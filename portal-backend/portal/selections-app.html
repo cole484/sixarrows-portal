@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Six Arrows Blueprint — Wave Selections</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+/* ── Reset ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--sage:#757f69;--sage-dk:#5a6455;--sage-lt:#c8cec2;--cream:#ebe9de;--cream-dk:#d4d1c5;--charcoal:#2e2e2e;--white:#fff;--gray:#666;--border:#e0ddd5;--bg-secondary:#f5f4ef;--bg-primary:#ffffff;--text-primary:#2e2e2e;--text-secondary:#666666;--text-danger:#cc3333;--radius:8px}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg-secondary);color:var(--text-primary);min-height:100vh;padding:20px;-webkit-font-smoothing:antialiased}
+@media(max-width:640px){body{padding:12px}}
+
+/* ── Layout ── */
+.app{max-width:680px;margin:0 auto}
+
+/* ── Login ── */
+.login-wrap{display:flex;flex-direction:column;align-items:center;min-height:60vh;justify-content:center;padding:2rem 0}
+.login-card{width:100%;max-width:420px;background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:2rem;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.login-logo{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--sage);margin-bottom:1.5rem;display:block}
+.login-card h2{font-size:22px;font-weight:700;margin-bottom:6px;color:var(--text-primary)}
+.login-card p{font-size:14px;color:var(--text-secondary);margin-bottom:1.5rem;line-height:1.6}
+.lf{margin-bottom:12px}
+.lf label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text-primary)}
+.lf input{width:100%;padding:11px 14px;font-size:14px;font-family:inherit;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-primary);color:var(--text-primary);transition:border-color .15s}
+.lf input:focus{outline:none;border-color:var(--sage)}
+.login-btn{width:100%;padding:12px;background:var(--sage);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;margin-top:4px;transition:background .15s}
+.login-btn:hover{background:var(--sage-dk)}
+.lerr{font-size:13px;color:var(--text-danger);margin-top:8px;display:none}
+
+/* ── Setup ── */
+.setup-card{background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1rem;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.setup-hd{font-size:20px;font-weight:700;margin-bottom:6px}
+.setup-sub{font-size:14px;color:var(--text-secondary);margin-bottom:1.25rem;line-height:1.6}
+.setup-section{margin-bottom:1.5rem}
+.setup-lbl{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--sage);margin-bottom:10px;display:block}
+.room-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.room-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-primary);flex-wrap:wrap;transition:border-color .15s}
+.room-row.has-plumbing{border-color:var(--sage)}
+.room-row-name{font-size:13px;font-weight:600;flex:1;min-width:100px}
+.plumb-lbl{font-size:11px;color:var(--text-secondary);white-space:nowrap}
+.plumb-toggle{display:flex;gap:4px;flex-wrap:wrap}
+.plumb-btn{padding:4px 9px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:20px;cursor:pointer;background:transparent;color:var(--text-secondary);transition:all .15s}
+.plumb-btn.ab{background:#e8f0e5;color:#3a5c32;border-color:#9ab898}
+.plumb-btn.ak{background:#e8eef8;color:#2a4a7a;border-color:#8aaad8}
+.plumb-btn.au{background:#f0eee8;color:#5a4a2a;border-color:#c8b898}
+.plumb-btn.an{background:var(--bg-secondary);color:var(--text-secondary)}
+.remove-btn{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:18px;padding:0 2px;line-height:1;transition:color .15s}
+.remove-btn:hover{color:var(--text-danger)}
+.add-section{display:flex;gap:8px;margin-bottom:10px}
+.add-section input{flex:1;padding:9px 12px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-primary);color:var(--text-primary)}
+.add-section input:focus{outline:none;border-color:var(--sage)}
+.add-btn{padding:9px 16px;background:var(--sage);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.add-btn:hover{background:var(--sage-dk)}
+.setup-summary{padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);margin-bottom:1.25rem;border:1px solid var(--border)}
+.setup-legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-secondary)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* ── App chrome ── */
+.client-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;padding:10px 14px;background:var(--bg-primary);border-radius:var(--radius);font-size:13px;border:1px solid var(--border)}
+.sw-btn{font-size:12px;color:var(--text-secondary);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline}
+.sw-btn:hover{color:var(--sage)}
+.prog-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--text-secondary);margin-bottom:7px}
+.prog-bg{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:1.25rem}
+.prog-fill{height:100%;background:var(--sage);border-radius:3px;transition:width .3s}
+.wtabs{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap}
+.wtab{padding:6px 14px;font-size:12px;font-weight:600;border:1px solid var(--border);border-radius:20px;cursor:pointer;background:transparent;color:var(--text-secondary);transition:all .15s}
+.wtab.active{background:var(--sage);color:#fff;border-color:var(--sage)}
+.wtab.done{color:var(--sage-dk);border-color:var(--sage-lt);background:#f0f2ee}
+.cnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.25rem}
+.cpill{padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:20px;cursor:pointer;background:transparent;color:var(--text-secondary);transition:all .15s;white-space:nowrap}
+.cpill.active{background:var(--bg-secondary);color:var(--text-primary);border-color:var(--sage-lt);font-weight:600}
+.cpill.done{border-color:var(--sage);color:var(--sage-dk)}
+.cpill.done::before{content:"✓ "}
+
+/* ── Form card ── */
+.card{background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1rem;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.wlbl{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--sage);margin-bottom:4px;display:block}
+.ctitle{font-size:20px;font-weight:700;margin-bottom:10px}
+.guidance{font-size:14px;color:var(--text-secondary);line-height:1.6;padding:11px 14px;background:var(--bg-secondary);border-radius:var(--radius);border-left:3px solid var(--sage);margin-bottom:1.25rem}
+.fields{display:flex;flex-direction:column;gap:14px}
+.fg{display:flex;flex-direction:column;gap:6px}
+.fg>label{font-size:13px;font-weight:600;color:var(--text-primary)}
+.req{color:var(--sage)}
+.rg{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:7px}
+.ro{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:13px;line-height:1.3;transition:all .15s;background:var(--bg-primary)}
+.ro input{width:14px;height:14px;accent-color:var(--sage);cursor:pointer;flex-shrink:0}
+.ro.sel{border-color:var(--sage);background:#f0f3ee}
+.fg input[type=text],.fg textarea{width:100%;padding:9px 12px;font-size:14px;font-family:inherit;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-primary);color:var(--text-primary);transition:border-color .15s}
+.fg input[type=text]:focus,.fg textarea:focus{outline:none;border-color:var(--sage)}
+.fg textarea{resize:vertical;min-height:70px}
+.dep{display:flex;flex-direction:column;gap:14px}
+.dep.hidden{display:none}
+
+/* ── Room sections ── */
+.room-section{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;background:var(--bg-primary)}
+.room-section:last-child{margin-bottom:0}
+.rs-hd{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--bg-secondary);cursor:pointer;user-select:none;border-bottom:1px solid var(--border)}
+.rs-hd-l{display:flex;flex-direction:column;gap:2px}
+.rs-nm{font-size:14px;font-weight:600}
+.rs-st{font-size:11px;color:var(--text-secondary)}
+.rs-body{padding:14px;display:flex;flex-direction:column;gap:12px}
+.rs-body.hidden{display:none}
+
+/* ── Light types ── */
+.lt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:7px}
+.lt-check{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:13px;transition:all .15s;user-select:none;background:var(--bg-primary)}
+.lt-check input{width:14px;height:14px;accent-color:var(--sage);cursor:pointer;flex-shrink:0}
+.lt-check.checked{border-color:var(--sage);background:#f0f3ee}
+.lt-check.default-on{border-style:dashed}
+
+/* ── Fixture cards ── */
+.fix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:7px}
+.fix-check{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:13px;transition:all .15s;user-select:none;background:var(--bg-primary)}
+.fix-check input{width:14px;height:14px;accent-color:var(--sage);cursor:pointer;flex-shrink:0}
+.fix-check.checked{border-color:var(--sage);background:#f0f3ee}
+.fix-detail{background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.fix-detail-hd{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--sage);padding-bottom:8px;border-bottom:1px solid var(--border)}
+.fix-details-wrap{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+
+/* ── Specialty ── */
+.spec-items{display:flex;flex-direction:column;gap:12px}
+.spec-item{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg-primary)}
+.spec-item-hd{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--bg-secondary);cursor:pointer;user-select:none}
+.spec-item-hd-l{display:flex;align-items:center;gap:10px}
+.spec-check{width:15px;height:15px;accent-color:var(--sage);cursor:pointer;flex-shrink:0}
+.spec-nm{font-size:14px;font-weight:600}
+.spec-sub{font-size:12px;color:var(--text-secondary)}
+.spec-body{padding:14px;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border)}
+.spec-body.hidden{display:none}
+
+/* ── Fireplace units ── */
+.fp-units{display:flex;flex-direction:column;gap:12px}
+.fp-unit{background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:1rem}
+.fp-uhd{font-size:13px;font-weight:600;color:var(--sage);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.fp-ufields{display:flex;flex-direction:column;gap:10px}
+
+/* ── Validation / buttons ── */
+.val-msg{font-size:13px;color:var(--text-danger);margin-top:10px;display:none;padding:10px 14px;background:#fdf2f2;border-radius:var(--radius);border-left:3px solid var(--text-danger);font-weight:500}
+.btn-row{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)}
+.btn{padding:10px 20px;font-size:14px;font-weight:600;border-radius:var(--radius);cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-primary);transition:all .15s}
+.btn:hover{background:var(--bg-secondary)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn-p{background:var(--sage);color:#fff;border-color:var(--sage)}
+.btn-p:hover{background:var(--sage-dk)}
+.btn-s{font-size:13px;color:var(--text-secondary);border:none;background:none;cursor:pointer;padding:0}
+.btn-s:hover{color:var(--sage)}
+
+/* ── Summary ── */
+.sum-card{background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:1.5rem;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.ss{margin-bottom:1.5rem}
+.ss h3{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--sage);margin-bottom:10px}
+.sc{margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+.sc:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.sc-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.sc-nm{font-size:14px;font-weight:600;cursor:pointer;color:var(--text-primary)}
+.sc-nm:hover{color:var(--sage)}
+.badge{display:inline-flex;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px}
+.b-done{background:#e8f0e5;color:#3a5c32}
+.b-pend{background:var(--bg-secondary);color:var(--text-secondary)}
+.sr{display:flex;justify-content:space-between;gap:16px;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)}
+.sr:last-child{border-bottom:none}
+.sk2{color:var(--text-secondary)}
+.sv{font-weight:600;text-align:right}
+.se{color:var(--text-secondary);font-style:italic;font-weight:400}
+
+/* Mood Board */
+.mb-section{margin-bottom:1.5rem}
+.mb-section-hd{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--sage);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.mb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.mb-card{background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.mb-img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;cursor:pointer}
+.mb-label{font-size:11px;font-weight:600;padding:5px 8px;color:var(--text-primary)}
+.mb-sublabel{font-size:10px;color:var(--text-secondary);padding:0 8px 5px}
+.sum-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.sum-thumb{width:46px;height:46px;object-fit:cover;border-radius:4px;border:1px solid var(--border);cursor:pointer}
+.photo-row{display:flex;gap:6px;margin-top:6px;align-items:center}
+.photo-row input{flex:1;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)}
+.photo-row input:focus{outline:none;border-color:var(--sage)}
+.inspo-section{margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)}
+.inspo-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+// ─────────────────────────────────────────────────────────
+// SIX ARROWS BLUEPRINT — WAVE SELECTIONS APP v8
+// sixarrowsconstruction.com
+// ─────────────────────────────────────────────────────────
+
+// ── Light types ───────────────────────────────────────────
+const LIGHT_TYPES=[
+  {id:"recessed",    name:"Recessed Lights",         defaultOn:true,  ph:"e.g. Halo 6\" LED H6ICAT, 3000K"},
+  {id:"pendant",     name:"Pendant(s)",               defaultOn:false, ph:"e.g. Visual Comfort Rosette 12\" SK5006"},
+  {id:"chandelier",  name:"Chandelier",               defaultOn:false, ph:"e.g. RH Hubbardton Forge 5-arm"},
+  {id:"sconces",     name:"Sconces",                  defaultOn:false, ph:"e.g. Arteriors Layla Sconce 49921"},
+  {id:"under_cab",   name:"Under Cabinet",            defaultOn:false, ph:"e.g. Kichler 2100 LED Strip 320H6"},
+  {id:"ceiling_fan", name:"Ceiling Fan (no light)",   defaultOn:false, ph:"e.g. Hunter Apex 54\" 59315"},
+  {id:"fan_light",   name:"Ceiling Fan with Light",   defaultOn:false, ph:"e.g. Progress Honea 52\" P250023"},
+  {id:"track",       name:"Track Lighting",           defaultOn:false, ph:"e.g. WAC 120V Track System HTK-103"},
+  {id:"accent",      name:"Accent / Feature",         defaultOn:false, ph:"e.g. LED strip in cove — brand, product..."},
+  {id:"cove",        name:"Cove / Toe Kick",          defaultOn:false, ph:"e.g. Armacost RibbonFlex Pro 140 LED/m"},
+  {id:"ext_wall",    name:"Exterior Wall Mount",      defaultOn:false, ph:"e.g. Kichler Barrington 14\" 49832BK"},
+  {id:"step_path",   name:"Step / Path Lighting",     defaultOn:false, ph:"e.g. Hinkley Hardy Isle 15443MZ"},
+  {id:"cab_int",     name:"Cabinet Interior",         defaultOn:false, ph:"e.g. Hafele Loox5 LED Dot 833.72.020"},
+  {id:"vanity_bar",  name:"Vanity Bar / Mirror Light", defaultOn:false, ph:"e.g. Kohler Purist 36\" K-11365-CP"}
+];
+
+// ── Default rooms (Garage added) ─────────────────────────
+const DEFAULT_ROOMS=[
+  {id:"great_room",   name:"Great Room",       plumbing:"none"},
+  {id:"kitchen",      name:"Kitchen",           plumbing:"kitchen"},
+  {id:"dining",       name:"Dining Room",       plumbing:"none"},
+  {id:"primary_bed",  name:"Primary Bedroom",   plumbing:"none"},
+  {id:"primary_bath", name:"Primary Bath",      plumbing:"bath"},
+  {id:"bedroom_1",    name:"Bedroom 1",         plumbing:"none"},
+  {id:"bedroom_2",    name:"Bedroom 2",         plumbing:"none"},
+  {id:"bathroom_1",   name:"Bathroom 1",        plumbing:"bath"},
+  {id:"bathroom_2",   name:"Bathroom 2",        plumbing:"bath"},
+  {id:"laundry",      name:"Laundry Room",      plumbing:"utility"},
+  {id:"mud_room",     name:"Mud Room",          plumbing:"utility"},
+  {id:"pantry",       name:"Pantry",            plumbing:"utility"},
+  {id:"garage",       name:"Garage",            plumbing:"none"}
+];
+
+const FLOOR_OPTS=["Hardwood","LVP / LVT","Carpet","Tile","Concrete","Epoxy (garage)","Undecided"];
+const WAVES=[
+  {label:"Wave 1",name:"Structure",cats:["fireplace","appliances","exterior_finishes"]},
+  {label:"Wave 2",name:"The Shell",cats:["specialty_trim","flooring","tile"]},
+  {label:"Wave 3",name:"The Jewelry",cats:["plumbing","lighting","countertops","hardware","paint","doors"]}
+];
+const TYPE_OPTS=["Gas","Electric","Wood burning","Undecided"];
+const SIZE_OPTS=['Standard (36")','Large (42")','Extra large (48"+)',"Undecided"];
+
+const BATH_FIXTURES=[
+  {id:"toilet",name:"Toilet"},{id:"single_sink",name:"Single Sink"},
+  {id:"double_sink",name:"Double Sink"},{id:"walk_in_shower",name:"Walk-in Shower"},
+  {id:"tub_shower_combo",name:"Tub/Shower Combo"},{id:"freestanding_tub",name:"Freestanding Tub"},
+  {id:"bidet",name:"Bidet"},{id:"urinal",name:"Urinal"}
+];
+const KITCHEN_FIXTURES=[
+  {id:"kitchen_sink",name:"Kitchen Sink"},{id:"pot_filler",name:"Pot Filler"},
+  {id:"bar_prep_sink",name:"Bar / Prep Sink"},{id:"outdoor_kitchen_sink",name:"Outdoor Kitchen Sink"},
+  {id:"wet_bar_sink",name:"Wet Bar Sink"}
+];
+const UTILITY_FIXTURES=[
+  {id:"utility_sink",name:"Utility / Laundry Sink"},{id:"washer_hookup",name:"Washer Hookup"},
+  {id:"hose_bibb",name:"Hose Bibb"},{id:"floor_drain",name:"Floor Drain"}
+];
+
+const FD={
+  toilet:[{id:"style",label:"Style",type:"radio",opts:["Standard two-piece","One-piece","Wall-hung","Comfort height","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Kohler Cimarron Comfort Height K-6418-0",req:true}],
+  single_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Undermount","Vessel","Drop-in","Pedestal","Wall-mount","Undecided"],req:true},{id:"faucet",label:"Faucet holes",type:"radio",opts:["Single hole","3-hole widespread","Wall mount","Undecided"],req:true},{id:"sink_product",label:"Exact sink selected",type:"text",ph:"e.g. Kohler Ladena 19\" Undermount K-2805-0",req:true},{id:"faucet_product",label:"Exact faucet selected",type:"text",ph:"e.g. Kohler Artifacts Single-Hole K-72759-4-CP",req:true}],
+  double_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Undermount","Vessel","Drop-in","Undecided"],req:true},{id:"faucet",label:"Faucet holes per sink",type:"radio",opts:["Single hole","3-hole widespread","Wall mount","Undecided"],req:true},{id:"sink_product",label:"Exact sink selected",type:"text",ph:"e.g. Ronbow 48\" Double Undermount",req:true},{id:"faucet_product",label:"Exact faucet selected (x2)",type:"text",ph:"e.g. Kohler Purist 2-Handle K-14406-4A-CP",req:true}],
+  walk_in_shower:[{id:"head",label:"Shower head setup",type:"radio",opts:["Single head","Dual heads","Rain head + hand shower","Full system","Undecided"],req:true},{id:"door",label:"Door / enclosure",type:"radio",opts:["Frameless glass door","Open entry","Semi-frameless","Curtain rod","Wet room","Undecided"],req:true},{id:"bench",label:"Built-in bench?",type:"radio",opts:["Yes","No","Undecided"],req:true},{id:"niche",label:"Shampoo niche(s)?",type:"radio",opts:["1 niche","2 niches","No niche","Undecided"],req:true},{id:"product",label:"Fixture product selected",type:"text",ph:"e.g. Kohler Artifacts 2.5 GPM K-72679-CP",req:true}],
+  tub_shower_combo:[{id:"head",label:"Shower head",type:"radio",opts:["Standard single","Rain head","Hand shower combo","Undecided"],req:true},{id:"surround",label:"Surround type",type:"radio",opts:["Tile surround","Solid surface","Acrylic unit","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Kohler Archer 5' Tub K-1123-0",req:true}],
+  freestanding_tub:[{id:"style",label:"Tub style",type:"radio",opts:["Classic clawfoot","Modern oval","Slipper","Rectangular modern","Undecided"],req:true},{id:"filler",label:"Faucet / filler type",type:"radio",opts:["Floor mount","Deck mount","Wall mount","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Victoria + Albert Amalfi 1700mm",req:true}],
+  bidet:[{id:"type",label:"Bidet type",type:"radio",opts:["Bidet seat / attachment","Standalone fixture","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. TOTO Washlet S550e SW3056AT40#01",req:true}],
+  urinal:[{id:"type",label:"Urinal type",type:"radio",opts:["Wall-hung standard","Waterless","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Kohler Bardon K-4917-0",req:true}],
+  kitchen_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Single basin undermount","Double basin undermount","Farmhouse / apron","Cast iron","Composite granite","Undecided"],req:true},{id:"sink_product",label:"Exact sink selected",type:"text",ph:"e.g. Kohler Whitehaven 35-7/8\" Farmhouse K-6489-0",req:true},{id:"faucet",label:"Faucet style",type:"radio",opts:["Pull-down single handle","Two handle","Commercial / bridge","Touch activated","Undecided"],req:true},{id:"faucet_product",label:"Exact faucet selected",type:"text",ph:"e.g. Kohler Artifacts Single-Handle K-72760-4",req:true}],
+  pot_filler:[{id:"mount",label:"Mount type",type:"radio",opts:["Wall mount over range","Ceiling mount","Undecided"],req:true},{id:"finish",label:"Finish",type:"radio",opts:["Match kitchen faucet","Matte black","Polished nickel","Brushed brass","Other","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Kohler Karbon K-6282-AF",req:true}],
+  bar_prep_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Single basin undermount","Round undermount","Bar sink","Undecided"],req:true},{id:"location",label:"Location",type:"text",ph:"Island, butler's pantry, wet bar...",req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Blanco Diamond Mini 15\" Undermount",req:true}],
+  outdoor_kitchen_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Single basin","Double basin","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Sunstone 15\" Single Bowl SSINK15",req:true}],
+  wet_bar_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Small bar sink","Standard undermount","Undecided"],req:true},{id:"location",label:"Location",type:"text",ph:"Basement bar, bonus room...",req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Elkay ELUH1316",req:true}],
+  utility_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Deep utility basin","Standard laundry","Undecided"],req:true},{id:"mount",label:"Mount",type:"radio",opts:["Freestanding legs","Cabinet mount","Wall mount","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Mustee 18E Utilatub",req:true}],
+  washer_hookup:[{id:"type",label:"Washer type",type:"radio",opts:["Standard top load","Front load / stacked","Side by side","Undecided"],req:true},{id:"product",label:"Washer/dryer selected",type:"text",ph:"e.g. Samsung WF45R6100AW + DVE45R6100W",req:true}],
+  hose_bibb:[{id:"count",label:"How many?",type:"radio",opts:["1","2","3","4+"],req:true},{id:"product",label:"Product / notes",type:"text",ph:"Locations: front, back, garage...",req:true}],
+  floor_drain:[{id:"product",label:"Location and product notes",type:"text",ph:"Laundry room, dog wash station...",req:true}]
+};
+
+const SPEC_ITEMS=[
+  {id:"beams",name:"Exposed Beams",sub:"Ceiling or structural beams left visible",fields:[{id:"beams_loc",label:"Locations",type:"text",ph:"Great room ceiling, kitchen...",req:true},{id:"beams_style",label:"Beam style",type:"radio",opts:["Rough sawn / rustic","Smooth / painted","Box beam","True timber","Undecided"],req:true},{id:"beams_fin",label:"Finish",type:"radio",opts:["Stained wood","Painted white","Painted dark","Left natural","Other","Undecided"],req:true},{id:"beams_notes",label:"Notes",type:"textarea",ph:"Size, spacing, direction..."}]},
+  {id:"shelves",name:"Floating Shelves",sub:"Open shelving — kitchen, pantry, office, etc.",fields:[{id:"shelves_loc",label:"Locations",type:"text",ph:"Kitchen flanking range hood, pantry...",req:true},{id:"shelves_mat",label:"Material",type:"radio",opts:["Wood — stained","Wood — painted","Live edge","Metal bracket + wood","Undecided"],req:true},{id:"shelves_notes",label:"Notes",type:"textarea",ph:"Number of shelves, depth, finish..."}]},
+  {id:"mantle",name:"Fireplace Mantle",sub:"Custom or built-in mantle surround",fields:[{id:"mantle_loc",label:"Which fireplace(s)",type:"text",ph:"Great room, master bedroom...",req:true},{id:"mantle_style",label:"Mantle style",type:"radio",opts:["Simple shelf","Full surround","Floating shelf","Shiplap surround","Stone / tile surround","Undecided"],req:true},{id:"mantle_fin",label:"Finish",type:"radio",opts:["Painted white","Painted dark","Stained wood","Mixed","Other","Undecided"],req:true},{id:"mantle_notes",label:"Notes",type:"textarea",ph:"Height, material, style inspiration..."}]},
+  {id:"wainscot",name:"Wainscoting / Paneling",sub:"Wall trim panels — dining, entry, hallways",fields:[{id:"wain_loc",label:"Locations",type:"text",ph:"Dining room, entry foyer...",req:true},{id:"wain_style",label:"Style",type:"radio",opts:["Board & batten","Raised panel","Flat / shaker","Picture rail","Shiplap","Undecided"],req:true},{id:"wain_ht",label:"Height",type:"radio",opts:['Chair rail (~36")','Half wall (~48")',"Full wall","Undecided"],req:true},{id:"wain_notes",label:"Notes",type:"textarea",ph:"Paint color, top rail details..."}]},
+  {id:"coffered",name:"Coffered Ceiling",sub:"Recessed grid pattern ceiling",fields:[{id:"coff_loc",label:"Location(s)",type:"text",ph:"Great room, dining room...",req:true},{id:"coff_fin",label:"Finish",type:"radio",opts:["Painted ceiling color","Painted contrasting","Stained wood beams","Undecided"],req:true},{id:"coff_notes",label:"Notes",type:"textarea",ph:"Depth, beam size, lighting integration..."}]},
+  {id:"other_trim",name:"Other Specialty Trim",sub:"Anything not listed above",fields:[{id:"oth_desc",label:"Describe what you have in mind",type:"textarea",ph:"Built-in bookshelves, window seats...",req:true}]}
+];
+
+const CATS={
+  fireplace:{name:"Fireplace",wave:0,type:"fireplace",guidance:"Each fireplace needs its fuel source, size, and location confirmed before framing begins. Changes after framing are expensive."},
+  appliances:{name:"Appliances",wave:0,type:"appliances",
+    guidance:"Select all appliances going into your home. Standard appliances are listed first — all are required. Then add any additional appliances from the list below."},
+  exterior_finishes:{name:"Exterior Finishes",wave:0,type:"exterior_finishes",
+    guidance:"Roof, soffit, and gutter selections need to be finalized before exterior framing closes. Roof type affects structural load and ventilation planning. All three need exact product selections before contractor bids are sent."},
+  specialty_trim:{name:"Specialty Trim & Built-Ins",wave:1,type:"specialty",guidance:"Select all specialty trim items you want. Complete all required fields for each selection. Cabinets are handled separately with your cabinet maker."},
+  flooring:{name:"Flooring",wave:1,type:"flooring",guidance:"Select flooring for each room. All fields are required before this section can be marked complete."},
+  tile:{name:"Tile Selections",wave:1,type:"tile",guidance:"Each bathroom gets its own tile selections. All required fields must be completed before advancing."},
+  plumbing:{name:"Plumbing Fixtures",wave:2,type:"plumbing",guidance:"For each room with plumbing, select which fixtures are in that room. Every fixture requires all questions answered and an exact product selected."},
+  lighting:{name:"Lighting Fixtures",wave:2,type:"lighting",guidance:"For each room, select which light types are going in that space and enter the exact fixture for each one. Recessed lights are pre-selected as typical — uncheck if a room won't have them."},
+  countertops:{name:"Countertops",wave:2,type:"countertops",guidance:"Select material before cabinets are installed so ordering and templating can begin on schedule.",fields:[
+    {id:"ct_kit",label:"Kitchen countertop material",type:"radio",opts:["Quartz (engineered)","Quartzite (natural)","Granite","Marble","Butcher block","Undecided"],req:true},
+    {id:"ct_color",label:"Color direction",type:"text",ph:"White subtle movement, warm beige...",req:true},
+    {id:"ct_edge",label:"Edge profile",type:"radio",opts:["Eased / straight","Beveled","Mitered (thick look)","Ogee","Undecided"],req:true},
+    {id:"ct_isl",label:"Different island countertop?",type:"radio",opts:["Yes — contrasting material","Yes — contrasting color","No — all matching"],req:true},
+    {id:"ct_isl_mat",label:"Island material (if different)",type:"text",ph:"Butcher block, marble, contrasting quartz..."},
+    {id:"ct_product",label:"Exact kitchen slab / product selected",type:"text",ph:"e.g. Cambria Brittanicca Warm 3CM",req:true},
+    {id:"ct_notes",label:"Notes",type:"textarea",ph:"Waterfall edge, laundry surface, outdoor kitchen..."}
+  ]},
+
+  paint:{name:"Paint & Stain Colors",wave:2,type:"paint",guidance:"Select paint colors for each room. All rooms require wall, trim, ceiling color, and sheen. Exterior surfaces including porch ceiling and posts are also covered here.",fields:[]},
+  doors:{name:"Interior Doors & Trim",wave:2,type:"standard",guidance:"Door style and trim profile drive millwork orders. Decide before framing completes so openings are sized correctly.",fields:[
+    {id:"dr_sty",label:"Door style",type:"radio",opts:["2-panel shaker","5-panel traditional","Flat / flush modern","French (glass panels)","Undecided"],req:true},
+    {id:"dr_ht",label:"Door height",type:"radio",opts:['6\'8" standard','7\'0" tall','8\'0" tall',"Varied"],req:true},
+    {id:"dr_col",label:"Door finish",type:"radio",opts:["Painted white","Match trim","Stained wood","Painted black","Undecided"],req:true},
+    {id:"dr_spec",label:"Special doors",type:"textarea",ph:"Barn doors, pocket doors, oversized pivot entry..."},
+    {id:"tr_prof",label:"Trim / casing profile",type:"radio",opts:["Simple / modern","Traditional","Craftsman","Chunky / custom","Undecided"],req:true},
+    {id:"tr_base",label:"Base molding height",type:"radio",opts:['3.5" standard','5.5" tall','7"+ statement',"Undecided"],req:true},
+    {id:"tr_crown",label:"Crown molding?",type:"radio",opts:["Yes — throughout","Yes — main areas only","No crown molding"],req:true},
+    {id:"tr_product",label:"Exact millwork / door product selected",type:"text",ph:"e.g. Masonite Riverside 2-panel 80\" Hollow Core",req:true},
+    {id:"tr_notes",label:"Notes",type:"textarea",ph:"Wainscoting, board & batten, picture rail..."}
+  ]}
+};
+const ALL_IDS=["fireplace","appliances","exterior_finishes","specialty_trim","flooring","tile","plumbing","lighting","countertops","paint","doors"];
+
+// ── State ─────────────────────────────────────────────────
+let ST={
+  screen:"login",clientKey:"",clientName:"",projectName:"",
+  wave:0,catId:"fireplace",
+  answers:{},saved:{},
+  fpUnits:[],specSel:{},
+  rooms:[],
+  plumbingFixtures:{},
+  lightingTypes:{},
+  roomOpen:{},
+  view:"form"
+};
+
+// ── Storage (localStorage fallback if window.storage unavailable) ──
+function storageGet(key){
+  try{if(window.storage)return window.storage.get(key).then(r=>r?r.value:null).catch(()=>null);}catch(e){}
+  return Promise.resolve(localStorage.getItem(key));
+}
+function storageSet(key,val){
+  try{if(window.storage)return window.storage.set(key,val).catch(()=>{});}catch(e){}
+  try{localStorage.setItem(key,val);}catch(e){}
+  return Promise.resolve();
+}
+
+function sk(x){return`sab8_${ST.clientKey}_${x}`}
+function ga(fid){return ST.answers[`${ST.catId}_${fid}`]||""}
+function sa(fid,v){ST.answers[`${ST.catId}_${fid}`]=v}
+function isSaved(id){return!!ST.saved[id]}
+function isSkipped(id){if(id==="fireplace")return ST.answers["fireplace_fp_want"]==="No — no fireplace";return false}
+function catDone(id){return isSaved(id)||isSkipped(id)}
+function total(){return ALL_IDS.length}
+function done(){return ALL_IDS.filter(id=>catDone(id)).length}
+function pct(){return Math.round(done()/total()*100)}
+function bathRooms(){return ST.rooms.filter(r=>r.plumbing==="bath")}
+function plumbingRooms(){return ST.rooms.filter(r=>r.plumbing!=="none")}
+function getFixturesForType(t){if(t==="bath")return BATH_FIXTURES;if(t==="kitchen")return KITCHEN_FIXTURES;return UTILITY_FIXTURES;}
+function isFixtureSel(rid,fid){return!!(ST.plumbingFixtures[rid]||{})[fid]}
+function setFixture(rid,fid,v){if(!ST.plumbingFixtures[rid])ST.plumbingFixtures[rid]={};ST.plumbingFixtures[rid][fid]=v;}
+function getFA(rid,fid,field){return ST.answers[`plumbing_${rid}_${fid}_${field}`]||""}
+function setFA(rid,fid,field,v){ST.answers[`plumbing_${rid}_${fid}_${field}`]=v;}
+function countRoomFixtures(rid){return Object.values(ST.plumbingFixtures[rid]||{}).filter(Boolean).length}
+function isLightSel(rid,ltid){return!!(ST.lightingTypes[rid]||{})[ltid]}
+function setLight(rid,ltid,v){if(!ST.lightingTypes[rid])ST.lightingTypes[rid]={};ST.lightingTypes[rid][ltid]=v;}
+function getLightProduct(rid,ltid){return ST.answers[`lighting_${rid}_${ltid}_product`]||""}
+function setLightProduct(rid,ltid,v){ST.answers[`lighting_${rid}_${ltid}_product`]=v;}
+function countRoomLights(rid){return Object.values(ST.lightingTypes[rid]||{}).filter(Boolean).length}
+function initRoomLights(rid){if(!ST.lightingTypes[rid]){ST.lightingTypes[rid]={};LIGHT_TYPES.forEach(lt=>{if(lt.defaultOn)ST.lightingTypes[rid][lt.id]=true;});}
+  // Pre-fill recessed lights default product if not already set
+  if(!ST.answers[`lighting_${rid}_recessed_product`]){ST.answers[`lighting_${rid}_recessed_product`]='6" LED Recessed Light (confirm brand/model with designer)';}
+}
+
+// Photo helpers
+function imgErr(el){if(el)el.style.display='none';}
+function getPhoto(k){return ST.answers[k+'_photo']||'';}
+function setPhoto(k,v){ST.answers[k+'_photo']=v;}
+function getInspo(cat){try{return JSON.parse(ST.answers['inspo_'+cat]||'[]');}catch(e){return[];}}
+function setInspo(cat,arr){ST.answers['inspo_'+cat]=JSON.stringify(arr);}
+
+// Inline photo URL input — uses data-photokey, handled by event delegation
+function photoInput(key, ph){
+  var url=(getPhoto(key)||'').replace(/"/g,'&quot;');
+  return '<div class="photo-row"><input type="text" value="'+url+'" placeholder="'+(ph||'Photo URL...')+'" data-photokey="'+key.replace(/"/g,'&quot;')+'" oninput="photoInputHandler(this)"></div>';
+}
+function photoInputHandler(el){
+  setPhoto(el.dataset.photokey, el.value);
+}
+
+// Inspiration photos
+function addInspoUrl(cat){
+  var arr=getInspo(cat);arr.push('');setInspo(cat,arr);render();
+}
+function removeInspoUrl(cat,idx){
+  var arr=getInspo(cat);arr.splice(idx,1);setInspo(cat,arr);render();
+}
+function inspoInputHandler(el){
+  var cat=el.dataset.cat;
+  var idx=parseInt(el.dataset.idx);
+  var arr=getInspo(cat);
+  if(arr[idx]!==undefined)arr[idx]=el.value;
+  setInspo(cat,arr);
+}
+
+// Build inspiration section HTML
+function inspoSection(catId){
+  var arr=getInspo(catId);
+  var rows=arr.map(function(url,i){
+    var safeUrl=(url||'').replace(/"/g,'&quot;');
+    var preview=url?'<img src="'+safeUrl+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)" onerror="imgErr(this)">':'<span style="font-size:18px">🖼</span>';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      +preview
+      +'<input type="text" value="'+safeUrl+'" placeholder="Paste image URL (Pinterest, Houzz, manufacturer...)" '
+      +'style="flex:1;padding:7px 10px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary)" '
+      +'data-cat="'+catId+'" data-idx="'+i+'" oninput="inspoInputHandler(this)">'
+      +'<button data-cat="'+catId+'" data-idx="'+i+'" onclick="removeInspoUrl(this.dataset.cat,parseInt(this.dataset.idx))" '
+      +'style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:18px;padding:0 4px;flex-shrink:0">×</button>'
+      +'</div>';
+  }).join('');
+  return '<div class="inspo-section">'
+    +'<div class="inspo-hd">'
+    +'<span style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--sage)">Inspiration Photos</span>'
+    +'<button data-cat="'+catId+'" onclick="addInspoUrl(this.dataset.cat)" '
+    +'style="padding:5px 12px;background:var(--sage);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">+ Add Photo</button>'
+    +'</div>'
+    +(rows||'<div style="font-size:13px;color:var(--text-secondary)">Paste photo URLs from Pinterest, Houzz, or manufacturer sites.</div>')
+    +'</div>';
+}
+
+// Summary thumbnail
+function sumThumbImg(url, label){
+  if(!url)return '';
+  var safe=(url||'').replace(/"/g,'%22');
+  return '<img class="sum-thumb" src="'+safe+'" title="'+label+'" onerror="imgErr(this)" data-href="'+safe+'" onclick="window.open(this.dataset.href)">';
+}
+
+async function persist(){
+  await storageSet(sk("ans"),JSON.stringify(ST.answers));
+  await storageSet(sk("sav"),JSON.stringify(ST.saved));
+  await storageSet(sk("fpu"),JSON.stringify(ST.fpUnits));
+  await storageSet(sk("spc"),JSON.stringify(ST.specSel));
+  await storageSet(sk("rms"),JSON.stringify(ST.rooms));
+  await storageSet(sk("pfx"),JSON.stringify(ST.plumbingFixtures));
+  await storageSet(sk("ltx"),JSON.stringify(ST.lightingTypes));
+}
+
+// ── Validation ────────────────────────────────────────────
+function validate(){
+  // ── FIREPLACE ──────────────────────────────────────────────────────────────
+  if(ST.catId==="fireplace"){
+    const want=ST.answers["fireplace_fp_want"]||"";
+    if(!want)return{ok:false,msg:"Please answer the fireplace question before continuing."};
+    if(want==="No — no fireplace")return{ok:true};
+    const cnt=parseInt(ST.answers["fireplace_fp_count"]||"0");
+    if(!cnt)return{ok:false,msg:"Please select how many fireplaces."};
+    const ords=["First","Second","Third","Fourth"];
+    for(let i=0;i<ST.fpUnits.length;i++){
+      const u=ST.fpUnits[i];
+      if(!u.type)return{ok:false,msg:`Please select a fuel type for the ${ords[i]} fireplace.`};
+      if(!u.size)return{ok:false,msg:`Please select a size for the ${ords[i]} fireplace.`};
+      if(!u.location||!u.location.trim())return{ok:false,msg:`Please enter a location for the ${ords[i]} fireplace.`};
+    }
+    return{ok:true};
+  }
+  // ── APPLIANCES ─────────────────────────────────────────────────────────────
+  if(ST.catId==="appliances"){
+    var appReq=[
+      ['app_range_type','range type'],['app_range_size','range size'],['app_range_product','exact range product'],
+      ['app_hood_type','hood type'],['app_hood_vent','hood venting'],['app_hood_product','exact hood product'],
+      ['app_fridge_type','refrigerator type'],['app_fridge_size','refrigerator width'],['app_fridge_product','exact refrigerator product'],
+      ['app_dish_type','dishwasher type'],['app_dish_product','exact dishwasher product'],
+      ['app_micro_type','microwave type'],['app_micro_product','exact microwave product']
+    ];
+    for(var _i=0;_i<appReq.length;_i++){var ar=appReq[_i];if(!(ST.answers[ar[0]]||'').trim())return{ok:false,msg:'Please complete the '+ar[1]+' field.'};}
+    var ADD_IDS=['wine_fridge','bev_fridge','warming_draw','steam_oven','speed_oven','coffee_sys','ice_maker','trash_comp','second_dish','outdoor_grill','outdoor_fridge','outdoor_pizza','wine_tower','keg_fridge'];
+    for(var _j=0;_j<ADD_IDS.length;_j++){var aid=ADD_IDS[_j];
+      if(ST.answers['app_add_sel_'+aid]){
+        if(!(ST.answers['app_add_prod_'+aid]||'').trim())return{ok:false,msg:'Please enter the exact product for the selected additional appliance.'};
+      }
+    }
+    return{ok:true};
+  }
+  // ── EXTERIOR FINISHES ──────────────────────────────────────────────────────
+  if(ST.catId==="exterior_finishes"){
+    if(!(ST.answers['ext_roof_type']||'').trim())return{ok:false,msg:'Please select a roof type.'};
+    if(!(ST.answers['ext_roof_color']||'').trim())return{ok:false,msg:'Please enter a roof color.'};
+    if(!(ST.answers['ext_roof_product']||'').trim())return{ok:false,msg:'Please enter the exact roof product.'};
+    if(!(ST.answers['ext_soffit_type']||'').trim())return{ok:false,msg:'Please select a soffit type.'};
+    if(!(ST.answers['ext_soffit_vent']||'').trim())return{ok:false,msg:'Please select vented or non-vented soffit.'};
+    if(!(ST.answers['ext_soffit_color']||'').trim())return{ok:false,msg:'Please enter a soffit color.'};
+    if(!(ST.answers['ext_gutter_type']||'').trim())return{ok:false,msg:'Please select a gutter style.'};
+    if(!(ST.answers['ext_gutter_material']||'').trim())return{ok:false,msg:'Please select a gutter material.'};
+    if(!(ST.answers['ext_gutter_color']||'').trim())return{ok:false,msg:'Please enter a gutter color.'};
+    return{ok:true};
+  }
+  // ── SPECIALTY TRIM ─────────────────────────────────────────────────────────
+  if(ST.catId==="specialty_trim"){
+    const sel=ST.specSel||{};
+    if(Object.values(sel).some(v=>v)){
+      for(const item of SPEC_ITEMS){
+        if(sel[item.id]){
+          for(const f of item.fields){
+            if(!f.req)continue;
+            const v=ST.answers[`specialty_trim_${f.id}`]||"";
+            if(!v.trim())return{ok:false,msg:`Please complete "${f.label}" for ${item.name}.`};
+          }
+        }
+      }
+    }
+    return{ok:true};
+  }
+  // ── FLOORING ───────────────────────────────────────────────────────────────
+  if(ST.catId==="flooring"){
+    for(var _k=0;_k<ST.rooms.length;_k++){var r=ST.rooms[_k];
+      if(!ST.answers['flooring_floor_'+r.id])return{ok:false,msg:'Please select flooring type for '+r.name+'.'};
+      if(!(ST.answers['flooring_color_'+r.id]||'').trim())return{ok:false,msg:'Please enter color direction for '+r.name+'.'};
+      if(!(ST.answers['flooring_product_'+r.id]||'').trim())return{ok:false,msg:'Please enter exact product for '+r.name+'.'};
+    }
+    return{ok:true};
+  }
+  // ── TILE ───────────────────────────────────────────────────────────────────
+  if(ST.catId==="tile"){
+    const baths=ST.rooms.filter(r=>r.plumbing==="bath");
+    for(const b of baths){
+      if(!(ST.answers[`tile_floor_${b.id}`]||"").trim())return{ok:false,msg:`Please enter floor tile for ${b.name}.`};
+      if(!(ST.answers[`tile_floor_product_${b.id}`]||"").trim())return{ok:false,msg:`Please enter floor tile product for ${b.name}.`};
+      if(!(ST.answers[`tile_shower_${b.id}`]||"").trim())return{ok:false,msg:`Please enter shower wall tile for ${b.name}.`};
+      if(!(ST.answers[`tile_shower_product_${b.id}`]||"").trim())return{ok:false,msg:`Please enter shower wall tile product for ${b.name}.`};
+    }
+    return{ok:true};
+  }
+  // ── PLUMBING ───────────────────────────────────────────────────────────────
+  if(ST.catId==="plumbing"){
+    const plumbRooms=ST.rooms.filter(r=>r.plumbing!=="none");
+    for(const r of plumbRooms){
+      if(countRoomFixtures(r.id)===0)return{ok:false,msg:`Please select at least one fixture for ${r.name}.`};
+      const fixtures=getFixturesForType(r.plumbing);
+      for(const fix of fixtures){
+        if(!isFixtureSel(r.id,fix.id))continue;
+        const defs=FD[fix.id]||[];
+        for(const d of defs){if(!d.req)continue;const v=getFA(r.id,fix.id,d.id);if(!v.trim())return{ok:false,msg:`Please complete "${d.label}" for ${fix.name} in ${r.name}.`};}
+      }
+    }
+    return{ok:true};
+  }
+  // ── LIGHTING ───────────────────────────────────────────────────────────────
+  if(ST.catId==="lighting"){
+    for(const r of ST.rooms){
+      if(countRoomLights(r.id)===0)return{ok:false,msg:`Please select at least one light type for ${r.name}.`};
+      const sel=ST.lightingTypes[r.id]||{};
+      for(const lt of LIGHT_TYPES){if(!sel[lt.id])continue;const v=getLightProduct(r.id,lt.id);if(!v.trim())return{ok:false,msg:`Please enter the exact fixture for ${lt.name} in ${r.name}.`};}
+    }
+    return{ok:true};
+  }
+  // ── COUNTERTOPS ────────────────────────────────────────────────────────────
+  if(ST.catId==="countertops"){
+    const cat=CATS[ST.catId];
+    if(cat&&cat.fields){for(const f of cat.fields){if(!f.req)continue;const v=(ST.answers['countertops_'+f.id]||ST.answers[f.id]||"");if(!v.trim())return{ok:false,msg:`Please complete "${f.label}" before continuing.`};}}
+    const baths=ST.rooms.filter(r=>r.plumbing==="bath");
+    for(const b of baths){
+      if(!(ST.answers[`ct_bath_${b.id}`]||"").trim())return{ok:false,msg:`Please select a vanity countertop material for ${b.name}.`};
+      if(ST.answers[`ct_bath_${b.id}`]==="Other"&&!(ST.answers[`ct_bath_other_${b.id}`]||"").trim())return{ok:false,msg:`Please specify the countertop material for ${b.name}.`};
+      if(!(ST.answers[`ct_bath_product_${b.id}`]||"").trim())return{ok:false,msg:`Please enter the exact vanity countertop product for ${b.name}.`};
+    }
+    return{ok:true};
+  }
+  // ── PAINT ──────────────────────────────────────────────────────────────────
+  if(ST.catId==="paint"){
+    if(!(ST.answers['paint_sheen_walls']||'').trim())return{ok:false,msg:'Please select a sheen for all walls.'};
+    if(!(ST.answers['paint_sheen_trim']||'').trim())return{ok:false,msg:'Please select a sheen for all trim.'};
+    if(!(ST.answers['paint_sheen_ceilings']||'').trim())return{ok:false,msg:'Please select a sheen for all ceilings.'};
+    for(var _p=0;_p<ST.rooms.length;_p++){var rp=ST.rooms[_p];
+      if(!(ST.answers['paint_int_wall_'+rp.id]||'').trim())return{ok:false,msg:'Please enter a wall color for '+rp.name+'.'};
+      if(!(ST.answers['paint_int_trim_'+rp.id]||'').trim())return{ok:false,msg:'Please enter a trim color for '+rp.name+'.'};
+      if(!(ST.answers['paint_int_ceil_'+rp.id]||'').trim())return{ok:false,msg:'Please enter a ceiling color for '+rp.name+'.'};
+    }
+    if(!(ST.answers['paint_porch_ceil_type']||'').trim())return{ok:false,msg:'Please select Paint or Stain for porch ceiling.'};
+    if(!(ST.answers['paint_porch_ceil_color']||'').trim())return{ok:false,msg:'Please enter a porch ceiling color.'};
+    if(!(ST.answers['paint_porch_post_type']||'').trim())return{ok:false,msg:'Please select Paint or Stain for porch posts.'};
+    if(!(ST.answers['paint_porch_post_color']||'').trim())return{ok:false,msg:'Please enter a porch post color.'};
+    return{ok:true};
+  }
+  // ── DOORS ──────────────────────────────────────────────────────────────────
+  const cat=CATS[ST.catId];
+  if(cat&&cat.fields){
+    for(const f of cat.fields){
+      if(!f.req)continue;
+      const v=(ST.answers[ST.catId+'_'+f.id]||ST.answers[f.id]||"");
+      if(!v.trim())return{ok:false,msg:`Please complete "${f.label}" before continuing.`};
+    }
+  }
+  return{ok:true};
+}
+
+function advance(){
+  const v=validate();if(!v.ok){showMsg(v.msg);return}
+  ST.saved[ST.catId]=true;persist();
+  const idx=ALL_IDS.indexOf(ST.catId);
+  if(idx<ALL_IDS.length-1){const nid=ALL_IDS[idx+1];ST.catId=nid;ST.wave=CATS[nid].wave;}
+  else ST.view="summary";
+  render();
+}
+function goBack(){
+  const idx=ALL_IDS.indexOf(ST.catId);
+  if(idx>0){const pid=ALL_IDS[idx-1];ST.catId=pid;ST.wave=CATS[pid].wave;}
+  else ST.screen="setup";
+  render();
+}
+function showMsg(msg){
+  const el=document.getElementById("val-msg");if(!el)return;
+  el.textContent=msg;el.style.display="block";
+  setTimeout(()=>el.style.display="none",5000);
+}
+
+// ── Pickers ───────────────────────────────────────────────
+function pickR(fid,val,el){val=decVal(val);
+  const current=ga(fid);
+  if(current===val){
+    // Deselect
+    sa(fid,"");
+    el.querySelector("input").checked=false;
+    el.classList.remove("sel");
+    return;
+  }
+  sa(fid,val);
+  el.closest(".rg").querySelectorAll(".ro").forEach(o=>o.classList.remove("sel"));
+  el.classList.add("sel");el.querySelector("input").checked=true;
+  if(ST.catId==="fireplace"){
+    if(fid==="fp_want"){const dep=document.getElementById("fp-dep");if(dep)dep.className="dep"+(val==="No — no fireplace"?" hidden":"");}
+    if(fid==="fp_count"){const n=parseInt(val)||0;ST.answers["fireplace_fp_count"]=String(n);ST.fpUnits=Array.from({length:n},(_,i)=>ST.fpUnits[i]||{type:"",size:"",location:""});renderFpUnits();const ns=document.getElementById("fp-notes-wrap");if(ns)ns.style.display=n>0?"":"none";}
+  }
+}
+function pickUnit(i,field,val,el){
+  // Toggle: clicking already-selected option deselects it
+  if(ST.fpUnits[i][field]===val){
+    ST.fpUnits[i][field]="";
+    el.closest(".rg").querySelectorAll(".ro").forEach(o=>o.classList.remove("sel"));
+    el.querySelector("input").checked=false;
+  } else {
+    ST.fpUnits[i][field]=val;
+    el.closest(".rg").querySelectorAll(".ro").forEach(o=>o.classList.remove("sel"));
+    el.classList.add("sel");
+    el.querySelector("input").checked=true;
+  }
+}
+function pickUnitByIdx(i,field,idx,el){
+  pickUnit(i,field,SIZE_OPTS[idx],el);
+}
+function pickUnitType(i,idx,el){
+  pickUnit(i,'type',TYPE_OPTS[idx],el);
+}
+// Decode HTML entities back to real characters when receiving values from onclick
+function decVal(s){return s.replace(/&#39;/g,"'").replace(/&#34;/g,'"');}
+function appRadioPick(key,val,el){val=decVal(val);ST.answers[key]=val;el.closest('.rg').querySelectorAll('.ro').forEach(function(x){x.classList.remove('sel')});el.classList.add('sel');}
+function appRadioPickIdx(regKey,key,idx,el){if(!window._rgOpts||!window._rgOpts[regKey])return;var val=window._rgOpts[regKey][idx];ST.answers[key]=val;el.closest('.rg').querySelectorAll('.ro').forEach(function(x){x.classList.remove('sel')});el.classList.add('sel');}
+const BATH_CT_OPTS=["Quartz","Marble","Granite","Quartzite","Porcelain slab","Same as kitchen","Other","Undecided"];
+function setBathCt(rid,idx,el){ST.answers['ct_bath_'+rid]=BATH_CT_OPTS[idx];el.closest('.rg').querySelectorAll('.ro').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');if(BATH_CT_OPTS[idx]==="Other")render();}
+function pickRIdx(fid,idx,el){const cat=CATS[ST.catId];if(!cat||!cat.fields)return;const f=cat.fields.find(x=>x.id===fid);if(!f)return;pickR(fid,f.opts[idx],el);}
+function pickFloor(rid,val,el){
+  const current=ST.answers[`flooring_floor_${rid}`]||"";
+  if(current===val){ST.answers[`flooring_floor_${rid}`]="";el.querySelector("input").checked=false;el.classList.remove("sel");return;}
+  ST.answers[`flooring_floor_${rid}`]=val;
+  el.closest(".rg").querySelectorAll(".ro").forEach(o=>o.classList.remove("sel"));
+  el.classList.add("sel");el.querySelector("input").checked=true;}
+function specPickR(fid,val,el){val=decVal(val);const cur=ST.answers[`specialty_trim_${fid}`]||"";if(cur===val){ST.answers[`specialty_trim_${fid}`]="";el.querySelector("input").checked=false;el.classList.remove("sel");return;}ST.answers[`specialty_trim_${fid}`]=val;el.closest(".rg").querySelectorAll(".ro").forEach(o=>o.classList.remove("sel"));el.classList.add("sel");el.querySelector("input").checked=true;}
+function pickFD(rid,fid,field,val,el){val=decVal(val);const cur=getFA(rid,fid,field);if(cur===val){setFA(rid,fid,field,"");el.querySelector("input").checked=false;el.classList.remove("sel");return;}setFA(rid,fid,field,val);el.closest(".rg").querySelectorAll(".ro").forEach(o=>o.classList.remove("sel"));el.classList.add("sel");el.querySelector("input").checked=true;}
+
+function renderFpUnits(){
+  const c=document.getElementById("fp-unit-wrap");if(!c)return;
+  const ords=["First","Second","Third","Fourth"];
+  c.innerHTML=ST.fpUnits.map((u,i)=>`<div class="fp-unit"><div class="fp-uhd">${ords[i]||`Fireplace ${i+1}`} Fireplace</div>
+    <div class="fp-ufields">
+      <div class="fg"><label>Fuel type <span class="req">*</span></label><div class="rg">${TYPE_OPTS.map((o,ti)=>`<label class="ro${u.type===o?" sel":""}" onclick="pickUnitType(${i},${ti},this)"><input type="radio" name="fpt_${i}" ${u.type===o?"checked":""}>${o}</label>`).join("")}</div></div>
+      <div class="fg"><label>Size <span class="req">*</span></label><div class="rg">${SIZE_OPTS.map((o,si)=>`<label class="ro${u.size===o?" sel":""}" onclick="pickUnitByIdx(${i},'size',${si},this)"><input type="radio" name="fps_${i}" ${u.size===o?"checked":""}>${o}</label>`).join("")}</div></div>
+      <div class="fg"><label>Location <span class="req">*</span></label><input type="text" value="${u.location}" placeholder="Great room, master bedroom, outdoor patio..." onchange="ST.fpUnits[${i}].location=this.value" onkeyup="ST.fpUnits[${i}].location=this.value"></div>
+    </div></div>`).join("");
+}
+
+// ── Form renderers ────────────────────────────────────────
+function rfFireplace(){
+  const want=ST.answers["fireplace_fp_want"]||"";const isNo=want==="No — no fireplace";const cnt=parseInt(ST.answers["fireplace_fp_count"]||"0");
+  return`<div class="fg"><label>Do you want a fireplace? <span class="req">*</span></label><div class="rg">${["Yes — include a fireplace","No — no fireplace"].map(o=>`<label class="ro${want===o?" sel":""}" onclick="pickR('fp_want','${o}',this)"><input type="radio" name="fp_want" ${want===o?"checked":""}>${o}</label>`).join("")}</div></div>
+  <div class="dep${isNo?" hidden":""}" id="fp-dep">
+    <div class="fg"><label>How many? <span class="req">*</span></label><div class="rg">${[1,2,3,4].map(n=>`<label class="ro${cnt===n?" sel":""}" onclick="pickR('fp_count','${n}',this)"><input type="radio" name="fp_count" ${cnt===n?"checked":""}>${n}${n===4?"+":""}</label>`).join("")}</div></div>
+    <div class="fp-units" id="fp-unit-wrap"></div>
+    <div class="fg" id="fp-notes-wrap" style="display:${cnt>0?"":"none"}"><label>Additional notes</label><textarea placeholder="Surround style, mantle, outdoor fireplace..." onchange="ST.answers['fireplace_fp_notes']=this.value" onkeyup="ST.answers['fireplace_fp_notes']=this.value">${ST.answers["fireplace_fp_notes"]||""}</textarea></div>
+  </div>`;
+}
+function rfSpecialty(){
+  const sel=ST.specSel||{};
+  return`<div style="font-size:14px;color:var(--text-secondary);margin-bottom:8px">Check each item you want. All required fields <span style="color:var(--sage)">*</span> must be completed.</div>
+  <div class="spec-items">${SPEC_ITEMS.map(item=>{
+    const checked=!!sel[item.id];
+    const fields=item.fields.map(f=>{const val=ST.answers[`specialty_trim_${f.id}`]||"";
+      if(f.type==="radio"){const opts=f.opts.map(o=>`<label class="ro${val===o?" sel":""}" onclick="specPickR('${f.id}','${o.replace(/'/g,'&#39;').replace(/"/g,'&#34;')}',this)"><input type="radio" name="${f.id}" ${val===o?"checked":""}>${o}</label>`).join("");return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><div class="rg">${opts}</div></div>`;}
+      if(f.type==="textarea")return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><textarea placeholder="${f.ph||""}" onchange="ST.answers['specialty_trim_${f.id}']=this.value" onkeyup="ST.answers['specialty_trim_${f.id}']=this.value">${val}</textarea></div>`;
+      return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="${(f.ph||"").replace(/"/g,'&quot;')}" onchange="ST.answers['specialty_trim_${f.id}']=this.value" onkeyup="ST.answers['specialty_trim_${f.id}']=this.value"></div>`;
+    }).join("");
+    return`<div class="spec-item"><div class="spec-item-hd" onclick="document.getElementById('sc-${item.id}').click()">
+      <div class="spec-item-hd-l"><input class="spec-check" type="checkbox" id="sc-${item.id}" ${checked?"checked":""} onclick="event.stopPropagation();ST.specSel['${item.id}']=this.checked;document.getElementById('sb-${item.id}').className='spec-body'+(this.checked?'':' hidden')">
+      <div><div class="spec-nm">${item.name}</div><div class="spec-sub">${item.sub}</div></div></div>
+      <span style="font-size:11px;color:var(--text-secondary)">${checked?"Details ▼":"Click to select"}</span>
+    </div><div class="spec-body${checked?"":" hidden"}" id="sb-${item.id}">${fields}</div></div>`;
+  }).join("")}</div>`;
+}
+function rfFlooring(){
+  if(!ST.rooms.length)return`<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No rooms set up. Go back to Project Setup first.</div>`;
+  return ST.rooms.map(r=>{const val=ST.answers[`flooring_floor_${r.id}`]||"";
+    return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-hd-l"><div class="rs-nm">${r.name}</div></div><span style="font-size:11px;color:${val?"var(--sage)":"var(--text-secondary)"}">${val||"Not selected"}</span></div>
+    <div class="rs-body">
+      <div class="fg"><label>Flooring type <span class="req">*</span></label><div class="rg">${FLOOR_OPTS.map(o=>`<label class="ro${val===o?" sel":""}" onclick="pickFloor('${r.id}','${o}',this)"><input type="radio" name="fl_${r.id}" ${val===o?"checked":""}>${o}</label>`).join("")}</div></div>
+      <div class="fg"><label>Color / finish direction <span class="req">*</span></label><input type="text" value="${(ST.answers[`flooring_color_${r.id}`]||"").replace(/"/g,'&quot;')}" placeholder="Light natural oak, warm gray, white marble look..." onchange="ST.answers['flooring_color_${r.id}']=this.value" onkeyup="ST.answers['flooring_color_${r.id}']=this.value"></div>
+      <div class="fg"><label>Exact product selected <span class="req">*</span></label><input type="text" value="${(ST.answers[`flooring_product_${r.id}`]||"").replace(/"/g,'&quot;')}" placeholder='e.g. Shaw Floorte Pro 5 Series, Mineral, 7" plank' onchange="ST.answers['flooring_product_${r.id}']=this.value" onkeyup="ST.answers['flooring_product_${r.id}']=this.value"></div>
+      <div class="fg"><label>Product photo URL</label>${photoInput('flooring_product_'+r.id,'Paste manufacturer or Houzz photo link...')}</div>
+    </div></div>`;}).join("");
+}
+function rfTile(){
+  const baths=bathRooms();
+  if(!baths.length)return`<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No bathrooms in your room list. Go back to Project Setup and set a room's plumbing type to "Bath".</div>`;
+  return baths.map(b=>{const fv=k=>(ST.answers[`tile_${k}_${b.id}`]||"").replace(/"/g,'&quot;');
+    return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-nm">${b.name}</div></div>
+    <div class="rs-body">
+      <div class="fg"><label>Floor tile <span class="req">*</span></label><input type="text" value="${fv("floor")}" placeholder="Style, size, color direction..." onchange="ST.answers['tile_floor_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_${b.id}']=this.value"></div>
+      <div class="fg"><label>Floor tile exact product <span class="req">*</span></label><input type="text" value="${fv("floor_product")}" placeholder="e.g. Daltile Santorini White 12x24 S26012241P" onchange="ST.answers['tile_floor_product_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_product_${b.id}']=this.value"></div>
+      <div class="fg"><label>Shower wall tile <span class="req">*</span></label><input type="text" value="${fv("shower")}" placeholder="Large format marble look, 4x16 subway, mosaic..." onchange="ST.answers['tile_shower_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_${b.id}']=this.value"></div>
+      <div class="fg"><label>Shower wall exact product <span class="req">*</span></label><input type="text" value="${fv("shower_product")}" placeholder="e.g. Anatolia Vintage Chic 4x12 Subway" onchange="ST.answers['tile_shower_product_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_product_${b.id}']=this.value"></div>
+      <div class="fg"><label>Shower accent / niche tile</label><input type="text" value="${fv("accent")}" placeholder="Contrasting tile, mosaic strip..." onchange="ST.answers['tile_accent_${b.id}']=this.value" onkeyup="ST.answers['tile_accent_${b.id}']=this.value"></div>
+      <div class="fg"><label>Heated floor?</label><div class="rg">${["Yes","No","Undecided"].map(o=>`<label class="ro${(ST.answers[`tile_heat_${b.id}`]||"")===o?" sel":""}" onclick="ST.answers['tile_heat_${b.id}']='${o}';this.closest('.rg').querySelectorAll('.ro').forEach(x=>x.classList.remove('sel'));this.classList.add('sel')"><input type="radio" name="th_${b.id}" ${(ST.answers[`tile_heat_${b.id}`]||"")===o?"checked":""}>${o}</label>`).join("")}</div></div>
+    </div></div>`;}).join("");
+}
+function rfPlumbing(){
+  const rooms=plumbingRooms();
+  if(!rooms.length)return`<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No plumbing rooms set up. Go back to Project Setup and assign plumbing types to your rooms.</div>`;
+  return rooms.map(r=>{
+    const fixtures=getFixturesForType(r.plumbing);
+    const cnt=countRoomFixtures(r.id);
+    const isOpen=ST.roomOpen[r.id]!==false;
+    const typeLbl=r.plumbing==="bath"?"Bath":r.plumbing==="kitchen"?"Kitchen":"Utility";
+    const fixChecks=fixtures.map(f=>{const sel=isFixtureSel(r.id,f.id);return`<label class="fix-check${sel?" checked":""}" onclick="this.querySelector('input').click()"><input type="checkbox" ${sel?"checked":""} onclick="event.stopPropagation();toggleFixture('${r.id}','${f.id}',this)">${f.name}</label>`;}).join("");
+    const detailSections=fixtures.filter(f=>isFixtureSel(r.id,f.id)).map(f=>{
+      const defs=FD[f.id]||[];
+      const fields=defs.map(d=>{const val=getFA(r.id,f.id,d.id);
+        if(d.type==="radio"){const opts=d.opts.map(o=>`<label class="ro${val===o?" sel":""}" onclick="pickFD('${r.id}','${f.id}','${d.id}','${o.replace(/'/g,'&#39;').replace(/"/g,'&#34;')}',this)"><input type="radio" name="pfd_${r.id}_${f.id}_${d.id}" ${val===o?"checked":""}>${o}</label>`).join("");return`<div class="fg"><label>${d.label}${d.req?` <span class="req">*</span>`:""}</label><div class="rg">${opts}</div></div>`;}
+        return`<div class="fg"><label>${d.label}${d.req?` <span class="req">*</span>`:""}</label><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="${(d.ph||"").replace(/"/g,'&quot;')}" onchange="setFA('${r.id}','${f.id}','${d.id}',this.value)" onkeyup="setFA('${r.id}','${f.id}','${d.id}',this.value)"></div>`;
+      }).join("");
+      return`<div class="fix-detail"><div class="fix-detail-hd">${f.name}</div>${fields}</div>`;
+    }).join("");
+    return`<div class="room-section"><div class="rs-hd" onclick="ST.roomOpen['${r.id}']=!ST.roomOpen['${r.id}'];render()">
+      <div class="rs-hd-l"><div class="rs-nm">${r.name}</div><div class="rs-st">${typeLbl} plumbing · ${cnt?cnt+" fixture"+(cnt!==1?"s":"")+" selected":"No fixtures selected yet"}</div></div>
+      <span style="font-size:12px;color:var(--text-secondary)">${isOpen?"▲":"▼"}</span>
+    </div>
+    <div class="rs-body${isOpen?"":" hidden"}">
+      <div class="fg"><label>Which fixtures are in this room? <span class="req">*</span></label></div>
+      <div class="fix-grid">${fixChecks}</div>
+      ${detailSections?`<div class="fix-details-wrap">${detailSections}</div>`:""}
+      <div class="fg"><label>Room notes</label><input type="text" value="${(ST.answers[`plumbing_${r.id}_notes`]||"").replace(/"/g,'&quot;')}" placeholder="Any special plumbing notes..." onchange="ST.answers['plumbing_${r.id}_notes']=this.value" onkeyup="ST.answers['plumbing_${r.id}_notes']=this.value"></div>
+    </div></div>`;
+  }).join("");
+}
+function rfLighting(){
+  if(!ST.rooms.length)return'<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No rooms set up. Go back to Project Setup first.</div>';
+  return ST.rooms.map(function(r){
+    initRoomLights(r.id);
+    var cnt=countRoomLights(r.id);
+    var isOpen=ST.roomOpen['lt_'+r.id]!==false;
+    var sel=ST.lightingTypes[r.id]||{};
+    var ltChecks=LIGHT_TYPES.map(function(lt){
+      var checked=!!sel[lt.id];
+      var typLabel=lt.defaultOn?'<span style="font-size:10px;color:var(--sage);margin-left:3px">typical</span>':'';
+      return '<label class="lt-check'+(checked?' checked':'')+(lt.defaultOn?' default-on':'')+'" onclick="this.querySelector(\'input\').click()">'
+        +'<input type="checkbox" '+(checked?'checked':'')+' onclick="event.stopPropagation();toggleLight(\''+r.id+'\',\''+lt.id+'\',this)">'
+        +lt.name+typLabel+'</label>';
+    }).join('');
+    var productInputs=LIGHT_TYPES.filter(function(lt){return sel[lt.id];}).map(function(lt){
+      var rawProd=getLightProduct(r.id,lt.id);
+      if(lt.id==='recessed'&&!rawProd){
+        rawProd='6" LED Recessed Light (e.g. Halo H6ICAT, 3000K)';
+        setLightProduct(r.id,lt.id,rawProd);
+      }
+      var prod=(rawProd||'').replace(/"/g,'&quot;');
+      return '<div class="fix-detail"><div class="fix-detail-hd">'+lt.name+'</div>'
+        +'<div class="fg"><label>Exact fixture selected <span class="req">*</span></label>'
+        +'<input type="text" value="'+prod+'" placeholder="'+lt.ph+'" '
+        +'onchange="setLightProduct(\''+r.id+'\',\''+lt.id+'\',this.value)" '
+        +'onkeyup="setLightProduct(\''+r.id+'\',\''+lt.id+'\',this.value)">'
+        +'<div class="fg"><label>Fixture photo URL</label>'+photoInput('lighting_'+r.id+'_'+lt.id,'Paste product photo link...')+'</div>'
+        +'</div></div>';
+    }).join('');
+    var notesVal=(ST.answers['lighting_'+r.id+'_notes']||'').replace(/"/g,'&quot;');
+    var body='<div class="fg"><label>Which light types are going in this room? <span class="req">*</span></label>'
+      +'<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">Recessed lights are pre-selected — uncheck if this room won\'t have them.</div></div>'
+      +'<div class="lt-grid">'+ltChecks+'</div>'
+      +(productInputs?'<div class="fix-details-wrap">'+productInputs+'</div>':'')
+      +'<div class="fg" style="margin-top:4px"><label>Lighting notes for this room</label>'
+      +'<input type="text" value="'+notesVal+'" placeholder="Dimmer switch, smart controls, placement notes..." '
+      +'onchange="ST.answers[\'lighting_'+r.id+'_notes\']=this.value" '
+      +'onkeyup="ST.answers[\'lighting_'+r.id+'_notes\']=this.value">'
+      +'</div>';
+    return '<div class="room-section">'
+      +'<div class="rs-hd" onclick="ST.roomOpen[\'lt_'+r.id+'\']=!ST.roomOpen[\'lt_'+r.id+'\'];render()">'
+      +'<div class="rs-hd-l"><div class="rs-nm">'+r.name+'</div>'
+      +'<div class="rs-st">'+(cnt?cnt+' light type'+(cnt!==1?'s':'')+' selected':'No light types selected yet')+'</div></div>'
+      +'<span style="font-size:12px;color:var(--text-secondary)">'+(isOpen?'▲':'▼')+'</span></div>'
+      +'<div class="rs-body'+(isOpen?'':' hidden')+'">'+body+'</div></div>';
+  }).join('');
+}
+function rfCountertops(){
+  const cat=CATS[ST.catId];
+  const baths=ST.rooms.filter(r=>r.plumbing==="bath");
+  // Render standard fields (excluding bath vanity — handled per room below)
+  let html=cat.fields.map(f=>{const val=ga(f.id);
+    if(f.type==="radio"){const opts=f.opts.map((o,oi)=>`<label class="ro${val===o?" sel":""}" onclick="pickRIdx('${f.id}',${oi},this)"><input type="radio" name="${f.id}" ${val===o?"checked":""}>${o}</label>`).join("");return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><div class="rg">${opts}</div></div>`;}
+    if(f.type==="textarea")return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><textarea placeholder="${f.ph||""}" onchange="sa('${f.id}',this.value)" onkeyup="sa('${f.id}',this.value)">${val}</textarea></div>`;
+    return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="${(f.ph||"").replace(/"/g,'&quot;')}" onchange="sa('${f.id}',this.value)" onkeyup="sa('${f.id}',this.value)"></div>`;
+  }).join("");
+  // Per-bathroom vanity countertop section
+  if(baths.length){
+    const bathRows=baths.map(b=>{
+      const bval=ST.answers[`ct_bath_${b.id}`]||"";
+      const opts=BATH_CT_OPTS.map((o,oi)=>`<label class="ro${bval===o?" sel":""}" onclick="setBathCt('${b.id}',${oi},this)"><input type="radio" name="ctb_${b.id}" ${bval===o?"checked":""}>${o}</label>`).join("");
+      const bprod=ST.answers[`ct_bath_product_${b.id}`]||"";
+      const bother=ST.answers[`ct_bath_other_${b.id}`]||"";
+      return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-nm">${b.name} — Vanity Countertop</div></div>
+        <div class="rs-body">
+          <div class="fg"><label>Countertop material <span class="req">*</span></label><div class="rg">${opts}</div></div>
+          ${bval==="Other"?`<div class="fg"><label>Specify material <span class="req">*</span></label><input type="text" value="${bother.replace(/"/g,'&quot;')}" placeholder="Describe material..." onchange="ST.answers['ct_bath_other_${b.id}']=this.value" onkeyup="ST.answers['ct_bath_other_${b.id}']=this.value"></div>`:""}
+          <div class="fg"><label>Exact product selected <span class="req">*</span></label><input type="text" value="${bprod.replace(/"/g,'&quot;')}" placeholder="e.g. Cambria Torquay 3CM slab" onchange="ST.answers['ct_bath_product_${b.id}']=this.value" onkeyup="ST.answers['ct_bath_product_${b.id}']=this.value"></div>
+        </div></div>`;
+    }).join("");
+    html+=`<div style="margin-top:14px"><div style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--sage);margin-bottom:10px">Bath Vanity Countertops — Per Room</div>${bathRows}</div>`;
+  } else {
+    html+=`<div style="margin-top:14px;padding:12px;background:var(--bg-secondary);border-radius:var(--radius);font-size:13px;color:var(--text-secondary)">No bathrooms set up. Go back to Project Setup and assign plumbing type "Bath" to your bathroom rooms.</div>`;
+  }
+  return html;
+}
+
+// ── Static appliance radio options — defined at boot, not at render time ──────
+var APPL_OPTS = {
+  'app_range_type':  ['Gas range','Electric range','Induction cooktop','Dual fuel (gas top / electric oven)','Separate cooktop + wall oven','Undecided'],
+  'app_range_size':  ['30"','36"','48"','60"+','N/A — wall oven'],
+  'app_hood_type':   ['Wall mount chimney hood','Under-cabinet hood','Island hood (ceiling mount)','Built-in insert (custom surround)','Downdraft','Recirculating (no duct)','Undecided'],
+  'app_hood_vent':   ['Exterior vented','Recirculating','Undecided'],
+  'app_fridge_type': ['French door','Side by side','Bottom freezer','Column refrigerator','Column fridge + separate column freezer','Counter depth','Undecided'],
+  'app_fridge_size': ['30"','33"','36"','42"','48" (column pair)','Undecided'],
+  'app_dish_type':   ['Standard 24"','Compact 18"','Double dishwasher drawer','Undecided'],
+  'app_micro_type':  ['Built-in wall unit','Drawer microwave (under counter)','Over-the-range','Countertop — no dedicated space needed','None']
+};
+function appRadioSet(key, idx, el){
+  var opts = APPL_OPTS[key];
+  if(!opts || idx >= opts.length) return;
+  ST.answers[key] = opts[idx];
+  el.closest('.rg').querySelectorAll('.ro').forEach(function(x){x.classList.remove('sel');});
+  el.classList.add('sel');
+}
+
+function rfAppliances(){
+
+  // Helper: radio group stored in answers
+  function radioGroup(key,nameAttr,opts,label,req){
+    var val=ST.answers[key]||'';
+    var btns=opts.map(function(o,i){
+      return '<label class="ro'+(val===o?' sel':'')+'" onclick="appRadioSet(\''+key+'\','+i+',this)">'
+        +'<input type="radio" name="'+nameAttr+'" '+(val===o?'checked':'')+'>'+o+'</label>';
+    }).join('');
+    return '<div class="fg"><label>'+label+(req?' <span class="req">*</span>':'')+'</label><div class="rg">'+btns+'</div></div>';
+  }
+  function textField(key,label,ph,req){
+    var val=(ST.answers[key]||'').replace(/"/g,'&quot;');
+    return '<div class="fg"><label>'+label+(req?' <span class="req">*</span>':'')+'</label>'
+      +'<input type="text" value="'+val+'" placeholder="'+ph+'" '
+      +'onchange="ST.answers[\''+key+'\']=this.value" onkeyup="ST.answers[\''+key+'\']=this.value"></div>';
+  }
+
+  // ── STANDARD APPLIANCES (always shown, all required) ────────────────────
+  var standardSection='<div style="font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--sage);margin-bottom:12px">Standard Appliances</div>'
+  +sectionWrap('Range / Cooktop',
+    radioGroup('app_range_type','app_range_type',['Gas range','Electric range','Induction cooktop','Dual fuel (gas top / electric oven)','Separate cooktop + wall oven','Undecided'],'Type',true)
+    +radioGroup('app_range_size','app_range_size',['30"','36"','48"','60"+','N/A — wall oven'],'Size',true)
+    +textField('app_range_brand','Brand preference','Wolf, Thermador, Viking, Café, KitchenAid, Samsung...',false)
+    +textField('app_range_product','Exact product selected','e.g. Wolf 36" Dual Fuel Range DF366',true))
+  +sectionWrap('Range Hood / Ventilation',
+    radioGroup('app_hood_type','app_hood_type',['Wall mount chimney hood','Under-cabinet hood','Island hood (ceiling mount)','Built-in insert (custom surround)','Downdraft','Recirculating (no duct)','Undecided'],'Type',true)
+    +radioGroup('app_hood_vent','app_hood_vent',['Exterior vented','Recirculating','Undecided'],'Vented or recirculating?',true)
+    +textField('app_hood_product','Exact product selected','e.g. Zephyr Modena 36" Wall Hood AK9200AS',true))
+  +sectionWrap('Refrigerator',
+    radioGroup('app_fridge_type','app_fridge_type',['French door','Side by side','Bottom freezer','Column refrigerator','Column fridge + separate column freezer','Counter depth','Undecided'],'Type',true)
+    +radioGroup('app_fridge_size','app_fridge_size',['30"','33"','36"','42"','48" (column pair)','Undecided'],'Width',true)
+    +textField('app_fridge_brand','Brand preference','Sub-Zero, Thermador, Café, Samsung, LG...',false)
+    +textField('app_fridge_product','Exact product selected','e.g. Sub-Zero BI-42UFDID 42" Built-In',true))
+  +sectionWrap('Dishwasher',
+    radioGroup('app_dish_type','app_dish_type',['Standard 24"','Compact 18"','Double dishwasher drawer','Undecided'],'Type',true)
+    +textField('app_dish_product','Exact product selected','e.g. Bosch 800 Series SHPM88Z75N',true))
+  +sectionWrap('Microwave',
+    radioGroup('app_micro_type','app_micro_type',['Built-in wall unit','Drawer microwave (under counter)','Over-the-range','Countertop — no dedicated space needed','None'],'Type',true)
+    +textField('app_micro_product','Exact product selected','e.g. Sharp 24" Drawer Microwave SMD2470ASY',true));
+
+  // ── ADDITIONAL APPLIANCES (opt-in) ───────────────────────────────────────
+  var ADD_OPTS=[
+    {id:'wine_fridge',  name:'Wine Refrigerator'},
+    {id:'bev_fridge',   name:'Beverage Refrigerator'},
+    {id:'warming_draw', name:'Warming Drawer'},
+    {id:'steam_oven',   name:'Steam Oven'},
+    {id:'speed_oven',   name:'Speed Oven / Combi'},
+    {id:'coffee_sys',   name:'Built-in Coffee System'},
+    {id:'ice_maker',    name:'Ice Maker'},
+    {id:'trash_comp',   name:'Trash Compactor'},
+    {id:'second_dish',  name:'Second Dishwasher'},
+    {id:'outdoor_grill',name:'Outdoor Grill'},
+    {id:'outdoor_fridge',name:'Outdoor Refrigerator'},
+    {id:'outdoor_pizza',name:'Outdoor Pizza Oven'},
+    {id:'wine_tower',   name:'Wine Tower / Column'},
+    {id:'keg_fridge',   name:'Keg / Draft Beer System'}
+  ];
+
+  var addChecks=ADD_OPTS.map(function(a){
+    var checked=!!(ST.answers['app_add_sel_'+a.id]);
+    return '<label class="lt-check'+(checked?' checked':'')+'" onclick="this.querySelector(\'input\').click()" style="min-width:160px">'
+      +'<input type="checkbox" '+(checked?'checked':'')+' onclick="event.stopPropagation();appAddToggle(\''+a.id+'\',this)">'
+      +a.name+'</label>';
+  }).join('');
+
+  var addDetails=ADD_OPTS.filter(function(a){return ST.answers['app_add_sel_'+a.id];}).map(function(a){
+    var loc=(ST.answers['app_add_loc_'+a.id]||'').replace(/"/g,'&quot;');
+    var prod=(ST.answers['app_add_prod_'+a.id]||'').replace(/"/g,'&quot;');
+    return '<div class="fix-detail"><div class="fix-detail-hd">'+a.name+'</div>'
+      +'<div class="fg"><label>Location / notes</label>'
+      +'<input type="text" value="'+loc+'" placeholder="e.g. Island, butler pantry, outdoor kitchen..." '
+      +'onchange="ST.answers[\'app_add_loc_'+a.id+'\']=this.value" onkeyup="ST.answers[\'app_add_loc_'+a.id+'\']=this.value"></div>'
+      +'<div class="fg"><label>Exact product selected <span class="req">*</span></label>'
+      +'<input type="text" value="'+prod+'" placeholder="Make, model, SKU..." '
+      +'onchange="ST.answers[\'app_add_prod_'+a.id+'\']=this.value" onkeyup="ST.answers[\'app_add_prod_'+a.id+'\']=this.value"></div>'
+      +'</div>';
+  }).join('');
+
+  // ── CUSTOM ADDITIONAL APPLIANCES (manual add) ────────────────────────────
+  var customs=[];try{customs=JSON.parse(ST.answers['app_custom']||'[]');}catch(e){}
+  var customRows=customs.map(function(c,i){
+    return '<div style="display:grid;grid-template-columns:1fr 1fr 36px;gap:8px;align-items:end;margin-bottom:8px">'
+      +'<div class="fg"><label style="font-size:12px">Appliance name</label>'
+      +'<input type="text" value="'+(c.name||'').replace(/"/g,'&quot;')+'" placeholder="e.g. Nugget ice maker, Pasta arm..." '
+      +'onchange="appCustomName('+i+',this.value)" onkeyup="appCustomName('+i+',this.value)"></div>'
+      +'<div class="fg"><label style="font-size:12px">Exact product</label>'
+      +'<input type="text" value="'+(c.product||'').replace(/"/g,'&quot;')+'" placeholder="Make, model, SKU..." '
+      +'onchange="appCustomProduct('+i+',this.value)" onkeyup="appCustomProduct('+i+',this.value)"></div>'
+      +'<div class="fg"><label style="font-size:12px">&nbsp;</label>'
+      +'<button onclick="appCustomRemove('+i+')" style="padding:9px 10px;background:none;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;color:var(--text-secondary);font-size:16px;height:40px">×</button></div>'
+      +'</div>';
+  }).join('');
+
+  var additionalSection='<div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)">'
+    +'<div style="font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--sage);margin-bottom:12px">Additional Appliances</div>'
+    +'<div style="font-size:13px;color:var(--text-secondary);margin-bottom:10px">Select any additional appliances going into your home. For each selected, enter the exact product.</div>'
+    +'<div class="lt-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-bottom:12px">'+addChecks+'</div>'
+    +(addDetails?'<div class="fix-details-wrap" style="margin-bottom:14px">'+addDetails+'</div>':'')
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +'<span style="font-size:13px;font-weight:600">Not in the list? Add manually</span>'
+    +'<button onclick="appCustomAdd()" style="padding:7px 14px;background:var(--sage);color:#fff;border:none;border-radius:var(--radius);font-size:12px;font-weight:600;cursor:pointer">+ Add Appliance</button>'
+    +'</div>'
+    +(customRows||'')
+    +'</div>';
+
+  return standardSection + additionalSection;
+}
+
+function sectionWrap(title, body){
+  return '<div class="room-section" style="margin-bottom:10px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">'+title+'</div></div>'
+    +'<div class="rs-body">'+body+'</div></div>';
+}
+
+function appAddToggle(id,el){
+  ST.answers['app_add_sel_'+id]=el.checked?'1':'';
+  el.closest('.lt-check').className='lt-check'+(el.checked?' checked':'');
+  render();
+}
+function appCustomAdd(){
+  var c=[];try{c=JSON.parse(ST.answers['app_custom']||'[]');}catch(e){}
+  c.push({name:'',product:''});
+  ST.answers['app_custom']=JSON.stringify(c);
+  render();
+}
+function appCustomRemove(i){
+  var c=[];try{c=JSON.parse(ST.answers['app_custom']||'[]');}catch(e){}
+  c.splice(i,1);
+  ST.answers['app_custom']=JSON.stringify(c);
+  render();
+}
+function appCustomName(i,v){
+  var c=[];try{c=JSON.parse(ST.answers['app_custom']||'[]');}catch(e){}
+  if(c[i])c[i].name=v;
+  ST.answers['app_custom']=JSON.stringify(c);
+}
+function appCustomProduct(i,v){
+  var c=[];try{c=JSON.parse(ST.answers['app_custom']||'[]');}catch(e){}
+  if(c[i])c[i].product=v;
+  ST.answers['app_custom']=JSON.stringify(c);
+}
+
+function rfExteriorFinishes(){
+
+  function radioGroup(key,nameAttr,opts,label,req){
+    var val=ST.answers[key]||'';
+    var btns=opts.map(function(o){
+      return '<label class="ro'+(val===o?' sel':'')+'" onclick="ST.answers[\''+key+'\']=\''+o+'\';this.closest(\'.rg\').querySelectorAll(\'.ro\').forEach(function(x){x.classList.remove(\'sel\')});this.classList.add(\'sel\')">'
+        +'<input type="radio" name="'+nameAttr+'" '+(val===o?'checked':'')+'>'+o+'</label>';
+    }).join('');
+    return '<div class="fg"><label>'+label+(req?' <span class="req">*</span>':'')+'</label><div class="rg">'+btns+'</div></div>';
+  }
+
+  function textField(key,label,ph,req){
+    var val=(ST.answers[key]||'').replace(/"/g,'&quot;');
+    return '<div class="fg"><label>'+label+(req?' <span class="req">*</span>':'')+'</label>'
+      +'<input type="text" value="'+val+'" placeholder="'+ph+'" '
+      +'onchange="ST.answers[\''+key+'\']=this.value" onkeyup="ST.answers[\''+key+'\']=this.value"></div>';
+  }
+
+  // ── Roof ────────────────────────────────────────────────────────────────
+  var roofSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Roof</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Type affects structural load, ridge venting, and flashing</div></div>'
+    +'<div class="rs-body">'
+    +radioGroup('ext_roof_type','roof_type',
+      ['Architectural shingle','Metal standing seam','Metal corrugated','Metal tile','Flat / TPO','Concrete tile','Clay tile','Cedar shake','Undecided'],
+      'Roof type',true)
+    +textField('ext_roof_color','Color / finish','e.g. Weathered Wood, Charcoal Gray, Galvalume natural...',true)
+    +textField('ext_roof_product','Exact product selected','e.g. Owens Corning Duration, Duration Storm, Charcoal TruDefinition',true)
+    +'<div class="fg"><label>Notes</label>'
+    +'<input type="text" value="'+(ST.answers['ext_roof_notes']||'').replace(/"/g,'&quot;')+'" '
+    +'placeholder="Ridge vent type, ice & water shield spec, valley treatment..." '
+    +'onchange="ST.answers[\'ext_roof_notes\']=this.value" onkeyup="ST.answers[\'ext_roof_notes\']=this.value">'
+    +'</div></div></div>';
+
+  // ── Soffit ──────────────────────────────────────────────────────────────
+  var soffitSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Soffit</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Type ties to exterior framing and ventilation plan</div></div>'
+    +'<div class="rs-body">'
+    +radioGroup('ext_soffit_type','soffit_type',
+      ['Vented aluminum','Non-vented aluminum','Wood','Fiber cement','PVC / cellular','Undecided'],
+      'Soffit type',true)
+    +radioGroup('ext_soffit_vent','soffit_vent',
+      ['Vented (perforated)','Non-vented (solid)','Undecided'],
+      'Vented or non-vented?',true)
+    +textField('ext_soffit_color','Color','e.g. White, Almond, Clay, or custom match...', true)
+    +'</div></div>';
+
+  // ── Gutters ─────────────────────────────────────────────────────────────
+  var gutterSection='<div class="room-section">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Gutters</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Downspout locations affect grading and drainage plan</div></div>'
+    +'<div class="rs-body">'
+    +radioGroup('ext_gutter_type','gutter_type',
+      ['K-style','Half-round','Box','Undecided'],
+      'Gutter style',true)
+    +radioGroup('ext_gutter_material','gutter_material',
+      ['Aluminum seamless','Copper','Steel','Galvanized steel','Vinyl','Undecided'],
+      'Material',true)
+    +textField('ext_gutter_size','Size','e.g. 5" standard, 6" for steep roof...', false)
+    +textField('ext_gutter_color','Color','e.g. White, Bronze, to match fascia, natural copper...', true)
+    +'<div class="fg"><label>Downspout notes</label>'
+    +'<input type="text" value="'+(ST.answers['ext_gutter_notes']||'').replace(/"/g,'&quot;')+'" '
+    +'placeholder="Number of downspouts, locations, underground drainage..." '
+    +'onchange="ST.answers[\'ext_gutter_notes\']=this.value" onkeyup="ST.answers[\'ext_gutter_notes\']=this.value">'
+    +'</div></div></div>';
+
+  return roofSection + soffitSection + gutterSection;
+}
+
+function rfPaint(){
+  if(!ST.rooms.length)return '<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No rooms set up. Go back to Project Setup first.</div>';
+
+  var SHEEN_OPTS=["Flat","Matte","Eggshell","Satin","Semi-gloss","High-gloss"];
+
+  // ── Whole-house sheen selectors ─────────────────────────────────────────
+  function sheenRow(key,lbl){
+    var val=ST.answers['paint_sheen_'+key]||'';
+    var opts=SHEEN_OPTS.map(function(o,i){
+      return '<label class="ro'+(val===o?' sel':'')+'" onclick="ST.answers[\'paint_sheen_'+key+'\']=\''+o+'\';this.closest(\'.rg\').querySelectorAll(\'.ro\').forEach(function(x){x.classList.remove(\'sel\')});this.classList.add(\'sel\')">'
+        +'<input type="radio" name="sheen_'+key+'" '+(val===o?'checked':'')+'>'+o+'</label>';
+    }).join('');
+    return '<div class="fg"><label>'+lbl+' sheen <span class="req">*</span></label><div class="rg">'+opts+'</div></div>';
+  }
+
+  var sheenSection='<div class="room-section" style="margin-bottom:14px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Whole-House Paint Sheen</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Applied to all rooms — note exceptions below</div></div>'
+    +'<div class="rs-body">'
+    +sheenRow('walls','All walls')
+    +sheenRow('trim','All trim')
+    +sheenRow('ceilings','All painted ceilings')
+    +'<div class="fg"><label>Sheen exceptions / notes</label>'
+    +'<input type="text" value="'+(ST.answers['paint_sheen_notes']||'').replace(/"/g,'&quot;')+'" '
+    +'placeholder="e.g. Semi-gloss in all bathrooms, high-gloss on front door trim..." '
+    +'onchange="ST.answers[\'paint_sheen_notes\']=this.value" onkeyup="ST.answers[\'paint_sheen_notes\']=this.value">'
+    +'</div></div></div>';
+
+  // ── Interior: room by room colors ───────────────────────────────────────
+  var interiorRows=ST.rooms.map(function(r){
+    var wall=(ST.answers['paint_int_wall_'+r.id]||'').replace(/"/g,'&quot;');
+    var trim=(ST.answers['paint_int_trim_'+r.id]||'').replace(/"/g,'&quot;');
+    var ceil=(ST.answers['paint_int_ceil_'+r.id]||'').replace(/"/g,'&quot;');
+    var notes=(ST.answers['paint_int_notes_'+r.id]||'').replace(/"/g,'&quot;');
+    return '<div class="room-section">'
+      +'<div class="rs-hd" style="cursor:default"><div class="rs-hd-l"><div class="rs-nm">'+r.name+'</div></div>'
+      +'<span style="font-size:11px;color:'+(wall?'var(--sage)':'var(--text-secondary)')+'">'+( wall||'Not entered')+'</span></div>'
+      +'<div class="rs-body">'
+      +'<div class="fg"><label>Wall color <span class="req">*</span></label>'
+      +'<input type="text" value="'+wall+'" placeholder="e.g. SW Alabaster SW7012, BM White Dove OC-17..." '
+      +'onchange="ST.answers[\'paint_int_wall_'+r.id+'\']=this.value" onkeyup="ST.answers[\'paint_int_wall_'+r.id+'\']=this.value"></div>'
+      +'<div class="fg"><label>Trim color <span class="req">*</span></label>'
+      +'<input type="text" value="'+trim+'" placeholder="e.g. SW Extra White SW7006, or Same as walls..." '
+      +'onchange="ST.answers[\'paint_int_trim_'+r.id+'\']=this.value" onkeyup="ST.answers[\'paint_int_trim_'+r.id+'\']=this.value"></div>'
+      +'<div class="fg"><label>Ceiling color <span class="req">*</span></label>'
+      +'<input type="text" value="'+ceil+'" placeholder="e.g. SW Ceiling Bright White, Same as walls, or Accent color..." '
+      +'onchange="ST.answers[\'paint_int_ceil_'+r.id+'\']=this.value" onkeyup="ST.answers[\'paint_int_ceil_'+r.id+'\']=this.value"></div>'
+      +'<div class="fg"><label>Room notes</label>'
+      +'<input type="text" value="'+notes+'" placeholder="Any different sheen, accent wall, special treatment..." '
+      +'onchange="ST.answers[\'paint_int_notes_'+r.id+'\']=this.value" onkeyup="ST.answers[\'paint_int_notes_'+r.id+'\']=this.value"></div>'
+      +'</div></div>';
+  }).join('');
+
+  // ── Exterior ────────────────────────────────────────────────────────────
+  var porchCeilType=ST.answers['paint_porch_ceil_type']||'';
+  var porchCeilColor=(ST.answers['paint_porch_ceil_color']||'').replace(/"/g,'&quot;');
+  var porchPostType=ST.answers['paint_porch_post_type']||'';
+  var porchPostColor=(ST.answers['paint_porch_post_color']||'').replace(/"/g,'&quot;');
+
+  function extTypeOpts(key,nameAttr){
+    return ['Paint','Stain'].map(function(o){
+      var cur=ST.answers[key]||'';
+      return '<label class="ro'+(cur===o?' sel':'')+'" onclick="ST.answers[\''+key+'\']=\''+o+'\';this.closest(\'.rg\').querySelectorAll(\'.ro\').forEach(function(x){x.classList.remove(\'sel\')});this.classList.add(\'sel\')">'
+        +'<input type="radio" name="'+nameAttr+'" '+(cur===o?'checked':'')+'>'+o+'</label>';
+    }).join('');
+  }
+
+  // Dynamic exterior surfaces
+  var surfaces=[];
+  try{surfaces=JSON.parse(ST.answers['paint_ext_surfaces']||'[]');}catch(e){}
+  var surfaceRows=surfaces.map(function(s,i){
+    var sType=s.type||'Paint';
+    var sColor=(s.color||'').replace(/"/g,'&quot;');
+    var sName=(s.name||'').replace(/"/g,'&quot;');
+    var typeOpts=['Paint','Stain'].map(function(o){
+      return '<label class="ro'+(sType===o?' sel':'')+'" onclick="paintExtSurfaceType('+i+',\''+o+'\',this)">'
+        +'<input type="radio" name="ext_surf_type_'+i+'" '+(sType===o?'checked':'')+'>'+o+'</label>';
+    }).join('');
+    return '<div style="display:grid;grid-template-columns:1fr 100px 1fr 36px;gap:8px;align-items:end;margin-bottom:10px">'
+      +'<div class="fg"><label style="font-size:12px">Surface name</label>'
+      +'<input type="text" value="'+sName+'" placeholder="e.g. Front door, Shutters, Fascia..." '
+      +'onchange="paintExtSurfaceName('+i+',this.value)" onkeyup="paintExtSurfaceName('+i+',this.value)"></div>'
+      +'<div class="fg"><label style="font-size:12px">Type</label>'
+      +'<div class="rg" style="grid-template-columns:1fr 1fr">'+typeOpts+'</div></div>'
+      +'<div class="fg"><label style="font-size:12px">Color / product</label>'
+      +'<input type="text" value="'+sColor+'" placeholder="Color name or product..." '
+      +'onchange="paintExtSurfaceColor('+i+',this.value)" onkeyup="paintExtSurfaceColor('+i+',this.value)"></div>'
+      +'<div class="fg"><label style="font-size:12px">&nbsp;</label>'
+      +'<button onclick="paintExtRemoveSurface('+i+')" style="padding:9px 10px;background:none;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;color:var(--text-secondary);font-size:16px;height:40px">×</button></div>'
+      +'</div>';
+  }).join('');
+
+  var exteriorSection='<div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)">'
+    +'<div style="font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--sage);margin-bottom:14px">Exterior Paint & Stain</div>'
+    // Porch ceiling
+    +'<div class="room-section" style="margin-bottom:10px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Porch Ceiling</div></div>'
+    +'<div class="rs-body">'
+    +'<div class="fg"><label>Paint or stain? <span class="req">*</span></label>'
+    +'<div class="rg" style="grid-template-columns:1fr 1fr">'+extTypeOpts('paint_porch_ceil_type','porch_ceil_type')+'</div></div>'
+    +'<div class="fg"><label>Color / product <span class="req">*</span></label>'
+    +'<input type="text" value="'+porchCeilColor+'" placeholder="e.g. SW Rookwood Shutter Green, or Cabot Driftwood Gray stain..." '
+    +'onchange="ST.answers[\'paint_porch_ceil_color\']=this.value" onkeyup="ST.answers[\'paint_porch_ceil_color\']=this.value">'
+    +'</div></div></div>'
+    // Porch posts
+    +'<div class="room-section" style="margin-bottom:10px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Porch Posts</div></div>'
+    +'<div class="rs-body">'
+    +'<div class="fg"><label>Paint or stain? <span class="req">*</span></label>'
+    +'<div class="rg" style="grid-template-columns:1fr 1fr">'+extTypeOpts('paint_porch_post_type','porch_post_type')+'</div></div>'
+    +'<div class="fg"><label>Color / product <span class="req">*</span></label>'
+    +'<input type="text" value="'+porchPostColor+'" placeholder="e.g. SW Extra White, or match trim color..." '
+    +'onchange="ST.answers[\'paint_porch_post_color\']=this.value" onkeyup="ST.answers[\'paint_porch_post_color\']=this.value">'
+    +'</div></div></div>'
+    // Additional surfaces
+    +'<div style="margin-top:14px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    +'<span style="font-size:13px;font-weight:600">Additional Exterior Surfaces</span>'
+    +'<button onclick="paintExtAddSurface()" style="padding:7px 14px;background:var(--sage);color:#fff;border:none;border-radius:var(--radius);font-size:12px;font-weight:600;cursor:pointer">+ Add Surface</button>'
+    +'</div>'
+    +(surfaceRows||'<div style="font-size:13px;color:var(--text-secondary);padding:8px 0">No additional surfaces added. Click Add Surface for front door, shutters, fascia, siding body color, garage door, etc.</div>')
+    +'</div></div>';
+
+  return sheenSection
+    +'<div style="font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--sage);margin-bottom:10px">Interior Colors — By Room</div>'
+    +interiorRows
+    +exteriorSection;
+}
+
+function paintExtAddSurface(){
+  var surfaces=[];try{surfaces=JSON.parse(ST.answers['paint_ext_surfaces']||'[]');}catch(e){}
+  surfaces.push({name:'',type:'Paint',color:''});
+  ST.answers['paint_ext_surfaces']=JSON.stringify(surfaces);
+  render();
+}
+function paintExtRemoveSurface(i){
+  var surfaces=[];try{surfaces=JSON.parse(ST.answers['paint_ext_surfaces']||'[]');}catch(e){}
+  surfaces.splice(i,1);
+  ST.answers['paint_ext_surfaces']=JSON.stringify(surfaces);
+  render();
+}
+function paintExtSurfaceName(i,v){
+  var surfaces=[];try{surfaces=JSON.parse(ST.answers['paint_ext_surfaces']||'[]');}catch(e){}
+  if(surfaces[i])surfaces[i].name=v;
+  ST.answers['paint_ext_surfaces']=JSON.stringify(surfaces);
+}
+function paintExtSurfaceType(i,v,el){
+  var surfaces=[];try{surfaces=JSON.parse(ST.answers['paint_ext_surfaces']||'[]');}catch(e){}
+  if(surfaces[i])surfaces[i].type=v;
+  ST.answers['paint_ext_surfaces']=JSON.stringify(surfaces);
+  el.closest('.rg').querySelectorAll('.ro').forEach(function(x){x.classList.remove('sel')});
+  el.classList.add('sel');
+}
+function paintExtSurfaceColor(i,v){
+  var surfaces=[];try{surfaces=JSON.parse(ST.answers['paint_ext_surfaces']||'[]');}catch(e){}
+  if(surfaces[i])surfaces[i].color=v;
+  ST.answers['paint_ext_surfaces']=JSON.stringify(surfaces);
+}
+
+
+function rfStandard(){
+  const cat=CATS[ST.catId];
+  return cat.fields.map(f=>{const val=ga(f.id);
+    if(f.type==="radio"){const opts=f.opts.map(o=>`<label class="ro${val===o?" sel":""}" onclick="pickR('${f.id}','${o.replace(/'/g,'&#39;').replace(/"/g,'&#34;')}',this)"><input type="radio" name="${f.id}" ${val===o?"checked":""}>${o}</label>`).join("");return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><div class="rg">${opts}</div></div>`;}
+    if(f.type==="textarea")return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><textarea placeholder="${f.ph||""}" onchange="sa('${f.id}',this.value)" onkeyup="sa('${f.id}',this.value)">${val}</textarea></div>`;
+    return`<div class="fg"><label>${f.label}${f.req?` <span class="req">*</span>`:""}</label><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="${(f.ph||"").replace(/"/g,'&quot;')}" onchange="sa('${f.id}',this.value)" onkeyup="sa('${f.id}',this.value)"></div>`;
+  }).join("");
+}
+function toggleFixture(rid,fid,el){setFixture(rid,fid,el.checked);el.closest(".fix-check").className="fix-check"+(el.checked?" checked":"");render();}
+function toggleLight(rid,ltid,el){setLight(rid,ltid,el.checked);const lt=LIGHT_TYPES.find(l=>l.id===ltid);el.closest(".lt-check").className="lt-check"+(el.checked?" checked":"")+(lt&&lt.defaultOn?" default-on":"");render();}
+
+function renderForm(){
+  const cat=CATS[ST.catId];const wv=WAVES[cat.wave];
+  const isFirst=ALL_IDS.indexOf(ST.catId)===0;const isLast=ALL_IDS.indexOf(ST.catId)===ALL_IDS.length-1;
+  let body="";
+  if(cat.type==="fireplace")body=rfFireplace();
+  else if(cat.type==="specialty")body=rfSpecialty();
+  else if(cat.type==="flooring")body=rfFlooring();
+  else if(cat.type==="tile")body=rfTile();
+  else if(cat.type==="plumbing")body=rfPlumbing();
+  else if(cat.type==="lighting")body=rfLighting();
+  else if(cat.type==="appliances")body=rfAppliances();
+  else if(cat.type==="exterior_finishes")body=rfExteriorFinishes();
+  else if(cat.type==="countertops")body=rfCountertops();
+  else if(cat.type==="paint")body=rfPaint();
+  else body=rfStandard();
+  const INSPO_CATS=['flooring','tile','plumbing','lighting','countertops','paint','exterior_finishes'];
+  const inspoHtml=INSPO_CATS.includes(ST.catId)?inspoSection(ST.catId):'';
+  return`<div class="card"><span class="wlbl">${wv.label} — ${wv.name}</span><div class="ctitle">${cat.name}</div><div class="guidance">${cat.guidance}</div><div class="fields">${body}</div>${inspoHtml}
+    <div id="val-msg" class="val-msg"></div>
+    <div class="btn-row"><button class="btn" onclick="goBack()">${isFirst?"← Setup":"Back"}</button><button class="btn-s" onclick="persist()">Save progress</button><button class="btn btn-p" onclick="advance()">${isLast?"View Summary →":"Save & Continue →"}</button></div>
+  </div>`;
+}
+
+function renderSummary(){
+  // Helper: one summary row
+  function srow(label, val){
+    if(!val||val==='')return '';
+    return '<div class="sr"><span class="sk2">'+label+'</span><span class="sv">'+val+'</span></div>';
+  }
+  function srow_req(label, val){
+    var empty=!val||val==='';
+    return '<div class="sr"><span class="sk2">'+label+'</span><span class="sv '+(empty?'se':'')+'">'+(val||'— not entered —')+'</span></div>';
+  }
+  
+  function shead(label){
+    return '<div style="font-size:11px;font-weight:600;color:var(--sage);letter-spacing:.1em;text-transform:uppercase;margin:10px 0 6px;padding-top:8px;border-top:1px solid var(--border)">'+label+'</div>';
+  }
+
+  var secs=WAVES.map(function(w,wi){
+    var cats=ALL_IDS.filter(function(id){return CATS[id].wave===wi;});
+    var rows=cats.map(function(id){
+      var cat=CATS[id];
+      var d=isSaved(id),skipped=isSkipped(id);
+      var badge=d?'<span class="badge b-done">Complete</span>':skipped?'<span class="badge b-done">Skipped</span>':'<span class="badge b-pend">Pending</span>';
+      var preview='';
+
+      // ── FIREPLACE ──────────────────────────────────────────────────────
+      if(id==='fireplace'){
+        var want=ST.answers['fireplace_fp_want']||'';
+        preview+=srow_req('Fireplace?', want);
+        if(ST.fpUnits&&ST.fpUnits.length){
+          ST.fpUnits.forEach(function(u,i){
+            preview+=srow_req('Fireplace '+(i+1), u.type&&u.size&&u.location?(u.type+', '+u.size+' — '+u.location):(u.type||'Incomplete'));
+          });
+        }
+        preview+=srow('Notes', ST.answers['fireplace_fp_notes']||'');
+      }
+
+      // ── APPLIANCES ─────────────────────────────────────────────────────
+      else if(id==='appliances'){
+        // One compact row per standard appliance — type + product combined
+        [
+          ['Range / Cooktop','app_range_type','app_range_product'],
+          ['Range Hood','app_hood_type','app_hood_product'],
+          ['Refrigerator','app_fridge_type','app_fridge_product'],
+          ['Dishwasher','app_dish_type','app_dish_product'],
+          ['Microwave','app_micro_type','app_micro_product']
+        ].forEach(function(r){
+          var t=ST.answers[r[1]]||'';
+          var p=ST.answers[r[2]]||'';
+          var val=t&&p?(t+' — '+p):t||p||'';
+          preview+=srow_req(r[0],val);
+        });
+        // Additional checked appliances
+        var ADD_OPTS_SUM=[
+          {id:'wine_fridge',  name:'Wine Refrigerator'},
+          {id:'bev_fridge',   name:'Beverage Refrigerator'},
+          {id:'warming_draw', name:'Warming Drawer'},
+          {id:'steam_oven',   name:'Steam Oven'},
+          {id:'speed_oven',   name:'Speed Oven / Combi'},
+          {id:'coffee_sys',   name:'Built-in Coffee System'},
+          {id:'ice_maker',    name:'Ice Maker'},
+          {id:'trash_comp',   name:'Trash Compactor'},
+          {id:'second_dish',  name:'Second Dishwasher'},
+          {id:'outdoor_grill',name:'Outdoor Grill'},
+          {id:'outdoor_fridge',name:'Outdoor Refrigerator'},
+          {id:'outdoor_pizza',name:'Outdoor Pizza Oven'},
+          {id:'wine_tower',   name:'Wine Tower / Column'},
+          {id:'keg_fridge',   name:'Keg / Draft Beer System'}
+        ];
+        var hasAdditional=false;
+        ADD_OPTS_SUM.forEach(function(a){
+          if(ST.answers['app_add_sel_'+a.id]){
+            if(!hasAdditional){preview+=shead('Additional Appliances');hasAdditional=true;}
+            var prod=ST.answers['app_add_prod_'+a.id]||'';
+            var loc=ST.answers['app_add_loc_'+a.id]||'';
+            preview+=srow_req(a.name, prod+(loc?' ('+loc+')':''));
+          }
+        });
+        // Custom appliances
+        var customs=[];try{customs=JSON.parse(ST.answers['app_custom']||'[]');}catch(e){}
+        if(customs.length){
+          if(!hasAdditional)preview+=shead('Additional Appliances');
+          customs.forEach(function(c){if(c.name||c.product)preview+=srow_req(c.name||'Custom appliance',c.product||'');});
+        }
+      }
+
+      // ── EXTERIOR FINISHES ──────────────────────────────────────────────
+      else if(id==='exterior_finishes'){
+        preview+=shead('Roof');
+        preview+=srow_req('Type', ST.answers['ext_roof_type']||'');
+        preview+=srow_req('Color', ST.answers['ext_roof_color']||'');
+        preview+=srow_req('Product', ST.answers['ext_roof_product']||'');
+        preview+=srow('Notes', ST.answers['ext_roof_notes']||'');
+        preview+=shead('Soffit');
+        preview+=srow_req('Type', ST.answers['ext_soffit_type']||'');
+        preview+=srow_req('Vented?', ST.answers['ext_soffit_vent']||'');
+        preview+=srow_req('Color', ST.answers['ext_soffit_color']||'');
+        preview+=shead('Gutters');
+        preview+=srow_req('Style', ST.answers['ext_gutter_type']||'');
+        preview+=srow_req('Material', ST.answers['ext_gutter_material']||'');
+        preview+=srow_req('Color', ST.answers['ext_gutter_color']||'');
+        preview+=srow('Notes', ST.answers['ext_gutter_notes']||'');
+      }
+
+      // ── SPECIALTY TRIM ─────────────────────────────────────────────────
+      else if(id==='specialty_trim'){
+        var sel=ST.specSel||{};
+        var chosen=SPEC_ITEMS.filter(function(it){return sel[it.id];});
+        if(!chosen.length){
+          preview+=srow_req('Items selected','None');
+        } else {
+          chosen.forEach(function(it){
+            var locField=it.fields[0];
+            var loc=locField?ST.answers['specialty_trim_'+locField.id]||'':'';
+            preview+=srow_req(it.name, loc||'Selected');
+          });
+        }
+      }
+
+      // ── FLOORING ───────────────────────────────────────────────────────
+      else if(id==='flooring'){
+        var fThumbs='';
+        ST.rooms.forEach(function(r){
+          var type=ST.answers['flooring_floor_'+r.id]||'';
+          var color=ST.answers['flooring_color_'+r.id]||'';
+          var prod=ST.answers['flooring_product_'+r.id]||'';
+          preview+=srow_req(r.name, type+(color?' — '+color:'')+(prod?' ('+prod+')':''));
+          var ph=getPhoto('flooring_product_'+r.id);
+          if(ph)fThumbs+=sumThumbImg(ph,r.name);
+        });
+        if(fThumbs)preview+='<div class="sum-thumbs">'+fThumbs+'</div>';
+      }
+
+      // ── TILE ───────────────────────────────────────────────────────────
+      else if(id==='tile'){
+        bathRooms().forEach(function(b){
+          preview+=shead(b.name);
+          preview+=srow_req('Floor tile', ST.answers['tile_floor_'+b.id]||'');
+          preview+=srow_req('Floor product', ST.answers['tile_floor_product_'+b.id]||'');
+          preview+=srow_req('Shower wall tile', ST.answers['tile_shower_'+b.id]||'');
+          preview+=srow_req('Shower product', ST.answers['tile_shower_product_'+b.id]||'');
+          preview+=srow('Accent tile', ST.answers['tile_accent_'+b.id]||'');
+          preview+=srow('Heated floor', ST.answers['tile_heat_'+b.id]||'');
+        });
+      }
+
+      // ── PLUMBING ───────────────────────────────────────────────────────
+      else if(id==='plumbing'){
+        plumbingRooms().forEach(function(r){
+          var fixtures=getFixturesForType(r.plumbing);
+          var selFix=fixtures.filter(function(f){return isFixtureSel(r.id,f.id);});
+          if(!selFix.length){preview+=srow_req(r.name,'No fixtures selected');return;}
+          preview+=shead(r.name);
+          selFix.forEach(function(f){
+            var prod=getFA(r.id,f.id,'product')||getFA(r.id,f.id,'sink_product')||'';
+            var faucetProd=getFA(r.id,f.id,'faucet_product')||'';
+            preview+=srow_req(f.name+' — product', prod);
+            if(faucetProd)preview+=srow_req(f.name+' — faucet', faucetProd);
+          });
+        });
+      }
+
+      // ── LIGHTING ───────────────────────────────────────────────────────
+      else if(id==='lighting'){
+        ST.rooms.forEach(function(r){
+          var sel=ST.lightingTypes[r.id]||{};
+          var selTypes=LIGHT_TYPES.filter(function(lt){return sel[lt.id];});
+          if(!selTypes.length){preview+=srow_req(r.name,'No light types selected');return;}
+          preview+=shead(r.name);
+          selTypes.forEach(function(lt){
+            var prod=getLightProduct(r.id,lt.id)||'';
+            preview+=srow_req(lt.name, prod);
+          });
+          preview+=srow('Notes', ST.answers['lighting_'+r.id+'_notes']||'');
+        });
+      }
+
+      // ── COUNTERTOPS ────────────────────────────────────────────────────
+      else if(id==='countertops'){
+        preview+=shead('Kitchen');
+        preview+=srow_req('Material', ST.answers['countertops_ct_kit']||ST.answers['ct_kit']||'');
+        preview+=srow('Color direction', ST.answers['countertops_ct_color']||ST.answers['ct_color']||'');
+        preview+=srow('Edge profile', ST.answers['countertops_ct_edge']||ST.answers['ct_edge']||'');
+        preview+=srow('Island countertop', ST.answers['countertops_ct_isl']||ST.answers['ct_isl']||'');
+        preview+=srow('Island material', ST.answers['countertops_ct_isl_mat']||ST.answers['ct_isl_mat']||'');
+        preview+=srow_req('Kitchen product', ST.answers['countertops_ct_product']||ST.answers['ct_product']||'');
+        bathRooms().forEach(function(b){
+          preview+=shead(b.name+' Vanity');
+          preview+=srow_req('Material', ST.answers['ct_bath_'+b.id]||'');
+          preview+=srow_req('Product', ST.answers['ct_bath_product_'+b.id]||'');
+        });
+      }
+
+      // ── PAINT ──────────────────────────────────────────────────────────
+      else if(id==='paint'){
+        preview+=shead('Whole-House Sheen');
+        preview+=srow_req('All walls', ST.answers['paint_sheen_walls']||'');
+        preview+=srow_req('All trim', ST.answers['paint_sheen_trim']||'');
+        preview+=srow_req('All ceilings', ST.answers['paint_sheen_ceilings']||'');
+        preview+=srow('Exceptions', ST.answers['paint_sheen_notes']||'');
+        ST.rooms.forEach(function(r){
+          var wall=ST.answers['paint_int_wall_'+r.id]||'';
+          var trim=ST.answers['paint_int_trim_'+r.id]||'';
+          var ceil=ST.answers['paint_int_ceil_'+r.id]||'';
+          if(wall||trim||ceil){
+            preview+=shead(r.name);
+            preview+=srow_req('Walls',wall);
+            preview+=srow_req('Trim',trim);
+            preview+=srow_req('Ceiling',ceil);
+          }
+        });
+        preview+=shead('Exterior');
+        var pct=ST.answers['paint_porch_ceil_type']||'';
+        var pcc=ST.answers['paint_porch_ceil_color']||'';
+        if(pct||pcc)preview+=srow_req('Porch ceiling',pct+(pcc?' — '+pcc:''));
+        var ppt=ST.answers['paint_porch_post_type']||'';
+        var ppc=ST.answers['paint_porch_post_color']||'';
+        if(ppt||ppc)preview+=srow_req('Porch posts',ppt+(ppc?' — '+ppc:''));
+        var surfaces=[];try{surfaces=JSON.parse(ST.answers['paint_ext_surfaces']||'[]');}catch(e){}
+        surfaces.forEach(function(s){
+          if(s.name)preview+=srow_req(s.name,(s.type||'')+(s.color?' — '+s.color:''));
+        });
+      }
+
+      // ── DOORS & TRIM ───────────────────────────────────────────────────
+      else if(id==='doors'){
+        [
+          ['dr_sty','Door style'],['dr_ht','Door height'],['dr_col','Door finish'],
+          ['tr_prof','Trim / casing profile'],['tr_base','Base molding'],['tr_crown','Crown molding'],
+          ['tr_product','Millwork product']
+        ].forEach(function(pair){
+          var v=ST.answers['doors_'+pair[0]]||ST.answers[pair[0]]||'';
+          preview+=srow_req(pair[1],v);
+        });
+        preview+=srow('Special doors', ST.answers['doors_dr_spec']||ST.answers['dr_spec']||'');
+      }
+
+      // ── GENERIC FALLBACK ───────────────────────────────────────────────
+      else if(cat.fields){
+        cat.fields.forEach(function(f){
+          var v=ST.answers[id+'_'+f.id]||ST.answers[f.id]||'';
+          if(v&&f.type!=='textarea')preview+=srow(f.label,v);
+        });
+      }
+
+      return '<div class="sc"><div class="sc-hd"><span class="sc-nm" onclick="switchCat(\''+id+'\')">'+cat.name+'</span>'+badge+'</div>'+preview+'</div>';
+    }).join('');
+    return '<div class="ss"><h3>'+w.label+' — '+w.name+'</h3>'+rows+'</div>';
+  }).join('');
+
+  return '<div class="sum-card"><div style="font-size:20px;font-weight:700;margin-bottom:1rem">Selections Summary — '+ST.clientName+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius);margin-bottom:1.5rem;font-size:13px;border:1px solid var(--border)"><span style="color:var(--text-secondary)">Overall progress</span><span style="font-weight:700">'+done()+' of '+total()+' complete ('+pct()+'%)</span></div>'
+    +secs
+    +'<button class="btn btn-p" onclick="ST.view=\'form\';render()" style="width:100%;margin-top:1rem">Continue Selecting</button>'
+    +'</div>';
+}
+
+
+function switchCat(id){ST.catId=id;ST.wave=CATS[id].wave;ST.view="form";render()}
+function switchWave(idx){ST.wave=idx;const fid=ALL_IDS.find(id=>CATS[id].wave===idx);if(fid)ST.catId=fid;ST.view="form";render()}
+
+// ── Setup ─────────────────────────────────────────────────
+function setPlumbing(rid,type){const r=ST.rooms.find(r=>r.id===rid);if(!r)return;r.plumbing=type;render();}
+function addRoom(){const inp=document.getElementById("add-room-inp");const name=inp.value.trim();if(!name)return;ST.rooms.push({id:"custom_"+Date.now(),name,plumbing:"none"});inp.value="";render();}
+function removeRoom(rid){ST.rooms=ST.rooms.filter(r=>r.id!==rid);render();}
+function startWaves(){
+  if(!ST.rooms.length){const el=document.getElementById("setup-err");if(el){el.textContent="Please add at least one room.";el.style.display="block";setTimeout(()=>el.style.display="none",4000);}return;}
+  persist();ST.screen="app";ST.wave=0;ST.catId="fireplace";ST.view="form";render();
+}
+
+function renderSetup(){
+  const bathCnt=bathRooms().length;const plumbCnt=plumbingRooms().length;
+  const roomRows=ST.rooms.map(r=>{const p=r.plumbing;
+    return`<div class="room-row${p!=="none"?" has-plumbing":""}">
+      <div class="room-row-name">${r.name}</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="plumb-lbl">Plumbing:</span>
+        <div class="plumb-toggle">
+          <button class="plumb-btn${p==="none"?" an":""}" onclick="setPlumbing('${r.id}','none')">None</button>
+          <button class="plumb-btn${p==="bath"?" ab":""}" onclick="setPlumbing('${r.id}','bath')">Bath</button>
+          <button class="plumb-btn${p==="kitchen"?" ak":""}" onclick="setPlumbing('${r.id}','kitchen')">Kitchen</button>
+          <button class="plumb-btn${p==="utility"?" au":""}" onclick="setPlumbing('${r.id}','utility')">Utility</button>
+        </div>
+        <button class="remove-btn" onclick="removeRoom('${r.id}')" title="Remove room">×</button>
+      </div>
+    </div>`;}).join("");
+  return`<div class="setup-card">
+    <span class="wlbl">Project Setup</span>
+    <div class="setup-hd">Configure your rooms</div>
+    <div class="setup-sub">Add all rooms in your home. For each room, select the plumbing type if applicable — this drives fixture selections in Wave 3. All rooms appear in flooring and lighting selections automatically.</div>
+    <div class="setup-section">
+      <span class="setup-lbl">Plumbing types</span>
+      <div class="setup-legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#9ab898"></span>Bath — toilet, sinks, shower, tub</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#8aaad8"></span>Kitchen — sinks, pot filler</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#c8b898"></span>Utility — laundry, hose bibb</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--border)"></span>None — no plumbing</span>
+      </div>
+    </div>
+    <div class="setup-section">
+      <span class="setup-lbl">Your rooms</span>
+      ${ST.rooms.length?`<div class="room-rows">${roomRows}</div>`:`<div style="padding:12px;background:var(--bg-secondary);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);margin-bottom:12px;border:1px solid var(--border)">No rooms added yet. Click room names below to add defaults.</div>`}
+    </div>
+    <div class="setup-section">
+      <span class="setup-lbl">Add a room</span>
+      <div class="add-section"><input type="text" id="add-room-inp" placeholder="Room name — e.g. Theater Room, Powder Room, Outdoor Kitchen..." onkeydown="if(event.key==='Enter')addRoom()"><button class="add-btn" onclick="addRoom()">Add</button></div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+        ${DEFAULT_ROOMS.map(dr=>{const exists=ST.rooms.some(r=>r.id===dr.id);return`<button onclick="if(!ST.rooms.some(r=>r.id==='${dr.id}')){ST.rooms.push({id:'${dr.id}',name:'${dr.name}',plumbing:'${dr.plumbing}'});render()}" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:20px;cursor:${exists?"default":"pointer"};background:${exists?"var(--bg-secondary)":"var(--bg-primary)"};opacity:${exists?"0.45":"1"};color:var(--text-primary);font-family:inherit" ${exists?"disabled":""}>${dr.name}</button>`;}).join("")}
+      </div>
+    </div>
+    <div class="setup-summary">${ST.rooms.length} room${ST.rooms.length!==1?"s":""} total${bathCnt?` · ${bathCnt} bath room${bathCnt!==1?"s":""}`:""}${plumbCnt?` · ${plumbCnt} with plumbing`:""}</div>
+    <div id="setup-err" class="val-msg"></div>
+    <div class="btn-row"><button class="btn" onclick="ST.screen='login';render()">Back</button><button class="btn-s" onclick="persist()">Save</button><button class="btn btn-p" onclick="startWaves()">Continue to Wave 1 →</button></div>
+  </div>`;
+}
+
+function renderApp(){
+  const wvCats=ALL_IDS.filter(id=>CATS[id].wave===ST.wave);
+  const mbActive=ST.view==="moodboard";
+  const wTabs=WAVES.map((w,i)=>{const allDone=ALL_IDS.filter(id=>CATS[id].wave===i).every(id=>catDone(id));const cls=i===ST.wave?"active":allDone?"done":"";return`<button class="wtab ${cls}" onclick="switchWave(${i})">${w.label}: ${w.name}</button>`;}).join("");
+  const cPills=wvCats.map(id=>{const d=catDone(id),a=id===ST.catId&&ST.view==="form";return`<button class="cpill ${a?"active":""} ${d?"done":""}" onclick="switchCat('${id}')">${CATS[id].name}</button>`;}).join("");
+  const isPortal=new URLSearchParams(window.location.search).get("clientKey");
+  setTimeout(()=>{const b=document.getElementById("portal-back-btn");if(b)b.onclick=()=>{window.location.href="selections.html";};},0);
+  return`<div class="client-bar"><span>Project: <strong>${ST.clientName}${ST.projectName?" — "+ST.projectName:""}</strong></span>
+    <span style="display:flex;gap:12px"><button class="sw-btn" onclick="ST.screen='setup';render()">Edit rooms</button>${isPortal?'<button class="sw-btn" id="portal-back-btn">&#8592; Back to portal</button>':'<button class="sw-btn" onclick="ST.screen=\'login\';render()">Switch client</button>'}</span></div>
+    <div class="prog-meta"><span style="font-weight:600">${WAVES[ST.wave].label}: ${WAVES[ST.wave].name}</span><span>${done()} of ${total()} complete</span></div>
+    <div class="prog-bg"><div class="prog-fill" style="width:${pct()}%"></div></div>
+    <div class="wtabs">${wTabs}</div>
+    <div class="cnav">${cPills}<button class="cpill ${ST.view==="summary"?"active":""}" onclick="ST.view='summary';render()">Summary</button><button class="cpill ${ST.view==="moodboard"?"active":""}" onclick="ST.view='moodboard';render()">🎨 Mood Board</button></div>
+    ${ST.view==="summary"?renderSummary():ST.view==="moodboard"?renderMoodBoard():renderForm()}`;
+}
+
+function renderLogin(){
+  return`<div class="login-wrap"><div class="login-card"><span class="login-logo">Six Arrows Blueprint</span><h2>Wave Selections</h2>
+    <p>Enter your name to load or continue your selections. Each client's answers are saved separately.</p>
+    <div class="lf"><label>Your name</label><input type="text" id="ln" placeholder="e.g. Johnson Family" onkeydown="if(event.key==='Enter')loginGo()"></div>
+    <div class="lf"><label>Project / address <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label><input type="text" id="lp" placeholder="e.g. 123 Maple Lane" onkeydown="if(event.key==='Enter')loginGo()"></div>
+    <button class="login-btn" onclick="loginGo()">Open My Selections</button>
+    <div class="lerr" id="lerr">Please enter your name to continue.</div>
+  </div></div>`;
+}
+
+async function loginGo(){
+  const name=document.getElementById("ln").value.trim();const proj=document.getElementById("lp").value.trim();
+  if(!name){document.getElementById("lerr").style.display="block";return}
+  ST.clientName=name;ST.projectName=proj;ST.clientKey=name.toLowerCase().replace(/[^a-z0-9]/g,"_");
+  ST.answers={};ST.saved={};ST.fpUnits=[];ST.specSel={};ST.rooms=[];ST.plumbingFixtures={};ST.lightingTypes={};ST.roomOpen={};
+  try{
+    const a=await storageGet(sk("ans"));if(a)ST.answers=JSON.parse(a);
+    const s=await storageGet(sk("sav"));if(s)ST.saved=JSON.parse(s);
+    const f=await storageGet(sk("fpu"));if(f)ST.fpUnits=JSON.parse(f);
+    const sp=await storageGet(sk("spc"));if(sp)ST.specSel=JSON.parse(sp);
+    const rm=await storageGet(sk("rms"));if(rm)ST.rooms=JSON.parse(rm);
+    const px=await storageGet(sk("pfx"));if(px)ST.plumbingFixtures=JSON.parse(px);
+    const lx=await storageGet(sk("ltx"));if(lx)ST.lightingTypes=JSON.parse(lx);
+  }catch(e){}
+  ST.screen=ST.rooms.length?"app":"setup";ST.wave=0;ST.catId="fireplace";ST.view="form";render();
+}
+
+function renderMoodBoard(){
+  var MOOD_CATS=[
+    {id:'flooring',label:'Flooring'},
+    {id:'tile',label:'Tile'},
+    {id:'plumbing',label:'Plumbing Fixtures'},
+    {id:'lighting',label:'Lighting Fixtures'},
+    {id:'countertops',label:'Countertops'},
+    {id:'paint',label:'Paint & Colors'},
+    {id:'exterior_finishes',label:'Exterior Finishes'}
+  ];
+
+  function mbSection(catLabel, imgs, inspoArr){
+    var html='';
+    if(imgs){html+='<div class="mb-section"><div class="mb-section-hd">'+catLabel+'</div><div class="mb-grid">'+imgs+'</div></div>';}
+    var inspoImgs=inspoArr.filter(function(u){return u;}).map(function(u){
+      var s=u.replace(/"/g,'%22');
+      return '<div class="mb-card"><img class="mb-img" src="'+s+'" onerror="imgErr(this.parentNode)" data-href="'+s+'" onclick="window.open(this.dataset.href)"><div class="mb-label">Inspiration</div></div>';
+    }).join('');
+    if(inspoImgs)html+='<div class="mb-section"><div class="mb-section-hd">'+catLabel+' — Inspiration</div><div class="mb-grid">'+inspoImgs+'</div></div>';
+    return html;
+  }
+
+  function mbImg(url, label, sub){
+    if(!url)return '';
+    var s=url.replace(/"/g,'%22');
+    return '<div class="mb-card"><img class="mb-img" src="'+s+'" onerror="imgErr(this.parentNode)" data-href="'+s+'" onclick="window.open(this.dataset.href)"><div class="mb-label">'+label+'</div>'+(sub?'<div class="mb-sublabel">'+sub+'</div>':'')+'</div>';
+  }
+
+  var sections='';
+
+  // Flooring
+  var fImgs=ST.rooms.map(function(r){return mbImg(getPhoto('flooring_product_'+r.id),r.name,ST.answers['flooring_floor_'+r.id]||'');}).join('');
+  sections+=mbSection('Flooring',fImgs,getInspo('flooring'));
+
+  // Tile
+  var tImgs=bathRooms().map(function(b){return mbImg(getPhoto('tile_inspo_'+b.id),b.name,'');}).join('');
+  sections+=mbSection('Tile',tImgs,getInspo('tile'));
+
+  // Plumbing
+  var pImgs='';
+  plumbingRooms().forEach(function(r){
+    getFixturesForType(r.plumbing).forEach(function(f){
+      if(!isFixtureSel(r.id,f.id))return;
+      pImgs+=mbImg(getPhoto('plumbing_'+r.id+'_'+f.id),r.name+' — '+f.name,'');
+    });
+  });
+  sections+=mbSection('Plumbing Fixtures',pImgs,getInspo('plumbing'));
+
+  // Lighting
+  var lImgs='';
+  ST.rooms.forEach(function(r){
+    var sel=ST.lightingTypes[r.id]||{};
+    LIGHT_TYPES.forEach(function(lt){
+      if(!sel[lt.id])return;
+      lImgs+=mbImg(getPhoto('lighting_'+r.id+'_'+lt.id),r.name+' — '+lt.name,'');
+    });
+  });
+  sections+=mbSection('Lighting Fixtures',lImgs,getInspo('lighting'));
+
+  // Countertops / Paint / Exterior — inspo only
+  sections+=mbSection('Countertops','',getInspo('countertops'));
+  sections+=mbSection('Paint & Colors','',getInspo('paint'));
+  sections+=mbSection('Exterior Finishes','',getInspo('exterior_finishes'));
+
+  return '<div class="sum-card">'
+    +'<div style="font-size:20px;font-weight:700;margin-bottom:4px">🎨 Mood Board — '+ST.clientName+'</div>'
+    +'<div style="font-size:13px;color:var(--text-secondary);margin-bottom:1.5rem">Add photo URLs to your selections to build your board. Use the Inspiration Photos section in each category to add general direction images.</div>'
+    +(sections.trim()
+      ? sections
+      : '<div style="padding:2rem;text-align:center;color:var(--text-secondary);background:var(--bg-secondary);border-radius:8px"><div style="font-size:32px;margin-bottom:10px">🎨</div><div style="font-weight:600;margin-bottom:6px">No photos yet</div><div style="font-size:13px">Go to Flooring, Lighting, or other categories and add photo URLs to your product selections or inspiration sections.</div></div>')
+    +'</div>';
+}
+
+function render(){
+  document.getElementById("app").innerHTML=ST.screen==="login"?renderLogin():ST.screen==="setup"?renderSetup():renderApp();
+  if(ST.screen==="app"&&ST.catId==="fireplace"&&ST.view==="form")setTimeout(renderFpUnits,0);
+}
+
+// ── Portal integration: auto-login from URL params ──
+async function portalInit(){
+  const params=new URLSearchParams(window.location.search);
+  const pClientKey=params.get("clientKey");
+  const pClientName=params.get("clientName");
+  const pProjectName=params.get("projectName")||"";
+  const pWave=parseInt(params.get("wave")||"0");
+  const pCat=params.get("cat")||"fireplace";
+
+  if(pClientKey && pClientName){
+    // Auto-login — skip login screen entirely
+    ST.clientName=pClientName;
+    ST.projectName=pProjectName;
+    ST.clientKey=pClientKey;
+    ST.answers={};ST.saved={};ST.fpUnits=[];ST.specSel={};
+    ST.rooms=[];ST.plumbingFixtures={};ST.lightingTypes={};ST.roomOpen={};
+    try{
+      const a=await storageGet(sk("ans"));if(a)ST.answers=JSON.parse(a);
+      const s=await storageGet(sk("sav"));if(s)ST.saved=JSON.parse(s);
+      const f=await storageGet(sk("fpu"));if(f)ST.fpUnits=JSON.parse(f);
+      const sp=await storageGet(sk("spc"));if(sp)ST.specSel=JSON.parse(sp);
+      const rm=await storageGet(sk("rms"));if(rm)ST.rooms=JSON.parse(rm);
+      const px=await storageGet(sk("pfx"));if(px)ST.plumbingFixtures=JSON.parse(px);
+      const lx=await storageGet(sk("ltx"));if(lx)ST.lightingTypes=JSON.parse(lx);
+    }catch(e){}
+    ST.screen=ST.rooms.length?"app":"setup";
+    ST.wave=pWave;
+    // Find first cat of target wave
+    const waveCats=ALL_IDS.filter(id=>CATS[id].wave===pWave);
+    ST.catId=waveCats[0]||"fireplace";
+    ST.view="form";
+    render();
+  } else {
+    render();
+  }
+}
+portalInit();</script>
+</body>
+</html>
