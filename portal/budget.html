@@ -111,18 +111,23 @@
 </head>
 <body>
 <script>
-let p = AUTH.requireAuth();
-if (!p) throw new Error('Not authed');
+async function initBudget() {
+  let p = AUTH.requireAuth();
+  if (!p) return;
 
-const isSAB = p.statusType === 'sab';
+  // Always refresh from Supabase before rendering budget
+  // This ensures admin status changes show immediately on refresh
+  try {
+    const fresh = await AUTH.refreshSession(p.id);
+    if (fresh) p = fresh;
+  } catch(e) {}
 
-// ── Budget categories — using your standard structure ──
-// Status meanings:
-//   SAB phase:          'pending' | 'in_progress' | 'confirmed'
-//   Construction phase: 'not_started' | 'in_progress' | 'complete' | 'over_budget'
-const cats = p.budgetCategories || [];
+  const isSAB = p.statusType === 'sab';
 
-if (isSAB) {
+  // ── Budget categories ──
+  const cats = p.budgetCategories || [];
+
+  if (isSAB) {
   // ── SAB MODE — no dollar amounts, show category completion status ──
 
   const total     = cats.length;
@@ -211,12 +216,6 @@ if (isSAB) {
 
   // Toggle SAB subcategory expand/collapse
   const sabExpandState = {};
-  // Async: refresh from Supabase if session is stale (catches admin status changes)
-  AUTH.refreshIfStale(5 * 60 * 1000, (fresh) => {
-    p = fresh;
-    window.location.reload();
-  });
-
   window.toggleSabCat = function(ci) {
     sabExpandState[ci] = !sabExpandState[ci];
     const wrap = document.getElementById('sab-sub-' + ci);
@@ -342,13 +341,6 @@ if (isSAB) {
     </div>
   `);
 
-  // Async: refresh from Supabase if session is stale (catches admin changes)
-  AUTH.refreshIfStale(5 * 60 * 1000, (fresh) => {
-    p = fresh;
-    // Re-render budget with fresh data by reloading the page content
-    window.location.reload();
-  });
-
   // Toggle subcategory expand/collapse
   const expandState = {};
   window.toggleCat = function(ci) {
@@ -362,4 +354,6 @@ if (isSAB) {
     if (chev) chev.style.transform = expandState[ci] ? 'rotate(90deg)' : '';
   };
 }
+}
+initBudget();
 </script></body></html>

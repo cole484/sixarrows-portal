@@ -704,6 +704,19 @@ const AUTH = {
   requireAuth() {
     const p = this.getSession();
     if (!p) { window.location.href = 'index.html'; return null; }
+    // If session was force-invalidated (ts=0), trigger background refresh
+    // but still return the cached data so page renders immediately
+    try {
+      const raw = localStorage.getItem('sa_session_v3');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.ts === 0 && p.id) {
+          // Restore ts so we don't refresh on every call, then refresh in background
+          s.ts = Date.now() - (9 * 60 * 1000); // Mark as 9 min old so refreshIfStale triggers
+          localStorage.setItem('sa_session_v3', JSON.stringify(s));
+        }
+      }
+    } catch(e) {}
     return p;
   },
   // Refresh session data from Supabase (call after updates to reflect changes)

@@ -227,8 +227,16 @@
 </head>
 <body>
 <script>
-let p = AUTH.requireAuth();
-if (!p) throw new Error('Not authed');
+// Async initialization — fetches fresh session from Supabase before rendering
+async function initDashboard() {
+  let p = AUTH.requireAuth();
+  if (!p) return;
+
+  // Always refresh from Supabase on dashboard load (fast — ~200ms)
+  try {
+    const fresh = await AUTH.refreshSession(p.id);
+    if (fresh) p = fresh;
+  } catch(e) {}
 
 // ── Load tracker state (Notion first, localStorage fallback) ─────
 let TS = {};
@@ -690,11 +698,8 @@ if (isConstruction) {
   }
 })();
 
-// Async: refresh session from Supabase if stale or force-invalidated
-AUTH.refreshIfStale(2 * 60 * 1000, (fresh) => {
-  p = fresh;
-  window.location.reload();
-});
+}
+initDashboard();
 </script>
 </body>
 </html>
