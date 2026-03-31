@@ -227,7 +227,7 @@
 </head>
 <body>
 <script>
-const p = AUTH.requireAuth();
+let p = AUTH.requireAuth();
 if (!p) throw new Error('Not authed');
 
 // ── Load tracker state (Notion first, localStorage fallback) ─────
@@ -689,6 +689,12 @@ if (isConstruction) {
     if (el) el.innerHTML = `Days remaining: <strong>${daysLeft}</strong>`;
   }
 })();
+
+// Async: refresh session from Supabase if stale or force-invalidated
+AUTH.refreshIfStale(2 * 60 * 1000, (fresh) => {
+  p = fresh;
+  window.location.reload();
+});
 </script>
 </body>
 </html>

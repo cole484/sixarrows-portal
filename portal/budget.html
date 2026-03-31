@@ -111,7 +111,7 @@
 </head>
 <body>
 <script>
-const p = AUTH.requireAuth();
+let p = AUTH.requireAuth();
 if (!p) throw new Error('Not authed');
 
 const isSAB = p.statusType === 'sab';
@@ -211,6 +211,12 @@ if (isSAB) {
 
   // Toggle SAB subcategory expand/collapse
   const sabExpandState = {};
+  // Async: refresh from Supabase if session is stale (catches admin status changes)
+  AUTH.refreshIfStale(5 * 60 * 1000, (fresh) => {
+    p = fresh;
+    window.location.reload();
+  });
+
   window.toggleSabCat = function(ci) {
     sabExpandState[ci] = !sabExpandState[ci];
     const wrap = document.getElementById('sab-sub-' + ci);
@@ -335,6 +341,13 @@ if (isSAB) {
       }).join('')}
     </div>
   `);
+
+  // Async: refresh from Supabase if session is stale (catches admin changes)
+  AUTH.refreshIfStale(5 * 60 * 1000, (fresh) => {
+    p = fresh;
+    // Re-render budget with fresh data by reloading the page content
+    window.location.reload();
+  });
 
   // Toggle subcategory expand/collapse
   const expandState = {};

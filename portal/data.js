@@ -718,6 +718,21 @@ const AUTH = {
       }
     } catch(e) {}
     return null;
+  },
+  // Refresh session if older than maxAgeMs, then call callback with fresh data
+  // Use this on pages that show data that admins can change (budget, updates, etc.)
+  async refreshIfStale(maxAgeMs, callback) {
+    try {
+      const raw = localStorage.getItem('sa_session_v3');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      const age = Date.now() - (s.ts || 0);
+      // Always refresh if ts=0 (forced invalidation) or older than maxAgeMs
+      if (s.ts === 0 || age > maxAgeMs) {
+        const fresh = await AUTH.refreshSession(s.id || s.data?.id);
+        if (fresh && callback) callback(fresh);
+      }
+    } catch(e) {}
   }
 };
 
