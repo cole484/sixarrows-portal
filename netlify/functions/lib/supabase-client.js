@@ -65,16 +65,15 @@ export async function supabase(table, options = {}) {
 // Upsert helper
 export async function upsertRow(table, row, conflictCols = []) {
   const url = `${SUPABASE_URL}/rest/v1/${table}`;
+  const preferParts = ['return=representation', 'resolution=merge-duplicates'];
+  if (conflictCols.length > 0) preferParts.push(`on_conflict=${conflictCols.join(',')}`);
   const headers = {
     'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
-    'Prefer': 'return=representation,resolution=merge-duplicates',
+    'Prefer': preferParts.join(','),
   };
-  if (conflictCols.length > 0) {
-    headers['Prefer'] += `,on_conflict=${conflictCols.join(',')}`;
-  }
-  const res = await fetch(url + '?on_conflict=' + conflictCols.join(','), {
+  const res = await fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(row),

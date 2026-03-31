@@ -64,13 +64,20 @@ export const handler = async (event) => {
       const { suffix, data } = JSON.parse(event.body || '{}');
       if (!suffix) return respond(400, { error: 'suffix required' });
 
-      const url = `${SB_URL()}/rest/v1/selections?on_conflict=client_id,suffix`;
+      const url = `${SB_URL()}/rest/v1/selections`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { ...sbHeaders(), 'Prefer': 'return=minimal,resolution=merge-duplicates' },
+        headers: {
+          ...sbHeaders(),
+          'Prefer': 'return=minimal,resolution=merge-duplicates,on_conflict=client_id,suffix',
+        },
         body: JSON.stringify({ client_id: clientKey, suffix, data, updated_at: new Date().toISOString() }),
       });
-      if (!res.ok) throw new Error(`Supabase POST: ${res.status} ${await res.text()}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error('Supabase POST failed:', res.status, errText);
+        throw new Error(`Supabase POST: ${res.status} ${errText}`);
+      }
       return respond(200, { success: true });
     } catch (err) {
       console.error('selections POST error:', err.message);
