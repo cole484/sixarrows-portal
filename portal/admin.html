@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Six Arrows — Admin</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<style>
+/* ── Admin shell ── */
+.admin-shell { display:flex; min-height:100vh; }
+.admin-sidebar {
+  width:220px; flex-shrink:0; background:var(--charcoal);
+  padding:1.25rem 1rem; display:flex; flex-direction:column; gap:1.25rem;
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+}
+.admin-logo { display:flex; align-items:center; gap:9px; }
+.admin-logo img { width:28px; height:28px; object-fit:contain; }
+.admin-logo-text { font-size:11px; font-weight:700; color:var(--cream); letter-spacing:.05em; text-transform:uppercase; }
+.admin-logo-sub  { font-size:9px; color:rgba(235,233,222,.3); letter-spacing:.1em; text-transform:uppercase; }
+.admin-nav-section { margin-bottom:4px; }
+.admin-nav-title { font-size:9px; text-transform:uppercase; letter-spacing:.13em; color:rgba(235,233,222,.25); margin-bottom:5px; padding-left:9px; }
+.admin-nav-link {
+  display:flex; align-items:center; gap:7px;
+  padding:7px 9px; border-radius:var(--r-md);
+  color:rgba(235,233,222,.42); font-size:12px; font-weight:400;
+  cursor:pointer; transition:all .15s; margin-bottom:1px; user-select:none;
+}
+.admin-nav-link:hover { background:rgba(255,255,255,.06); color:rgba(235,233,222,.72); }
+.admin-nav-link.active { background:rgba(117,127,105,.2); color:var(--cream); font-weight:500; }
+.admin-nav-link svg { width:13px; height:13px; opacity:.6; flex-shrink:0; }
+.admin-nav-link.active svg { opacity:1; }
+
+.admin-main { flex:1; min-width:0; background:var(--cream); }
+.admin-topbar {
+  position:sticky; top:0; z-index:10;
+  height:50px; background:var(--cream-pale);
+  border-bottom:0.5px solid var(--border-2);
+  padding:0 1.5rem; display:flex; align-items:center; justify-content:space-between;
+}
+.admin-topbar-title { font-size:13px; font-weight:600; color:var(--charcoal); }
+.admin-content { padding:1.5rem; max-width:900px; }
+
+/* Project tabs */
+.project-tabs { display:flex; gap:6px; margin-bottom:1.25rem; flex-wrap:wrap; }
+.project-tab {
+  padding:7px 15px; border-radius:var(--r-full);
+  border:0.5px solid var(--border-2); background:white;
+  cursor:pointer; font-size:12px; font-weight:500; color:var(--charcoal-3); transition:all .15s;
+}
+.project-tab.active { background:var(--charcoal); color:var(--cream); border-color:var(--charcoal); }
+.project-tab:hover:not(.active) { border-color:var(--border-3); color:var(--charcoal); }
+
+/* Form elements */
+.adm-field { margin-bottom:12px; }
+.adm-field label { display:block; font-size:11px; font-weight:600; color:var(--charcoal-3); text-transform:uppercase; letter-spacing:.08em; margin-bottom:5px; }
+.adm-inp {
+  width:100%; padding:9px 12px; font-size:13px; font-family:'Work Sans',sans-serif;
+  border:0.5px solid var(--border-2); border-radius:var(--r-md); background:white;
+  color:var(--charcoal); outline:none; transition:border-color .15s;
+}
+.adm-inp:focus { border-color:var(--green); }
+.adm-inp[type=date] { cursor:pointer; }
+.adm-sel { appearance:none; cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; }
+.adm-textarea { resize:vertical; min-height:80px; }
+.adm-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.adm-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.adm-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 16px; border-radius:var(--r-md); border:none;
+  font-size:12px; font-weight:600; cursor:pointer; font-family:'Work Sans',sans-serif;
+  transition:all .15s;
+}
+.adm-btn-primary { background:var(--charcoal); color:var(--cream); }
+.adm-btn-primary:hover { opacity:.85; }
+.adm-btn-green { background:var(--green); color:white; }
+.adm-btn-green:hover { opacity:.85; }
+.adm-btn-danger { background:var(--danger-lt); color:var(--danger); border:0.5px solid rgba(184,50,50,.2); }
+.adm-btn-danger:hover { background:#fde8e8; }
+.adm-btn-ghost { background:var(--cream-pale); color:var(--charcoal-3); border:0.5px solid var(--border-2); }
+.adm-btn-ghost:hover { background:var(--cream-2); }
+
+/* Step management */
+.step-manage-row {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 0; border-bottom:0.5px solid var(--border);
+}
+.step-manage-row:last-child { border-bottom:none; }
+.step-check {
+  width:20px; height:20px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--border-3); cursor:pointer; transition:all .15s;
+}
+.step-check.done { background:var(--green); border-color:var(--green); }
+.step-check svg { width:9px; height:9px; }
+.step-manage-meta { flex:1; min-width:0; }
+.step-manage-name { font-size:13px; font-weight:500; color:var(--charcoal); }
+.step-manage-date { font-size:11px; color:var(--charcoal-4); margin-top:1px; }
+.step-manage-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.step-date-set { font-size:11px; padding:4px 8px; border:0.5px solid var(--border-2); border-radius:var(--r-xs); font-family:'Work Sans',sans-serif; background:white; color:var(--charcoal); outline:none; cursor:pointer; }
+.step-date-set:focus { border-color:var(--green); }
+
+/* Update / milestone rows */
+.list-item-row {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:12px 0; border-bottom:0.5px solid var(--border);
+}
+.list-item-row:last-child { border-bottom:none; }
+.list-item-body { flex:1; min-width:0; }
+.list-item-meta { font-size:11px; color:var(--charcoal-4); margin-bottom:2px; }
+.list-item-title { font-size:13px; font-weight:600; color:var(--charcoal); margin-bottom:2px; }
+.list-item-note { font-size:12px; color:var(--charcoal-3); line-height:1.4; }
+
+/* Phase section header */
+.phase-section-hd {
+  font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.1em; color:var(--charcoal-4);
+  padding:10px 0 8px; border-bottom:0.5px solid var(--border-2);
+  margin-bottom:4px; margin-top:16px;
+}
+.phase-section-hd:first-child { margin-top:0; }
+
+/* Adm msg */
+.adm-msg { font-size:12px; padding:8px 12px; border-radius:var(--r-md); margin-top:8px; display:none; }
+.adm-msg.success { background:var(--green-lt); color:var(--green-deep); }
+.adm-msg.error   { background:var(--danger-lt); color:var(--danger); }
+</style>
+</head>
+<body>
+<script>
+// ════════════════════════════════════════════════════════
+//  SIX ARROWS ADMIN PANEL
+// ════════════════════════════════════════════════════════
+
+const ADMIN_PASS = 'sa_admin_2026';
+// Supabase direct access for admin operations
+const SUPABASE_DIRECT_URL = 'https://mtvcahscwpralmlqlnzg.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10dmNhaHNjd3ByYWxtbHFsbnpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTY4ODEsImV4cCI6MjA5MDM5Mjg4MX0.givpTh-YxG16vYZmn0KLBCPG0ivxYbjh-i8Q87eCNnk';
+let adminAuthed  = false;
+let activeProject = Object.keys(PROJECTS)[0];
+let activeView    = 'tracker';
+
+// ── Storage helpers ──────────────────────────────────────
+function adminKey(projectId, suffix) { return `sa_admin_${projectId}_${suffix}`; }
+function adminGet(projectId, suffix) {
+  try { return JSON.parse(localStorage.getItem(adminKey(projectId, suffix)) || 'null'); } catch(e) { return null; }
+}
+function adminSet(projectId, suffix, val) {
+  localStorage.setItem(adminKey(projectId, suffix), JSON.stringify(val));
+}
+
+// Tracker state uses the same key as the client portal
+function getTrackerState(p) {
+  try { return JSON.parse(localStorage.getItem('sa_tracker_v3_' + p.id) || '{}'); } catch(e) { return {}; }
+}
+function setTrackerState(p, TS) {
+  localStorage.setItem('sa_tracker_v3_' + p.id, JSON.stringify(TS));
+}
+
+// ── Auth ─────────────────────────────────────────────────
+function checkAdminAuth() {
+  if (sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS) {
+    adminAuthed = true; renderAdmin(); return;
+  }
+  renderAdminLogin();
+}
+
+function renderAdminLogin() {
+  document.body.innerHTML = `
+    <div class="login-page">
+      <div style="background:white;border:0.5px solid var(--border-2);border-radius:var(--r-2xl);padding:2.5rem;max-width:400px;width:90%;box-shadow:var(--sh-lg)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.5rem">
+          <img id="al-logo" style="width:32px;height:32px;object-fit:contain">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--charcoal);text-transform:uppercase;letter-spacing:.05em">Six Arrows</div>
+            <div style="font-size:9px;color:var(--charcoal-4);text-transform:uppercase;letter-spacing:.1em">Admin Panel</div>
+          </div>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--charcoal);margin-bottom:4px">Admin access</div>
+        <p style="font-size:13px;color:var(--charcoal-3);margin-bottom:1.5rem">This page is not for clients.</p>
+        <div class="adm-field">
+          <label>Admin password</label>
+          <input class="adm-inp" type="password" id="admin-pw" placeholder="Enter password" autocomplete="off"/>
+        </div>
+        <div id="admin-err" class="adm-msg error">Incorrect password.</div>
+        <button class="adm-btn adm-btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="attemptAdminLogin()">Enter Admin Panel →</button>
+      </div>
+    </div>`;
+  document.getElementById('al-logo').src = LOGO_CIRCLE;
+  document.getElementById('admin-pw').addEventListener('keydown', e => { if(e.key==='Enter') attemptAdminLogin(); });
+}
+
+function attemptAdminLogin() {
+  const pw = document.getElementById('admin-pw').value;
+  if (pw === ADMIN_PASS) {
+    sessionStorage.setItem('sa_admin_auth', ADMIN_PASS);
+    adminAuthed = true; renderAdmin();
+  } else {
+    const err = document.getElementById('admin-err');
+    err.style.display = 'block'; err.textContent = 'Incorrect password.';
+  }
+}
+
+// ── Show/hide msg helper ──────────────────────────────────
+function showMsg(id, type, text, duration=2800) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = `adm-msg ${type}`;
+  el.textContent = text;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, duration);
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER ADMIN
+// ════════════════════════════════════════════════════════
+function renderAdmin() {
+  const p   = PROJECTS[activeProject];
+  const nav = [
+    { key:'tracker',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="3.5" x2="13" y2="3.5"/><line x1="1" y1="7" x2="9" y2="7"/><line x1="1" y1="10.5" x2="11" y2="10.5"/></svg>`, label:'SAB Tracker'     },
+    { key:'updates',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 10V3a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H4L1 12V10z"/></svg>`, label:'Project Updates' },
+    { key:'timeline',  icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="2.5" cy="3.5" r="1.5"/><line x1="5" y1="3.5" x2="13" y2="3.5"/><circle cx="2.5" cy="7" r="1.5"/><line x1="5" y1="7" x2="13" y2="7"/></svg>`, label:'Milestones'        },
+    { key:'budget',    icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x=".5" y="1.5" width="13" height="11" rx="1"/><line x1=".5" y1="5" x2="13.5" y2="5"/><line x1="4.5" y1="5" x2="4.5" y2="12.5"/></svg>`, label:'Budget & Change Orders' },
+    { key:'project',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="4" r="2.5"/><path d="M1 12c0-3 2.7-5 6-5s6 2 6 5"/></svg>`, label:'Project Info'    },
+    { key:'selections',icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3.5l2 2 2.5-2.5"/><line x1="7" y1="4.5" x2="13" y2="4.5"/><path d="M1 9l2 2 2.5-2.5"/><line x1="7" y1="10" x2="13" y2="10"/></svg>`, label:'Selections'       },
+    { key:'documents', icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1h5.5L11 3.5V13H3V1z"/><polyline points="8.5,1 8.5,4 11,4"/></svg>`, label:'Documents'       },
+    { key:'photos',    icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="1"/><circle cx="5" cy="6" r="1.5"/><path d="M1 11l3-3 2.5 2.5L10 7l3 4"/></svg>`, label:'Build Photos'    },
+  ].map(n => `<div class="admin-nav-link ${activeView===n.key?'active':''}" onclick="activeView='${n.key}';renderAdmin()">${n.icon}${n.label}</div>`).join('');
+
+  const projectSelect = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <select class="adm-inp adm-sel" style="font-weight:600" onchange="activeProject=this.value;renderAdmin()">
+          ${Object.values(PROJECTS).map(proj =>
+            `<option value="${proj.id}" ${proj.id===activeProject?'selected':''}>${proj.clientName} — ${proj.projectName}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <button class="adm-btn adm-btn-ghost" onclick="activeView='addclient';renderAdmin()" style="white-space:nowrap">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
+        Add Client
+      </button>
+    </div>`;
+
+  let mainContent = '';
+
+  // ── TRACKER VIEW ──────────────────────────────────────
+  if (activeView === 'tracker') {
+    mainContent = renderTrackerView(p);
+  }
+
+  // ── UPDATES VIEW ─────────────────────────────────────
+  else if (activeView === 'updates') {
+    mainContent = renderUpdatesView(p);
+  }
+
+  // ── TIMELINE / MILESTONES VIEW ────────────────────────
+  else if (activeView === 'timeline') {
+    mainContent = renderTimelineView(p);
+  }
+
+  // ── BUDGET / CHANGE ORDERS VIEW ───────────────────────
+  else if (activeView === 'budget') {
+    mainContent = renderBudgetView(p);
+  }
+
+  // ── PROJECT INFO VIEW ─────────────────────────────────
+  else if (activeView === 'project') {
+    mainContent = renderProjectView(p);
+  }
+
+  // ── SELECTIONS VIEW ───────────────────────────────────
+  else if (activeView === 'selections') {
+    mainContent = renderSelectionsView(p);
+  }
+
+  // ── DOCUMENTS VIEW ────────────────────────────────────
+  else if (activeView === 'documents') {
+    mainContent = renderDocumentsView(p);
+  }
+
+  // ── PHOTOS VIEW ───────────────────────────────────────
+  else if (activeView === 'photos') {
+    mainContent = renderPhotosView(p);
+  }
+
+  // ── ADD CLIENT VIEW ───────────────────────────────────
+  else if (activeView === 'addclient') {
+    mainContent = renderAddClientView();
+  }
+
+  document.body.innerHTML = `
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <div class="admin-logo">
+          <img src="${LOGO_CIRCLE}" style="width:28px;height:28px;object-fit:contain">
+          <div><div class="admin-logo-text">Six Arrows</div><div class="admin-logo-sub">Admin</div></div>
+        </div>
+        <div class="admin-nav-section">
+          <div class="admin-nav-title">Manage</div>
+          ${nav}
+          <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 0"></div>
+          <div class="admin-nav-link ${activeView==='addclient'?'active':''}" onclick="activeView='addclient';renderAdmin()">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" style="width:13px;height:13px;opacity:.6"><circle cx="7" cy="4" r="2.5"/><path d="M1 12c0-3 2.7-5 6-5s6 2 6 5"/><line x1="10.5" y1="2" x2="10.5" y2="6"/><line x1="8.5" y1="4" x2="12.5" y2="4"/></svg>
+            Add New Client
+          </div>
+        </div>
+        <div style="margin-top:auto;padding-top:1rem;border-top:0.5px solid rgba(255,255,255,.07)">
+          <a href="index.html" style="font-size:11px;color:rgba(235,233,222,.35);text-decoration:none;display:block;padding:4px 9px">← Client portal</a>
+        </div>
+      </aside>
+      <div class="admin-main">
+        <div class="admin-topbar">
+          <span class="admin-topbar-title">${activeView === 'addclient' ? 'Add New Client' : `${p.clientName} — ${activeView.charAt(0).toUpperCase()+activeView.slice(1)}`}</span>
+          <span style="font-size:11px;color:var(--charcoal-4)">Admin only</span>
+        </div>
+        <div class="admin-content">
+          ${activeView !== 'addclient' ? projectSelect : ''}
+          ${mainContent}
+        </div>
+      </div>
+    </div>`;
+
+  // Attach dynamic handlers after render
+  attachHandlers(p);
+}
+
+// ════════════════════════════════════════════════════════
+//  TRACKER VIEW — mark steps complete, set target dates
+// ════════════════════════════════════════════════════════
+function renderTrackerView(p) {
+  const TS = getTrackerState(p);
+
+  function isStepDone(pi, si) {
+    const st = p.sabPhases[pi].steps[si];
+    const items = getStepAllItems(st);
+    if (items.length === 0) return !!st.complete;
+    return items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
+  }
+
+  // Groundbreaking date from admin storage (overrides data.js default)
+  const gbDate = adminGet(p.id, 'gbDate') || p.groundbreakingDate || '';
+
+  let html = `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Groundbreaking Date</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Sets the countdown on the client's Command Center and Timeline.</p>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <input class="adm-inp" type="date" id="gb-date-inp" value="${gbDate}" style="width:auto">
+        <button class="adm-btn adm-btn-green" onclick="saveGbDate('${p.id}')">Save Date</button>
+        <span id="gb-date-msg" class="adm-msg success" style="margin:0"></span>
+      </div>
+    </div>`;
+
+  p.sabPhases.forEach((ph, pi) => {
+    html += `<div class="phase-section-hd">Phase ${pi+1} — ${ph.label}</div>`;
+    ph.steps.forEach((step, si) => {
+      const done      = isStepDone(pi, si);
+      const dateKey   = `date-${pi}-${si}`;
+      const dateVal   = TS[dateKey] || '';
+      const items     = getStepAllItems(step);
+      const checked   = items.filter((_, ii) => TS[`${pi}-${si}-${ii}`]).length;
+
+      html += `<div class="step-manage-row" id="smr-${pi}-${si}">
+        <div class="step-check ${done?'done':''}" onclick="toggleStepDone(${pi},${si},'${p.id}')">
+          ${done?`<svg viewBox="0 0 9 9"><path d="M1.5 4.5l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`:''}
+        </div>
+        <div class="step-manage-meta">
+          <div class="step-manage-name">Step ${step.id+1}: ${step.title}</div>
+          <div class="step-manage-date">${items.length>0?`${checked}/${items.length} items`:'No checklist'} ${step.owner?'· '+{sa:'Six Arrows',client:'Client',both:'Collaborative'}[step.owner]:''}${step.completedDate?' · Completed '+step.completedDate:''}</div>
+        </div>
+        <div class="step-manage-right">
+          <div>
+            <div style="font-size:10px;color:var(--charcoal-4);margin-bottom:3px">Target date</div>
+            <input class="step-date-set" type="date" value="${dateVal}" onchange="setStepDate(${pi},${si},'${p.id}',this.value)">
+          </div>
+        </div>
+      </div>`;
+    });
+  });
+
+  return html;
+}
+
+function saveGbDate(projectId) {
+  const val = document.getElementById('gb-date-inp')?.value;
+  if (!val) return;
+  adminSet(projectId, 'gbDate', val);
+  // Also write to tracker state so the portal picks it up
+  const p  = PROJECTS[projectId];
+  const TS = getTrackerState(p);
+  TS['groundbreakingDate'] = val;
+  setTrackerState(p, TS);
+  showMsg('gb-date-msg', 'success', 'Saved ✓');
+}
+
+function toggleStepDone(pi, si, projectId) {
+  const p    = PROJECTS[projectId];
+  const TS   = getTrackerState(p);
+  const step = p.sabPhases[pi].steps[si];
+  const items = getStepAllItems(step);
+  const done = items.length === 0 ? !!step.complete
+    : items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
+
+  if (!done) {
+    // Mark all items complete
+    items.forEach((_, ii) => { TS[`${pi}-${si}-${ii}`] = true; });
+    // Store completion date
+    const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    TS[`completed-date-${pi}-${si}`] = today;
+    step.complete = true;
+  } else {
+    // Unmark all items
+    items.forEach((_, ii) => { TS[`${pi}-${si}-${ii}`] = false; });
+    delete TS[`completed-date-${pi}-${si}`];
+    step.complete = false;
+  }
+
+  setTrackerState(p, TS);
+  renderAdmin(); // re-render to reflect change
+}
+
+function setStepDate(pi, si, projectId, val) {
+  const p  = PROJECTS[projectId];
+  const TS = getTrackerState(p);
+  TS[`date-${pi}-${si}`] = val;
+  setTrackerState(p, TS);
+}
+
+// ════════════════════════════════════════════════════════
+//  UPDATES VIEW — post updates to client feed
+// ════════════════════════════════════════════════════════
+function renderUpdatesView(p) {
+  const stored = adminGet(p.id, 'updates') || [];
+  const all    = [...stored].reverse(); // newest first for display
+
+  return `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Post New Update</div></div>
+      <div class="adm-field">
+        <label>Title</label>
+        <input class="adm-inp" id="upd-title" type="text" placeholder="e.g. Wave 2 selections complete">
+      </div>
+      <div class="adm-field">
+        <label>Message</label>
+        <textarea class="adm-inp adm-textarea" id="upd-body" placeholder="Write your update to the client..."></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="adm-btn adm-btn-green" onclick="postUpdate('${p.id}')">Post Update</button>
+        <span id="upd-msg" class="adm-msg success" style="margin:0"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sh"><div class="sh-title">Posted Updates</div><span class="tag neutral" style="font-size:9px">${stored.length} total</span></div>
+      ${all.length === 0
+        ? `<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No updates posted yet.</div>`
+        : all.map((u, i) => `
+          <div class="list-item-row">
+            <div class="list-item-body">
+              <div class="list-item-meta">${u.date}</div>
+              <div class="list-item-title">${u.title}</div>
+              <div class="list-item-note">${u.body}</div>
+            </div>
+            <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="deleteUpdate('${p.id}',${stored.length-1-i})">Remove</button>
+          </div>`).join('')
+      }
+    </div>`;
+}
+
+async function postUpdate(projectId) {
+  const title     = document.getElementById('upd-title')?.value.trim();
+  const body      = document.getElementById('upd-body')?.value.trim();
+  const btn       = document.querySelector('[onclick*="postUpdate"]');
+  if (!title || !body) { showMsg('upd-msg','error','Title and message required.'); return; }
+  const date = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  // Try Supabase first
+  try {
+    const res = await fetch(`/.netlify/functions/client-updates?clientId=${projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, updateBody: body, date }),
+    });
+    if (res.ok) {
+      showMsg('upd-msg','success','Update posted ✓');
+      document.getElementById('upd-title').value = '';
+      document.getElementById('upd-body').value = '';
+      setTimeout(() => renderAdmin(), 800);
+      return;
+    }
+  } catch(e) {}
+
+  // Fallback: localStorage
+  const updates = adminGet(projectId, 'updates') || [];
+  updates.push({ date, title, body });
+  adminSet(projectId, 'updates', updates);
+  showMsg('upd-msg','success','Update posted (local) ✓');
+  setTimeout(() => renderAdmin(), 800);
+}
+
+async function deleteUpdate(projectId, updateId, idx) {
+  // Try Supabase delete by ID
+  if (updateId) {
+    try {
+      await fetch(`/.netlify/functions/client-updates?clientId=${projectId}&updateId=${updateId}`, {
+        method: 'DELETE',
+      });
+    } catch(e) {}
+  }
+  // Also remove from localStorage
+  const updates = adminGet(projectId, 'updates') || [];
+  if (idx !== undefined) updates.splice(idx, 1);
+  adminSet(projectId, 'updates', updates);
+  renderAdmin();
+}
+
+// ════════════════════════════════════════════════════════
+//  TIMELINE / MILESTONES VIEW
+// ════════════════════════════════════════════════════════
+function renderTimelineView(p) {
+  const stored = adminGet(p.id, 'milestones') || p.timeline || [];
+
+  return `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Add Milestone</div></div>
+      <div class="adm-grid3">
+        <div class="adm-field" style="grid-column:span 2">
+          <label>Milestone title</label>
+          <input class="adm-inp" id="ms-title" type="text" placeholder="e.g. Framing complete">
+        </div>
+        <div class="adm-field">
+          <label>Date</label>
+          <input class="adm-inp" id="ms-date" type="date">
+        </div>
+      </div>
+      <div class="adm-field">
+        <label>Note</label>
+        <input class="adm-inp" id="ms-note" type="text" placeholder="Optional detail for the client">
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="adm-btn adm-btn-green" onclick="addMilestone('${p.id}')">Add Milestone</button>
+        <span id="ms-msg" class="adm-msg success" style="margin:0"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sh"><div class="sh-title">Build Milestones</div><span class="tag neutral" style="font-size:9px">${stored.length} total</span></div>
+      ${stored.length === 0
+        ? `<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No milestones yet.</div>`
+        : stored.map((m, i) => `
+          <div class="list-item-row">
+            <div class="step-check ${m.done?'done':''}" style="flex-shrink:0;margin-top:2px;cursor:pointer" onclick="toggleMilestone('${p.id}',${i})">
+              ${m.done?`<svg viewBox="0 0 9 9"><path d="M1.5 4.5l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`:''}
+            </div>
+            <div class="list-item-body">
+              <div class="list-item-meta">${m.date} ${m.done?'· ✓ Complete':''}</div>
+              <div class="list-item-title">${m.title}</div>
+              ${m.note?`<div class="list-item-note">${m.note}</div>`:''}
+            </div>
+            <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="deleteMilestone('${p.id}',${i})">Remove</button>
+          </div>`).join('')
+      }
+    </div>`;
+}
+
+function addMilestone(projectId) {
+  const title = document.getElementById('ms-title')?.value.trim();
+  const date  = document.getElementById('ms-date')?.value;
+  const note  = document.getElementById('ms-note')?.value.trim();
+  if (!title) { showMsg('ms-msg','error','Title required.'); return; }
+  const p = PROJECTS[projectId];
+  const milestones = adminGet(projectId, 'milestones') || [...(p.timeline||[])];
+  const dateLabel = date ? new Date(date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+  milestones.push({ title, date:dateLabel, note, done:false });
+  adminSet(projectId, 'milestones', milestones);
+  showMsg('ms-msg','success','Milestone added ✓');
+  setTimeout(() => renderAdmin(), 600);
+}
+
+function toggleMilestone(projectId, idx) {
+  const p = PROJECTS[projectId];
+  const milestones = adminGet(projectId, 'milestones') || [...(p.timeline||[])];
+  milestones[idx].done = !milestones[idx].done;
+  adminSet(projectId, 'milestones', milestones);
+  renderAdmin();
+}
+
+function deleteMilestone(projectId, idx) {
+  const p = PROJECTS[projectId];
+  const milestones = adminGet(projectId, 'milestones') || [...(p.timeline||[])];
+  milestones.splice(idx, 1);
+  adminSet(projectId, 'milestones', milestones);
+  renderAdmin();
+}
+
+// ════════════════════════════════════════════════════════
+//  BUDGET / CHANGE ORDERS VIEW
+// ════════════════════════════════════════════════════════
+function renderBudgetView(p) {
+  const cos = adminGet(p.id, 'changeOrders') || (p.changeOrderItems||[]);
+
+  const totalCO = cos.reduce((a,c) => a+(c.amount||0), 0);
+
+  return `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Add Change Order</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Customer-approved additions after construction began. Positive = added cost, negative = credit/saving.</p>
+      <div class="adm-grid3">
+        <div class="adm-field" style="grid-column:span 2">
+          <label>Description</label>
+          <input class="adm-inp" id="co-desc" type="text" placeholder="e.g. Added dedicated dehumidification system">
+        </div>
+        <div class="adm-field">
+          <label>Amount ($)</label>
+          <input class="adm-inp" id="co-amount" type="number" placeholder="e.g. 4200 or -800">
+        </div>
+      </div>
+      <div class="adm-field">
+        <label>Date approved</label>
+        <input class="adm-inp" id="co-date" type="date" style="width:auto">
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="adm-btn adm-btn-green" onclick="addChangeOrder('${p.id}')">Add Change Order</button>
+        <span id="co-msg" class="adm-msg success" style="margin:0"></span>
+      </div>
+    </div>
+
+    <!-- Budget category status — SAB phase -->
+    ${p.statusType === 'sab' ? `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh">
+        <div class="sh-title">Budget Category Status</div>
+        <span style="font-size:11px;color:var(--charcoal-4)">Mark as client sees on their budget page</span>
+      </div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Update each category as you work through pricing. Clients see Pending / In Progress / Confirmed — no dollar amounts.</p>
+      ${(p.budgetCategories||[]).map((cat, ci) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+          <div style="flex:1;font-size:13px;font-weight:500;color:var(--charcoal)">${cat.name}</div>
+          <select class="adm-inp adm-sel" style="width:auto;font-size:12px;padding:5px 8px" onchange="updateBudgetCatStatus('${p.id}', ${ci}, this.value)">
+            <option value="pending"  ${(cat.status||'pending')==='pending' ?'selected':''}>Not started</option>
+            <option value="active"   ${(cat.status||'pending')==='active'  ?'selected':''}>In progress</option>
+            <option value="complete" ${(cat.status||'pending')==='complete'?'selected':''}>Confirmed</option>
+          </select>
+        </div>`).join('')}
+      <span id="bcat-status-msg" class="adm-msg success" style="margin-top:8px;display:block"></span>
+    </div>` : ''}
+
+    <div class="card">
+      <div class="sh">
+        <div class="sh-title">Change Orders</div>
+        <span style="font-size:13px;font-weight:700;color:${totalCO>0?'var(--danger)':totalCO<0?'var(--green-dk)':'var(--charcoal-4)'}">${totalCO>0?'+':''}${currency(totalCO)}</span>
+      </div>
+      ${cos.length === 0
+        ? `<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No change orders yet.</div>`
+        : cos.map((co, i) => `
+          <div class="list-item-row">
+            <div class="list-item-body">
+              <div class="list-item-meta">${co.date}</div>
+              <div class="list-item-title">${co.description}</div>
+            </div>
+            <div style="font-size:14px;font-weight:700;color:${co.amount>0?'var(--danger)':co.amount<0?'var(--green-dk)':'var(--charcoal)'};flex-shrink:0;margin-right:10px">${co.amount>0?'+':''}${currency(co.amount)}</div>
+            <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="deleteChangeOrder('${p.id}',${i})">Remove</button>
+          </div>`).join('')
+      }
+    </div>`;
+}
+
+function addChangeOrder(projectId) {
+  const desc   = document.getElementById('co-desc')?.value.trim();
+  const amount = parseFloat(document.getElementById('co-amount')?.value);
+  const dateV  = document.getElementById('co-date')?.value;
+  if (!desc || isNaN(amount)) { showMsg('co-msg','error','Description and amount required.'); return; }
+  const cos = adminGet(projectId, 'changeOrders') || [...(PROJECTS[projectId].changeOrderItems||[])];
+  const dateLabel = dateV ? new Date(dateV+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  cos.push({ description:desc, amount, date:dateLabel });
+  adminSet(projectId, 'changeOrders', cos);
+  showMsg('co-msg','success','Change order added ✓');
+  setTimeout(() => renderAdmin(), 600);
+}
+
+function deleteChangeOrder(projectId, idx) {
+  const cos = adminGet(projectId, 'changeOrders') || [...(PROJECTS[projectId].changeOrderItems||[])];
+  cos.splice(idx, 1);
+  adminSet(projectId, 'changeOrders', cos);
+  renderAdmin();
+}
+
+async function updateBudgetCatStatus(projectId, catIndex, newStatus) {
+  const p = PROJECTS[projectId];
+  if (!p.budgetCategories || !p.budgetCategories[catIndex]) return;
+  p.budgetCategories[catIndex].status = newStatus;
+  adminSet(projectId, 'budgetCats', p.budgetCategories);
+  // Push to Supabase
+  try {
+    const cat = p.budgetCategories[catIndex];
+    // Get the actual Supabase row ID by fetching categories
+    const res = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories?client_id=eq.${projectId}&order=sort_order.asc&select=id,name`, {
+      headers: { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON }
+    });
+    if (res.ok) {
+      const rows = await res.json();
+      const row = rows[catIndex];
+      if (row?.id) {
+        await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories?id=eq.${row.id}`, {
+          method: 'PATCH',
+          headers: { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        showMsg('bcat-status-msg','success','Saved ✓ — client will see on next login');
+        setTimeout(() => document.getElementById('bcat-status-msg').textContent = '', 3000);
+        // Invalidate client session cache so they get fresh data on next login
+        try {
+          const raw = localStorage.getItem('sa_session_v3');
+          if (raw) {
+            const s = JSON.parse(raw);
+            if (s.data && s.data.id === projectId) {
+              // Update the cached budget category status
+              if (s.data.budgetCategories && s.data.budgetCategories[catIndex]) {
+                s.data.budgetCategories[catIndex].status = newStatus;
+                localStorage.setItem('sa_session_v3', JSON.stringify(s));
+              }
+            }
+          }
+        } catch(e) {}
+      }
+    }
+  } catch(e) { console.log('Budget status update error:', e); }
+}
+
+// ════════════════════════════════════════════════════════
+//  PROJECT INFO VIEW
+// ════════════════════════════════════════════════════════
+function renderProjectView(p) {
+  const extra = adminGet(p.id, 'projectExtra') || {};
+
+  return `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Project Details</div></div>
+      <div class="adm-grid2">
+        <div class="adm-field">
+          <label>Client name</label>
+          <input class="adm-inp" id="pi-clientName" type="text" value="${p.clientName}">
+        </div>
+        <div class="adm-field">
+          <label>Project name</label>
+          <input class="adm-inp" id="pi-projectName" type="text" value="${p.projectName}">
+        </div>
+        <div class="adm-field">
+          <label>Location</label>
+          <input class="adm-inp" id="pi-location" type="text" value="${p.location}">
+        </div>
+        <div class="adm-field">
+          <label>Phase</label>
+          <select class="adm-inp adm-sel" id="pi-statusType">
+            <option value="sab" ${p.statusType==='sab'?'selected':''}>SAB™ Pre-Construction</option>
+            <option value="construction" ${p.statusType==='construction'?'selected':''}>Active Construction</option>
+          </select>
+        </div>
+        <div class="adm-field">
+          <label>Phase label (shown in portal)</label>
+          <input class="adm-inp" id="pi-phaseLabel" type="text" value="${p.phaseLabel}">
+        </div>
+        <div class="adm-field">
+          <label>Construction % (construction phase)</label>
+          <input class="adm-inp" id="pi-conPct" type="number" min="0" max="100" value="${p.constructionPct||0}">
+        </div>
+      </div>
+      <div style="border-top:0.5px solid var(--border);padding-top:12px;margin-top:4px">
+        <div class="adm-grid2">
+          <div class="adm-field">
+            <label>Timeline start</label>
+            <input class="adm-inp" id="pi-tlStart" type="text" placeholder="e.g. Feb 3, 2026" value="${p.timelineStart}">
+          </div>
+          <div class="adm-field">
+            <label>Timeline target</label>
+            <input class="adm-inp" id="pi-tlTarget" type="text" placeholder="e.g. Apr 19, 2026" value="${p.timelineTarget}">
+          </div>
+        </div>
+        <div class="adm-field" style="margin-top:8px">
+          <label>Budget Google Sheet URL <span style="font-size:10px;font-weight:400;color:var(--charcoal-4)">(shown as "View Budget Sheet →" link on client budget page)</span></label>
+          <input class="adm-inp" id="pi-budgetLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." value="${p.links?.budget||''}">
+        </div>
+        <div class="adm-field" style="margin-top:8px">
+          <label>Notion tracker page ID <span style="font-size:10px;font-weight:400;color:var(--charcoal-4)">(for SAB tracker sync)</span></label>
+          <input class="adm-inp" id="pi-notionId" type="text" placeholder="2fb4737b-ea6f-80dc-9b3b-..." value="${p.notionTrackerPageId||''}">
+        </div>
+      </div>
+      <div id="pi-msg" class="adm-msg success"></div>
+      <button class="adm-btn adm-btn-green" style="margin-top:4px" onclick="saveProjectInfo('${p.id}')">Save Changes</button>
+    </div>
+
+    <div class="card">
+      <div class="sh"><div class="sh-title">Login Credentials</div></div>
+      <div class="adm-grid2">
+        <div class="adm-field">
+          <label>Client email</label>
+          <input class="adm-inp" id="pi-email" type="text" value="${p.email}">
+        </div>
+        <div class="adm-field">
+          <label>Access code / password</label>
+          <input class="adm-inp" id="pi-password" type="text" value="${p.password}">
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--charcoal-4);margin-bottom:10px">Changes here update the login credentials immediately for this browser session. When you deploy, update data.js with these values.</p>
+      <button class="adm-btn adm-btn-primary" onclick="saveCredentials('${p.id}')">Update Credentials</button>
+      <span id="pi-cred-msg" class="adm-msg success" style="margin-left:10px"></span>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="sh"><div class="sh-title">Quick Summary (Command Center)</div></div>
+      <div class="adm-field">
+        <label>Your note to the client</label>
+        <textarea class="adm-inp adm-textarea" id="pi-summary">${p.quickSummary}</textarea>
+      </div>
+      <button class="adm-btn adm-btn-green" onclick="saveSummary('${p.id}')">Save</button>
+      <span id="pi-sum-msg" class="adm-msg success" style="margin-left:10px"></span>
+    </div>`;
+}
+
+function saveProjectInfo(projectId) {
+  const p = PROJECTS[projectId];
+  p.clientName      = document.getElementById('pi-clientName')?.value.trim()  || p.clientName;
+  p.projectName     = document.getElementById('pi-projectName')?.value.trim() || p.projectName;
+  p.location        = document.getElementById('pi-location')?.value.trim()    || p.location;
+  p.statusType      = document.getElementById('pi-statusType')?.value         || p.statusType;
+  p.phaseLabel      = document.getElementById('pi-phaseLabel')?.value.trim()  || p.phaseLabel;
+  p.constructionPct = parseInt(document.getElementById('pi-conPct')?.value)   || 0;
+  p.timelineStart   = document.getElementById('pi-tlStart')?.value.trim()     || p.timelineStart;
+  p.timelineTarget  = document.getElementById('pi-tlTarget')?.value.trim()    || p.timelineTarget;
+  const budgetLink = document.getElementById('pi-budgetLink')?.value.trim() || '';
+  const notionId   = document.getElementById('pi-notionId')?.value.trim()   || '';
+  if (!p.links) p.links = {};
+  p.links.budget = budgetLink;
+  p.notionTrackerPageId = notionId || p.notionTrackerPageId;
+  // Also update PROJECTS in memory so admin re-render picks it up
+  if (PROJECTS[projectId]) {
+    if (!PROJECTS[projectId].links) PROJECTS[projectId].links = {};
+    PROJECTS[projectId].links.budget = budgetLink;
+    PROJECTS[projectId].notionTrackerPageId = p.notionTrackerPageId;
+  }
+  // Persist to localStorage override
+  adminSet(projectId, 'projectOverride', { clientName:p.clientName, projectName:p.projectName, location:p.location, statusType:p.statusType, phaseLabel:p.phaseLabel, constructionPct:p.constructionPct, timelineStart:p.timelineStart, timelineTarget:p.timelineTarget, budgetLink, notionTrackerPageId: p.notionTrackerPageId });
+  // Update the cached session so budget page sees the link immediately
+  try {
+    const raw = localStorage.getItem('sa_session_v3');
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s.data && s.data.id === projectId) {
+        if (!s.data.links) s.data.links = {};
+        s.data.links.budget = budgetLink;
+        s.data.notionTrackerPageId = p.notionTrackerPageId;
+        localStorage.setItem('sa_session_v3', JSON.stringify(s));
+      }
+    }
+  } catch(e) {}
+  // Push to Supabase
+  fetch(`/.netlify/functions/admin-clients?clientId=${projectId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ADMIN_PASS },
+    body: JSON.stringify({ client_name: p.clientName, project_name: p.projectName, location: p.location, status_type: p.statusType, phase_label: p.phaseLabel, construction_pct: p.constructionPct, timeline_start: p.timelineStart, timeline_target: p.timelineTarget, notion_tracker_page_id: p.notionTrackerPageId }),
+  }).catch(() => {});
+  showMsg('pi-msg','success','Saved ✓');
+}
+
+function saveCredentials(projectId) {
+  const p = PROJECTS[projectId];
+  p.email    = document.getElementById('pi-email')?.value.trim()    || p.email;
+  p.password = document.getElementById('pi-password')?.value.trim() || p.password;
+  showMsg('pi-cred-msg','success','Updated for this session ✓');
+}
+
+function saveSummary(projectId) {
+  const p = PROJECTS[projectId];
+  p.quickSummary = document.getElementById('pi-summary')?.value.trim() || p.quickSummary;
+  adminSet(projectId, 'quickSummary', p.quickSummary);
+  showMsg('pi-sum-msg','success','Saved ✓');
+}
+
+// ════════════════════════════════════════════════════════
+//  SELECTIONS VIEW (read-only summary)
+// ════════════════════════════════════════════════════════
+function renderSelectionsView(p) {
+  const ck = p.selectionsClientKey || p.id;
+
+  // Render immediately from localStorage, then async-refresh from server
+  let saved = {}, answers = {};
+  try { saved   = JSON.parse(localStorage.getItem(`sab8_${ck}_sav`) || '{}'); } catch(e) {}
+  try { answers = JSON.parse(localStorage.getItem(`sab8_${ck}_ans`) || '{}'); } catch(e) {}
+
+  // Async: load from server and refresh view
+  fetch(`/.netlify/functions/selections-storage?clientKey=${ck}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data?.data) return;
+      saved   = data.data.sav || saved;
+      answers = data.data.ans || answers;
+      // Re-render selections section
+      const el = document.getElementById('admin-sel-content');
+      if (el) el.innerHTML = buildSelectionsContent(ck, p, saved, answers);
+    })
+    .catch(() => {});
+
+  const appUrl = `selections-app.html?clientKey=${ck}&clientName=${encodeURIComponent(p.clientName)}&projectName=${encodeURIComponent(p.projectName)}&wave=0&adminMode=1`;
+
+  return `
+    <div id="admin-sel-content">${buildSelectionsContent(ck, p, saved, answers)}</div>
+    <div class="card" style="margin-top:1rem;background:var(--cream-pale);border:0.5px solid var(--border-2)">
+      <div style="font-size:13px;font-weight:600;color:var(--charcoal);margin-bottom:6px">Pre-fill Selections for Client</div>
+      <div style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px;line-height:1.5">Open the Wave Selections app on behalf of this client. You can enter answers, make selections, and save on their behalf. All entries will be visible to the client immediately.</div>
+      <a href="${appUrl}" target="_blank" class="adm-btn adm-btn-primary" style="display:inline-block;text-decoration:none">Open Selections App for ${p.clientName} →</a>
+    </div>`;
+}
+
+function buildSelectionsContent(ck, p, saved, answers) {
+  const ALL_CATS = [
+    { id:'fireplace',wave:0,name:'Fireplace' },{ id:'appliances',wave:0,name:'Appliances' },
+    { id:'exterior_finishes',wave:0,name:'Exterior Finishes' },
+    { id:'specialty_trim',wave:1,name:'Specialty Trim' },{ id:'flooring',wave:1,name:'Flooring' },{ id:'tile',wave:1,name:'Tile' },
+    { id:'plumbing',wave:2,name:'Plumbing Fixtures' },{ id:'lighting',wave:2,name:'Lighting Fixtures' },
+    { id:'countertops',wave:2,name:'Countertops' },{ id:'hardware',wave:2,name:'Hardware' },
+    { id:'paint',wave:2,name:'Paint & Stain' },{ id:'doors',wave:2,name:'Interior Doors & Trim' },
+  ];
+  function catDone(id) {
+    if (id==='fireplace' && answers['fireplace_fp_want']==='No — no fireplace') return true;
+    return !!saved[id];
+  }
+  // Get a readable answer preview for a category
+  function catPreview(id) {
+    const keys = Object.keys(answers).filter(k => k.startsWith(id+'_') && answers[k] && typeof answers[k] === 'string' && answers[k].length < 60);
+    return keys.slice(0,2).map(k => answers[k]).filter(Boolean).join(' · ') || '';
+  }
+
+  const done = ALL_CATS.filter(c => catDone(c.id)).length;
+  const pct  = Math.round(done/ALL_CATS.length*100);
+  const waves = [
+    { label:'Wave 1 — Structure', cats:ALL_CATS.filter(c=>c.wave===0) },
+    { label:'Wave 2 — The Shell', cats:ALL_CATS.filter(c=>c.wave===1) },
+    { label:'Wave 3 — The Jewelry', cats:ALL_CATS.filter(c=>c.wave===2) },
+  ];
+
+  return `
+    <div class="card dark" style="margin-bottom:1rem">
+      <div class="kpi"><div class="kpi-lbl">Selections Complete</div><div class="kpi-val">${pct}%</div><div class="kpi-sub">${done} of ${ALL_CATS.length} categories</div></div>
+      <div class="track" style="margin-top:11px;background:rgba(255,255,255,.1)"><div class="bar" style="width:${pct}%"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Category Detail</div></div>
+      ${waves.map(w => `
+        <div class="phase-section-hd">${w.label}</div>
+        ${w.cats.map(cat => {
+          const isDone    = catDone(cat.id);
+          const preview   = catPreview(cat.id);
+          return `<div style="padding:9px 0;border-bottom:0.5px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:7px;height:7px;border-radius:50%;background:${isDone?'var(--green)':'var(--cream-3)'};flex-shrink:0;margin-top:1px"></div>
+              <div style="flex:1;font-size:13px;font-weight:500;color:var(--charcoal)">${cat.name}</div>
+              <span class="${isDone?'tag ok':'tag'}" style="font-size:9px;${!isDone?'background:var(--cream-2);color:var(--charcoal-4)':''}">${isDone?'Complete':'Pending'}</span>
+            </div>
+            ${preview ? `<div style="font-size:11px;color:var(--charcoal-3);margin-top:3px;padding-left:17px;line-height:1.4">${preview}</div>` : ''}
+          </div>`;
+        }).join('')}`).join('')}
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+//  DOCUMENTS + PHOTOS VIEWS (delegated to existing logic)
+// ════════════════════════════════════════════════════════
+function renderDocumentsView(p) {
+  const DOC_KEY = `sa_docs_${p.id}`;
+  let adminDocs = [];
+  try { adminDocs = JSON.parse(localStorage.getItem(DOC_KEY) || '[]'); } catch(e) {}
+  const allDocs  = [...(p.documents||[]).filter(d=>d.category!=='photos'), ...adminDocs.filter(d=>d.category!=='photos')];
+  const CAT_LABELS = {plans:'Architectural Plans',budget:'Budget & Financials',selections:'Selections',contracts:'Contracts',permits:'Permits',photos:'Site Photos',other:'Other'};
+
+  return `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Add Document</div></div>
+      <div class="adm-grid2">
+        <div class="adm-field"><label>Document name</label><input class="adm-inp" id="adm-doc-name" type="text" placeholder="e.g. Architectural Plans Rev 3"></div>
+        <div class="adm-field"><label>Category</label><select class="adm-inp adm-sel" id="adm-doc-cat">${Object.entries(CAT_LABELS).filter(([k])=>k!=='photos').map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+      </div>
+      <div class="adm-field"><label>Google Drive URL</label><input class="adm-inp" id="adm-doc-url" type="text" placeholder="https://drive.google.com/file/d/..."></div>
+      <div class="adm-grid2">
+        <div class="adm-field"><label>Type</label><select class="adm-inp adm-sel" id="adm-doc-type"><option value="pdf">PDF</option><option value="sheet">Google Sheet</option><option value="img">Image</option><option value="other">Other</option></select></div>
+        <div class="adm-field"><label>Note (optional)</label><input class="adm-inp" id="adm-doc-note" type="text" placeholder="e.g. Final approved set"></div>
+      </div>
+      <button class="adm-btn adm-btn-green" onclick="addAdminDoc('${p.id}')">Add Document →</button>
+      <span id="adm-doc-msg" class="adm-msg success" style="margin-left:10px"></span>
+    </div>
+    <div class="card">
+      <div class="sh"><div class="sh-title">All Documents (${allDocs.length})</div></div>
+      ${allDocs.length===0?`<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No documents yet.</div>`
+        :allDocs.map((doc,i)=>{const isAdmin=i>=(p.documents||[]).filter(d=>d.category!=='photos').length;return`<div class="list-item-row"><div class="list-item-body"><div class="list-item-title">${doc.name}</div><div class="list-item-meta">${CAT_LABELS[doc.category]||doc.category} · ${doc.type?.toUpperCase()||''} · ${doc.date||''}${doc.note?' · '+doc.note:''}</div></div><a href="${doc.url}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;flex-shrink:0;margin-right:8px">Open</a>${isAdmin?`<button class="adm-btn adm-btn-danger" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="removeAdminDoc('${p.id}',${i-(p.documents||[]).filter(d=>d.category!=='photos').length})">×</button>`:''}</div>`;}).join('')}
+    </div>`;
+}
+
+function addAdminDoc(projectId) {
+  const name = document.getElementById('adm-doc-name')?.value.trim();
+  const url  = document.getElementById('adm-doc-url')?.value.trim();
+  const cat  = document.getElementById('adm-doc-cat')?.value;
+  const type = document.getElementById('adm-doc-type')?.value;
+  const note = document.getElementById('adm-doc-note')?.value.trim();
+  if (!name || !url) { showMsg('adm-doc-msg','error','Name and URL required.'); return; }
+  const DOC_KEY = `sa_docs_${projectId}`;
+  let docs = [];
+  try { docs = JSON.parse(localStorage.getItem(DOC_KEY)||'[]'); } catch(e) {}
+  const now = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  let previewUrl = url;
+  if (type==='pdf' && url.includes('drive.google.com/file/d/')) {
+    previewUrl = url.replace('/view','/preview').replace('/edit','/preview');
+    if (!previewUrl.includes('/preview')) previewUrl += '/preview';
+  }
+  docs.push({ id:'adm'+Date.now(), category:cat, name, url:previewUrl, type, date:now, note });
+  localStorage.setItem(DOC_KEY, JSON.stringify(docs));
+  showMsg('adm-doc-msg','success','Added ✓');
+  setTimeout(() => renderAdmin(), 600);
+}
+
+function removeAdminDoc(projectId, idx) {
+  const DOC_KEY = `sa_docs_${projectId}`;
+  let docs = [];
+  try { docs = JSON.parse(localStorage.getItem(DOC_KEY)||'[]'); } catch(e) {}
+  docs.splice(idx, 1);
+  localStorage.setItem(DOC_KEY, JSON.stringify(docs));
+  renderAdmin();
+}
+
+function renderPhotosView(p) {
+  const PHOTO_KEY = `sa_photos_${p.id}`;
+  const basePhotos = (p.documents||[]).filter(d=>d.category==='photos');
+  let adminPhotos = [];
+  try { adminPhotos = JSON.parse(localStorage.getItem(PHOTO_KEY)||'[]'); } catch(e) {}
+  const allPhotos = [...basePhotos, ...adminPhotos];
+  const PHASES = [{id:'pre',label:'Pre-Construction'},{id:'foundation',label:'Foundation'},{id:'framing',label:'Framing'},{id:'mechanical',label:'Mechanical'},{id:'finishes',label:'Finishes'},{id:'completion',label:'Completion'}];
+  const PHASE_MAP = Object.fromEntries(PHASES.map(p=>[p.id,p.label]));
+
+  return `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Add Build Photo</div></div>
+      <div class="adm-grid2">
+        <div class="adm-field"><label>Caption</label><input class="adm-inp" id="adm-ph-caption" type="text" placeholder="e.g. Framing complete — east wall"></div>
+        <div class="adm-field"><label>Build Phase</label><select class="adm-inp adm-sel" id="adm-ph-phase">${PHASES.map(ph=>`<option value="${ph.id}">${ph.label}</option>`).join('')}</select></div>
+      </div>
+      <div class="adm-field"><label>Google Drive Image URL</label><input class="adm-inp" id="adm-ph-url" type="text" placeholder="https://drive.google.com/file/d/..."></div>
+      <div class="adm-field"><label>Date</label><input class="adm-inp adm-inp" id="adm-ph-date" type="date" style="width:auto"></div>
+      <button class="adm-btn adm-btn-green" onclick="addAdminPhoto('${p.id}')">Add Photo →</button>
+      <span id="adm-ph-msg" class="adm-msg success" style="margin-left:10px"></span>
+    </div>
+    <div class="card">
+      <div class="sh"><div class="sh-title">All Photos (${allPhotos.length})</div></div>
+      ${allPhotos.length===0?`<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No photos yet.</div>`
+        :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">
+          ${allPhotos.map((ph,i)=>{const isAdmin=i>=basePhotos.length;const match=(ph.url||'').match(/\/file\/d\/([^\/\?]+)/);const imgUrl=match?`https://drive.google.com/uc?export=view&id=${match[1]}`:ph.url;return`<div style="position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/3;background:var(--cream-2);border:0.5px solid var(--border)"><img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'"><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:3px 5px"><div style="font-size:9px;color:white">${ph.caption||'—'}</div><div style="font-size:8px;color:rgba(255,255,255,.6)">${PHASE_MAP[ph.phase]||''}</div></div>${isAdmin?`<button onclick="removeAdminPhoto('${p.id}',${i-basePhotos.length})" style="position:absolute;top:3px;right:3px;background:rgba(184,50,50,.85);border:none;border-radius:50%;width:18px;height:18px;color:white;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;line-height:1">×</button>`:''}</div>`;}).join('')}
+        </div>`}
+    </div>`;
+}
+
+function addAdminPhoto(projectId) {
+  const caption = document.getElementById('adm-ph-caption')?.value.trim();
+  const url     = document.getElementById('adm-ph-url')?.value.trim();
+  const phase   = document.getElementById('adm-ph-phase')?.value;
+  const dateVal = document.getElementById('adm-ph-date')?.value;
+  if (!url) { showMsg('adm-ph-msg','error','Image URL required.'); return; }
+  const PHOTO_KEY = `sa_photos_${projectId}`;
+  let photos = [];
+  try { photos = JSON.parse(localStorage.getItem(PHOTO_KEY)||'[]'); } catch(e) {}
+  const dateLabel = dateVal ? new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  photos.push({ id:'adm'+Date.now(), category:'photos', phase, caption, url, date:dateLabel });
+  localStorage.setItem(PHOTO_KEY, JSON.stringify(photos));
+  showMsg('adm-ph-msg','success','Added ✓');
+  setTimeout(() => renderAdmin(), 600);
+}
+
+function removeAdminPhoto(projectId, idx) {
+  const PHOTO_KEY = `sa_photos_${projectId}`;
+  let photos = [];
+  try { photos = JSON.parse(localStorage.getItem(PHOTO_KEY)||'[]'); } catch(e) {}
+  photos.splice(idx, 1);
+  localStorage.setItem(PHOTO_KEY, JSON.stringify(photos));
+  renderAdmin();
+}
+
+// ════════════════════════════════════════════════════════
+//  ADD CLIENT VIEW
+// ════════════════════════════════════════════════════════
+function renderAddClientView() {
+  return `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">New Client Setup</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:1.25rem;line-height:1.6">
+        Fill in the client details below. This generates the <code style="font-size:11px;background:var(--cream-2);padding:1px 5px;border-radius:3px">data.js</code> entry you'll need to add to the portal. Once the Supabase backend is live, this will create the client directly — no code editing required.
+      </p>
+
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin-bottom:10px">Client & Project</div>
+      <div class="adm-grid2">
+        <div class="adm-field"><label>Client name</label><input class="adm-inp" id="nc-clientName" type="text" placeholder="e.g. Johnson Family"></div>
+        <div class="adm-field"><label>Project name</label><input class="adm-inp" id="nc-projectName" type="text" placeholder="e.g. Custom Home — Smith Rd"></div>
+        <div class="adm-field"><label>Location</label><input class="adm-inp" id="nc-location" type="text" placeholder="e.g. Bowling Green, KY"></div>
+        <div class="adm-field"><label>Phase</label>
+          <select class="adm-inp adm-sel" id="nc-phase">
+            <option value="sab">SAB™ Pre-Construction</option>
+            <option value="construction">Active Construction</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Portal Login</div>
+      <div class="adm-grid2">
+        <div class="adm-field"><label>Client email</label><input class="adm-inp" id="nc-email" type="email" placeholder="client@email.com"></div>
+        <div class="adm-field"><label>Access code</label><input class="adm-inp" id="nc-password" type="text" placeholder="e.g. johnson2026"></div>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Notion & Google Connections</div>
+      <p style="font-size:11px;color:var(--charcoal-4);margin-bottom:10px">These IDs connect the portal to your Notion pages and Google Sheet. Required for the auto-sync features in the next build phase.</p>
+      <div class="adm-grid2">
+        <div class="adm-field"><label>SAB Tracker Notion Page ID</label><input class="adm-inp" id="nc-notionTracker" type="text" placeholder="e.g. 2d14737bea6f8095bd88..."></div>
+        <div class="adm-field"><label>Timeline Database Notion ID</label><input class="adm-inp" id="nc-notionTimeline" type="text" placeholder="e.g. 2424737bea6f806ab663..."></div>
+      </div>
+      <div class="adm-field"><label>Budget Google Sheet URL</label><input class="adm-inp" id="nc-sheetUrl" type="text" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
+
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Timeline Dates</div>
+      <div class="adm-grid2">
+        <div class="adm-field"><label>Timeline start</label><input class="adm-inp" id="nc-tlStart" type="text" placeholder="e.g. Feb 3, 2026"></div>
+        <div class="adm-field"><label>Target completion</label><input class="adm-inp" id="nc-tlTarget" type="text" placeholder="e.g. Dec 1, 2026"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+        <button class="adm-btn adm-btn-green" onclick="generateClientEntry()">Generate data.js Entry</button>
+        <button class="adm-btn adm-btn-ghost" onclick="activeView='tracker';renderAdmin()">Cancel</button>
+      </div>
+    </div>
+
+    <div id="nc-output" style="display:none">
+      <div class="card">
+        <div class="sh">
+          <div class="sh-title">Generated data.js Entry</div>
+          <button class="adm-btn adm-btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyClientEntry()">Copy</button>
+        </div>
+        <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">
+          Add this block inside the <code style="font-size:11px;background:var(--cream-2);padding:1px 5px;border-radius:3px">PROJECTS</code> object in <code style="font-size:11px;background:var(--cream-2);padding:1px 5px;border-radius:3px">data.js</code>, after the last existing client entry (before the closing <code style="font-size:11px;background:var(--cream-2);padding:1px 5px;border-radius:3px">}</code>).
+        </p>
+        <pre id="nc-code" style="font-size:11px;line-height:1.6;background:var(--charcoal);color:var(--cream);padding:1rem;border-radius:var(--r-md);overflow-x:auto;white-space:pre-wrap;word-break:break-all"></pre>
+        <span id="nc-copy-msg" class="adm-msg success" style="margin-top:8px"></span>
+      </div>
+    </div>`;
+}
+
+function generateClientEntry() {
+  const clientName    = document.getElementById('nc-clientName')?.value.trim();
+  const projectName   = document.getElementById('nc-projectName')?.value.trim();
+  const location      = document.getElementById('nc-location')?.value.trim() || 'Bowling Green, KY';
+  const phase         = document.getElementById('nc-phase')?.value;
+  const email         = document.getElementById('nc-email')?.value.trim();
+  const password      = document.getElementById('nc-password')?.value.trim();
+  const notionTracker = document.getElementById('nc-notionTracker')?.value.trim();
+  const notionTimeline= document.getElementById('nc-notionTimeline')?.value.trim();
+  const sheetUrl      = document.getElementById('nc-sheetUrl')?.value.trim();
+  const tlStart       = document.getElementById('nc-tlStart')?.value.trim();
+  const tlTarget      = document.getElementById('nc-tlTarget')?.value.trim();
+
+  if (!clientName || !email || !password) {
+    alert('Client name, email, and access code are required.');
+    return;
+  }
+
+  // Generate a clean ID from the client name
+  const id = clientName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g,'');
+
+  const entry = `\n  ${id}: {
+    id: '${id}',
+    email: '${email}',
+    password: '${password}',
+    clientName: '${clientName}',
+    projectName: '${projectName || 'Custom Home'}',
+    location: '${location}',
+    status: '${phase === 'sab' ? 'In SAB™ Process' : 'Active Construction'}',
+    statusType: '${phase}',
+    constructionPct: 0,
+    sabProgress: 0,
+    phaseLabel: '${phase === 'sab' ? 'Phase 1 — Design & Architecture' : 'Active Build'}',
+    nextDecision: '',
+    nextDecisionDueDays: 0,
+    groundbreakingDate: '',
+    budgetTotal: 0,
+    budgetCommitted: 0,
+    budgetAllowance: 0,
+    budgetContingency: 0,
+    changeOrders: 0,
+    changeOrderItems: [],
+    timelineStart: '${tlStart || 'TBD'}',
+    timelineTarget: '${tlTarget || 'TBD'}',
+    teamLead: 'Cole Borders',
+    teamPhone: '(270) 782-5388',
+    teamEmail: 'cole@sixarrowsconstruction.com',
+    quickSummary: 'Welcome to your Six Arrows client portal.',
+    selectionsClientKey: '${id}',
+    links: {
+      budget: '${sheetUrl || '#'}',
+      timeline: '#',
+    },
+    // Notion connections (used by API bridge — next build phase)
+    notionTrackerPageId: '${notionTracker || ''}',
+    notionTimelineDbId:  '${notionTimeline || ''}',
+    decisions: [],
+    updates: [],
+    timeline: [],
+    documents: [],
+    budgetCategories: [
+      { name:'Design & Planning',           total:0, spent:0, status:'pending', subCategories:[
+        { name:'Surveying & Permits', total:0, spent:0 },
+        { name:'Interior Design',     total:0, spent:0 },
+      ]},
+      { name:'Construction Costs',          total:0, spent:0, status:'pending', subCategories:[
+        { name:'Foundation', total:0, spent:0 }, { name:'Framing', total:0, spent:0 },
+        { name:'Roofing', total:0, spent:0 }, { name:'Windows & Doors', total:0, spent:0 },
+        { name:'Exterior Siding & Masonry', total:0, spent:0 },
+        { name:'Porches & Accents', total:0, spent:0 }, { name:'Exterior Painting', total:0, spent:0 },
+      ]},
+      { name:'Mechanical Systems',          total:0, spent:0, status:'pending', subCategories:[
+        { name:'Plumbing', total:0, spent:0 }, { name:'Electrical', total:0, spent:0 },
+        { name:'HVAC', total:0, spent:0 }, { name:'Insulation', total:0, spent:0 },
+      ]},
+      { name:'Interior Finishes',           total:0, spent:0, status:'pending', subCategories:[
+        { name:'Drywall', total:0, spent:0 }, { name:'Paint & Staining', total:0, spent:0 },
+        { name:'Tile & Masonry', total:0, spent:0 }, { name:'Flooring', total:0, spent:0 },
+        { name:'Cabinetry', total:0, spent:0 }, { name:'Countertops', total:0, spent:0 },
+        { name:'Interior Doors', total:0, spent:0 }, { name:'Trim Work & Moldings', total:0, spent:0 },
+        { name:'Fireplaces', total:0, spent:0 }, { name:'Electrical Fixtures', total:0, spent:0 },
+        { name:'Plumbing Fixtures', total:0, spent:0 }, { name:'Appliances', total:0, spent:0 },
+        { name:'Bathroom Fixtures', total:0, spent:0 }, { name:'Closet Systems', total:0, spent:0 },
+      ]},
+      { name:'Exterior Work',               total:0, spent:0, status:'pending', subCategories:[
+        { name:'Dirt & Grading', total:0, spent:0 }, { name:'Rock & Concrete', total:0, spent:0 },
+        { name:'Final Grade & Landscaping', total:0, spent:0 },
+      ]},
+      { name:'Utilities & Hookups',         total:0, spent:0, status:'pending', subCategories:[
+        { name:'Water & Sewer Lines', total:0, spent:0 }, { name:'Septic System', total:0, spent:0 },
+        { name:'Water Meter', total:0, spent:0 }, { name:'Utility Trenching', total:0, spent:0 },
+        { name:'Gas Connection', total:0, spent:0 }, { name:'Electrical Connection', total:0, spent:0 },
+      ]},
+      { name:'Miscellaneous',               total:0, spent:0, status:'pending', subCategories:[
+        { name:'Contingency Fund', total:0, spent:0 },
+      ]},
+      { name:'Other Costs & Management Fee',total:0, spent:0, status:'pending', subCategories:[
+        { name:'Temp Utilities', total:0, spent:0 }, { name:'Dumpsters & Toilet', total:0, spent:0 },
+        { name:'Site Clean Up & Builders Risk', total:0, spent:0 },
+        { name:'Six Arrows Management Fee', total:0, spent:0 },
+      ]},
+    ],
+    sabPhases: JSON.parse(JSON.stringify(PROJECTS[Object.keys(PROJECTS)[0]].sabPhases)),
+  },`;
+
+  const output = document.getElementById('nc-output');
+  const code   = document.getElementById('nc-code');
+  if (output) output.style.display = 'block';
+  if (code)   code.textContent = entry;
+}
+
+function copyClientEntry() {
+  const code = document.getElementById('nc-code')?.textContent;
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(() => {
+    showMsg('nc-copy-msg', 'success', 'Copied to clipboard ✓');
+  }).catch(() => {
+    showMsg('nc-copy-msg', 'error', 'Copy failed — select text manually');
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  ATTACH HANDLERS (called after every render)
+// ════════════════════════════════════════════════════════
+function attachHandlers(p) {
+  // Nothing extra needed — all handlers are inline onclick
+}
+
+// ── Boot ─────────────────────────────────────────────────
+checkAdminAuth();
+</script>
+</body>
+</html>

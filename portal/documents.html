@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Documents — Six Arrows</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<style>
+
+/* ── Category filter pills ── */
+.doc-filters {
+  display:flex; gap:6px; flex-wrap:wrap;
+  margin-bottom:1.25rem;
+}
+.doc-filter-pill {
+  padding:6px 14px; border-radius:999px;
+  border:0.5px solid var(--border-2);
+  background:var(--white); font-size:12px;
+  font-weight:500; color:var(--charcoal-3);
+  cursor:pointer; transition:all .15s;
+  font-family:'Work Sans',sans-serif;
+}
+.doc-filter-pill:hover  { border-color:var(--border-3); color:var(--charcoal); }
+.doc-filter-pill.active { background:var(--charcoal); color:var(--cream); border-color:var(--charcoal); }
+
+/* ── Document card ── */
+.doc-card {
+  background:var(--white);
+  border:0.5px solid var(--border);
+  border-radius:var(--r-lg);
+  margin-bottom:8px;
+  overflow:hidden;
+  transition:border-color .18s, box-shadow .18s;
+}
+.doc-card:hover { border-color:var(--border-2); box-shadow:var(--sh-sm); }
+.doc-card-header {
+  display:flex; align-items:center; gap:12px;
+  padding:13px 16px; cursor:pointer;
+}
+.doc-type-ico {
+  width:36px; height:36px; border-radius:var(--r-md);
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; font-size:16px;
+}
+.doc-type-ico.pdf   { background:#fdf0f0; }
+.doc-type-ico.sheet { background:#f0fdf4; }
+.doc-type-ico.img   { background:#f0f4ff; }
+.doc-type-ico.other { background:var(--cream-pale); }
+.doc-meta { flex:1; min-width:0; }
+.doc-name {
+  font-size:14px; font-weight:600; color:var(--charcoal);
+  margin-bottom:2px; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+.doc-info {
+  font-size:11px; color:var(--charcoal-4);
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.doc-cat-tag {
+  font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.07em; padding:2px 7px; border-radius:999px;
+  background:var(--cream-2); color:var(--charcoal-3);
+}
+.doc-actions {
+  display:flex; align-items:center; gap:6px; flex-shrink:0;
+}
+.doc-btn {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:6px 12px; border-radius:var(--r-md);
+  font-size:11px; font-weight:600;
+  border:0.5px solid var(--border-2);
+  background:var(--cream-pale); color:var(--charcoal);
+  cursor:pointer; text-decoration:none;
+  transition:all .15s; white-space:nowrap;
+  font-family:'Work Sans',sans-serif;
+}
+.doc-btn:hover { background:var(--cream-2); border-color:var(--border-3); }
+.doc-btn.primary {
+  background:var(--charcoal); color:var(--cream);
+  border-color:var(--charcoal);
+}
+.doc-btn.primary:hover { opacity:.84; }
+.doc-btn svg { width:10px; height:10px; }
+
+/* ── Preview panel ── */
+.doc-preview {
+  max-height:0; overflow:hidden;
+  transition:max-height .35s cubic-bezier(.4,0,.2,1);
+}
+.doc-preview.open { max-height:560px; border-top:0.5px solid var(--border); }
+.doc-preview iframe { width:100%; height:520px; border:none; display:block; }
+.doc-preview-note {
+  padding:10px 16px; font-size:11px; color:var(--charcoal-3);
+  background:var(--cream-pale); border-top:0.5px solid var(--border);
+  display:flex; align-items:center; gap:6px;
+}
+
+/* ── Build Photos section ── */
+.photo-phase-block { margin-bottom:1.75rem; }
+.photo-phase-hd {
+  display:flex; align-items:center; gap:10px;
+  margin-bottom:.875rem;
+}
+.photo-phase-label {
+  font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.1em; color:var(--charcoal-4);
+}
+.photo-phase-count {
+  font-size:11px; color:var(--charcoal-4);
+  background:var(--cream-2); padding:2px 8px;
+  border-radius:999px;
+}
+.photo-phase-line { flex:1; height:0.5px; background:var(--border-2); }
+
+.photo-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
+  gap:10px;
+}
+@media(max-width:580px) {
+  .photo-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+}
+
+.photo-thumb {
+  position:relative; border-radius:var(--r-md);
+  overflow:hidden; aspect-ratio:4/3;
+  background:var(--cream-2); cursor:pointer;
+  border:0.5px solid var(--border);
+  transition:transform .18s, box-shadow .18s;
+}
+.photo-thumb:hover { transform:scale(1.02); box-shadow:var(--sh-md); }
+.photo-thumb img {
+  width:100%; height:100%; object-fit:cover;
+  display:block; transition:opacity .2s;
+}
+.photo-thumb-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(46,46,46,.7) 0%, transparent 50%);
+  opacity:0; transition:opacity .18s;
+  display:flex; align-items:flex-end; padding:8px;
+}
+.photo-thumb:hover .photo-thumb-overlay { opacity:1; }
+.photo-thumb-caption {
+  font-size:11px; color:white; font-weight:500;
+  line-height:1.3;
+}
+.photo-thumb-date {
+  font-size:10px; color:rgba(255,255,255,.65);
+}
+.photo-thumb-load-err {
+  position:absolute; inset:0; display:flex;
+  align-items:center; justify-content:center;
+  font-size:11px; color:var(--charcoal-4);
+  text-align:center; padding:8px;
+  flex-direction:column; gap:4px;
+}
+
+/* ── Lightbox ── */
+.lightbox-overlay {
+  position:fixed; inset:0; z-index:9000;
+  background:rgba(20,20,20,.94);
+  display:flex; align-items:center; justify-content:center;
+  padding:1rem;
+  animation:lbIn .18s ease;
+}
+@keyframes lbIn { from{opacity:0} to{opacity:1} }
+.lightbox-inner {
+  max-width:900px; width:100%; max-height:90vh;
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+}
+.lightbox-img {
+  max-width:100%; max-height:70vh;
+  border-radius:var(--r-lg); object-fit:contain;
+}
+.lightbox-caption { font-size:14px; color:rgba(255,255,255,.8); text-align:center; }
+.lightbox-meta { font-size:12px; color:rgba(255,255,255,.4); }
+.lightbox-close {
+  position:fixed; top:16px; right:20px;
+  background:rgba(255,255,255,.12); border:none;
+  color:white; font-size:20px; width:36px; height:36px;
+  border-radius:50%; cursor:pointer; display:flex;
+  align-items:center; justify-content:center;
+  transition:background .15s;
+}
+.lightbox-close:hover { background:rgba(255,255,255,.22); }
+.lightbox-nav {
+  position:fixed; top:50%; transform:translateY(-50%);
+  background:rgba(255,255,255,.1); border:none;
+  color:white; font-size:22px; width:44px; height:44px;
+  border-radius:50%; cursor:pointer; display:flex;
+  align-items:center; justify-content:center;
+  transition:background .15s;
+}
+.lightbox-nav:hover { background:rgba(255,255,255,.22); }
+.lightbox-prev { left:16px; }
+.lightbox-next { right:16px; }
+
+/* ── Photos empty state ── */
+.photos-empty {
+  text-align:center; padding:3rem 1.5rem;
+  background:var(--white); border:0.5px solid var(--border);
+  border-radius:var(--r-xl);
+}
+.photos-empty-ico { font-size:40px; margin-bottom:12px; }
+.photos-empty-title { font-size:15px; font-weight:600; color:var(--charcoal-3); margin-bottom:5px; }
+.photos-empty-sub   { font-size:13px; color:var(--charcoal-4); line-height:1.55; }
+
+/* ── Inspiration section ── */
+.inspo-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
+  gap:10px;
+}
+.inspo-thumb {
+  position:relative; border-radius:var(--r-md);
+  overflow:hidden; background:var(--cream-2);
+  border:0.5px solid var(--border);
+}
+.inspo-thumb-img-wrap { aspect-ratio:1; }
+.inspo-thumb-img-wrap img { width:100%; height:100%; object-fit:cover; display:block; }
+.inspo-thumb-del {
+  position:absolute; top:4px; right:4px;
+  width:20px; height:20px; border-radius:50%;
+  background:rgba(46,46,46,.7); color:white;
+  border:none; cursor:pointer; font-size:13px;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .15s;
+}
+.inspo-thumb:hover .inspo-thumb-del { opacity:1; }
+.inspo-label-inp {
+  width:100%; font-size:11px; color:var(--charcoal-3);
+  background:transparent; border:none; outline:none;
+  text-align:center; padding:4px 6px;
+  font-family:'Work Sans',sans-serif;
+  border-top:0.5px solid var(--border);
+}
+
+.doc-empty {
+  text-align:center; padding:2.5rem 1rem;
+  background:var(--white); border:0.5px solid var(--border);
+  border-radius:var(--r-lg);
+}
+.doc-empty-ico { font-size:28px; margin-bottom:8px; }
+.doc-empty-title { font-size:14px; font-weight:600; color:var(--charcoal-3); margin-bottom:4px; }
+.doc-empty-sub   { font-size:12px; color:var(--charcoal-4); }
+</style>
+</head>
+<body>
+<script>
+const p = AUTH.requireAuth();
+if (!p) throw new Error('Not authed');
+
+// ── Storage keys ─────────────────────────────────────
+const DOC_KEY   = `sa_docs_${p.id}`;
+const PHOTO_KEY = `sa_photos_${p.id}`;
+const INSPO_KEY = `sa_inspo_${p.id}`;
+
+function loadDocs() {
+  let extra = [];
+  try { extra = JSON.parse(localStorage.getItem(DOC_KEY) || '[]'); } catch(e) {}
+  // Exclude photo entries from docs list
+  const baseDocs = (p.documents || []).filter(d => d.category !== 'photos');
+  return [...baseDocs, ...extra.filter(d => d.category !== 'photos')];
+}
+function loadPhotos() {
+  // Combine data.js photos + admin-added photos from localStorage
+  const basePhotos = (p.documents || []).filter(d => d.category === 'photos');
+  let extra = [];
+  try { extra = JSON.parse(localStorage.getItem(PHOTO_KEY) || '[]'); } catch(e) {}
+  return [...basePhotos, ...extra];
+}
+function loadInspo() {
+  try { return JSON.parse(localStorage.getItem(INSPO_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveInspo(items) { localStorage.setItem(INSPO_KEY, JSON.stringify(items)); }
+
+// ── Category config ───────────────────────────────────
+const CATS = {
+  all:       { label:'All Documents', icon:'📁' },
+  plans:     { label:'Architectural Plans', icon:'📐' },
+  budget:    { label:'Budget & Financials', icon:'💰' },
+  selections:{ label:'Selections', icon:'✅' },
+  contracts: { label:'Contracts', icon:'📋' },
+  permits:   { label:'Permits', icon:'🏛️' },
+  other:     { label:'Other', icon:'📄' },
+};
+
+const BUILD_PHASES = [
+  { id:'pre',        label:'Pre-Construction' },
+  { id:'foundation', label:'Foundation'       },
+  { id:'framing',    label:'Framing'          },
+  { id:'mechanical', label:'Mechanical'       },
+  { id:'finishes',   label:'Finishes'         },
+  { id:'completion', label:'Completion'       },
+];
+
+const TYPE_ICO = {
+  pdf:   { ico:'📄', cls:'pdf'   },
+  sheet: { ico:'📊', cls:'sheet' },
+  img:   { ico:'🖼️', cls:'img'   },
+  other: { ico:'📁', cls:'other' },
+};
+
+// Convert Google Drive share URL to embeddable image URL
+function driveImgUrl(url) {
+  if (!url) return url;
+  // https://drive.google.com/file/d/FILEID/view → https://drive.google.com/uc?export=view&id=FILEID
+  const match = url.match(/\/file\/d\/([^\/\?]+)/);
+  if (match) return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+  // Already in uc format
+  if (url.includes('uc?export')) return url;
+  return url;
+}
+
+// Convert Drive URL to preview (PDF embed) format
+function drivePdfUrl(url) {
+  if (!url) return url;
+  const match = url.match(/\/file\/d\/([^\/\?]+)/);
+  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+  return url;
+}
+
+function canPreview(doc) {
+  return doc.type === 'pdf' && (doc.url.includes('drive.google.com') || doc.url.includes('preview'));
+}
+
+// ── State ─────────────────────────────────────────────
+let activeFilter  = 'all';
+let activeSection = 'docs'; // 'docs' | 'photos' | 'inspo'
+let openPreviews  = {};
+let lightboxPhotos = [];
+let lightboxIdx    = 0;
+
+// ── Main render ───────────────────────────────────────
+function render() {
+  document.getElementById('section-tabs').innerHTML = [
+    { key:'docs',   label:'Documents' },
+    { key:'photos', label:'Build Photos' },
+    { key:'inspo',  label:'Your Inspiration' },
+  ].map(s => `<button class="doc-filter-pill ${activeSection===s.key?'active':''}" onclick="switchSection('${s.key}')">${s.label}</button>`).join('');
+
+  if (activeSection === 'docs')   renderDocs();
+  if (activeSection === 'photos') renderPhotos();
+  if (activeSection === 'inspo')  renderInspo();
+}
+
+function switchSection(sec) {
+  activeSection = sec;
+  document.getElementById('doc-filters').style.display = sec === 'docs' ? 'flex' : 'none';
+  render();
+}
+
+// ── Documents ─────────────────────────────────────────
+function renderDocs() {
+  const docs = loadDocs();
+  const filtered = activeFilter === 'all' ? docs : docs.filter(d => d.category === activeFilter);
+  const counts = {};
+  docs.forEach(d => { counts[d.category] = (counts[d.category]||0)+1; });
+
+  document.getElementById('doc-filters').innerHTML = Object.entries(CATS).map(([key, cfg]) => {
+    const count = key === 'all' ? docs.length : (counts[key]||0);
+    if (key !== 'all' && count === 0) return '';
+    return `<button class="doc-filter-pill ${activeFilter===key?'active':''}" onclick="setFilter('${key}')">
+      ${cfg.icon} ${cfg.label} <span style="opacity:.5;margin-left:3px">${count}</span>
+    </button>`;
+  }).join('');
+
+  document.getElementById('main-content').innerHTML = filtered.length === 0
+    ? `<div class="doc-empty"><div class="doc-empty-ico">📂</div><div class="doc-empty-title">No documents in this category</div><div class="doc-empty-sub">Documents added by Six Arrows will appear here.</div></div>`
+    : filtered.map(doc => {
+        const ti   = TYPE_ICO[doc.type] || TYPE_ICO.other;
+        const open = !!openPreviews[doc.id];
+        const prev = canPreview(doc);
+        const embedUrl = prev ? drivePdfUrl(doc.url) : doc.url;
+        return `
+        <div class="doc-card" id="dc-${doc.id}">
+          <div class="doc-card-header" onclick="${prev?`togglePreview('${doc.id}')`:''}" style="${prev?'':'cursor:default'}">
+            <div class="doc-type-ico ${ti.cls}">${ti.ico}</div>
+            <div class="doc-meta">
+              <div class="doc-name">${doc.name}</div>
+              <div class="doc-info">
+                <span class="doc-cat-tag">${CATS[doc.category]?.label||doc.category}</span>
+                <span>${doc.date}</span>
+                ${doc.note ? `<span>· ${doc.note}</span>` : ''}
+              </div>
+            </div>
+            <div class="doc-actions" onclick="event.stopPropagation()">
+              ${prev ? `<button class="doc-btn" onclick="togglePreview('${doc.id}')">
+                <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 5s1.5-3 4-3 4 3 4 3-1.5 3-4 3-4-3-4-3z"/><circle cx="5" cy="5" r="1.3"/></svg>
+                ${open?'Close':'Preview'}
+              </button>` : ''}
+              <a class="doc-btn primary" href="${doc.url}" target="_blank" rel="noopener">
+                <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 8L8 2M4 2h4v4"/></svg>
+                Open
+              </a>
+            </div>
+          </div>
+          ${prev ? `<div class="doc-preview ${open?'open':''}" id="dp-${doc.id}">
+            <div class="doc-preview-inner" id="dpi-${doc.id}">
+              ${open ? `<iframe src="${embedUrl}" allowfullscreen></iframe>` : ''}
+            </div>
+            <div class="doc-preview-note">
+              <svg style="width:11px;height:11px" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="var(--charcoal-4)" stroke-width="1"/><line x1="6" y1="5" x2="6" y2="9" stroke="var(--charcoal-4)" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="3.5" r=".5" fill="var(--charcoal-4)"/></svg>
+              Previewing via Google Drive — <a href="${doc.url}" target="_blank" style="color:var(--green-dk)">open full screen →</a>
+            </div>
+          </div>` : ''}
+        </div>`;
+      }).join('');
+}
+
+function setFilter(cat) {
+  activeFilter = cat;
+  renderDocs();
+}
+
+function togglePreview(id) {
+  openPreviews[id] = !openPreviews[id];
+  const panel = document.getElementById(`dp-${id}`);
+  const inner = document.getElementById(`dpi-${id}`);
+  const doc   = loadDocs().find(d => d.id === id);
+  if (panel) panel.classList.toggle('open', !!openPreviews[id]);
+  if (inner && openPreviews[id] && doc && !inner.querySelector('iframe')) {
+    inner.innerHTML = `<iframe src="${drivePdfUrl(doc.url)}" allowfullscreen></iframe>`;
+  }
+  const btn = document.querySelector(`#dc-${id} .doc-btn`);
+  if (btn) btn.innerHTML = `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 5s1.5-3 4-3 4 3 4 3-1.5 3-4 3-4-3-4-3z"/><circle cx="5" cy="5" r="1.3"/></svg>${openPreviews[id]?'Close':'Preview'}`;
+}
+
+// ── Build Photos ──────────────────────────────────────
+function renderPhotos() {
+  const photos = loadPhotos();
+  lightboxPhotos = photos;
+
+  if (photos.length === 0) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="photos-empty">
+        <div class="photos-empty-ico">📸</div>
+        <div class="photos-empty-title">No build photos yet</div>
+        <div class="photos-empty-sub">Six Arrows will add progress photos throughout your build — check back as construction gets underway.</div>
+      </div>`;
+    return;
+  }
+
+  // Group by phase, newest first within each phase
+  const byPhase = {};
+  photos.forEach((ph, idx) => {
+    const phase = ph.phase || 'other';
+    if (!byPhase[phase]) byPhase[phase] = [];
+    byPhase[phase].push({ ...ph, _idx: idx });
+  });
+
+  // Sort phases in build order
+  const phaseOrder = BUILD_PHASES.map(p => p.id);
+  const sortedPhases = Object.keys(byPhase).sort((a, b) => {
+    const ai = phaseOrder.indexOf(a), bi = phaseOrder.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  document.getElementById('main-content').innerHTML = sortedPhases.map(phaseId => {
+    const phaseLabel = BUILD_PHASES.find(p => p.id === phaseId)?.label || phaseId;
+    const phasePhotos = byPhase[phaseId].reverse(); // newest first
+    return `
+      <div class="photo-phase-block">
+        <div class="photo-phase-hd">
+          <span class="photo-phase-label">${phaseLabel}</span>
+          <span class="photo-phase-count">${phasePhotos.length} photo${phasePhotos.length!==1?'s':''}</span>
+          <div class="photo-phase-line"></div>
+        </div>
+        <div class="photo-grid">
+          ${phasePhotos.map(photo => {
+            const imgUrl = driveImgUrl(photo.url);
+            return `
+            <div class="photo-thumb" onclick="openLightbox(${photo._idx})">
+              <img src="${imgUrl}" alt="${photo.caption||''}" onerror="this.style.display='none';this.parentNode.querySelector('.photo-thumb-load-err').style.display='flex'">
+              <div class="photo-thumb-load-err" style="display:none">
+                <span style="font-size:20px">🖼️</span>
+                <span>Photo unavailable</span>
+              </div>
+              <div class="photo-thumb-overlay">
+                <div>
+                  ${photo.caption ? `<div class="photo-thumb-caption">${photo.caption}</div>` : ''}
+                  ${photo.date ? `<div class="photo-thumb-date">${photo.date}</div>` : ''}
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Lightbox ──────────────────────────────────────────
+function openLightbox(idx) {
+  lightboxIdx = idx;
+  showLightbox();
+}
+
+function showLightbox() {
+  const photo   = lightboxPhotos[lightboxIdx];
+  if (!photo) return;
+  const imgUrl  = driveImgUrl(photo.url);
+  const total   = lightboxPhotos.length;
+  const existing = document.getElementById('lightbox-overlay');
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.id = 'lightbox-overlay';
+  div.className = 'lightbox-overlay';
+  div.innerHTML = `
+    <button class="lightbox-close" onclick="closeLightbox()">×</button>
+    ${lightboxIdx > 0 ? `<button class="lightbox-nav lightbox-prev" onclick="lightboxNav(-1)">‹</button>` : ''}
+    ${lightboxIdx < total-1 ? `<button class="lightbox-nav lightbox-next" onclick="lightboxNav(1)">›</button>` : ''}
+    <div class="lightbox-inner">
+      <img class="lightbox-img" src="${imgUrl}" alt="${photo.caption||''}">
+      ${photo.caption ? `<div class="lightbox-caption">${photo.caption}</div>` : ''}
+      <div class="lightbox-meta">${photo.phase ? (BUILD_PHASES.find(p=>p.id===photo.phase)?.label||photo.phase) : ''} ${photo.date ? '· '+photo.date : ''} · ${lightboxIdx+1} of ${total}</div>
+    </div>`;
+  document.body.appendChild(div);
+  div.addEventListener('click', e => { if (e.target === div) closeLightbox(); });
+}
+
+function lightboxNav(dir) {
+  lightboxIdx = Math.max(0, Math.min(lightboxPhotos.length-1, lightboxIdx + dir));
+  showLightbox();
+}
+function closeLightbox() {
+  const el = document.getElementById('lightbox-overlay');
+  if (el) el.remove();
+}
+
+// Keyboard nav
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('lightbox-overlay')) return;
+  if (e.key === 'ArrowLeft')  lightboxNav(-1);
+  if (e.key === 'ArrowRight') lightboxNav(1);
+  if (e.key === 'Escape')     closeLightbox();
+});
+
+// ── Inspiration ───────────────────────────────────────
+function renderInspo() {
+  const items = loadInspo();
+  document.getElementById('main-content').innerHTML = `
+    <p style="font-size:13px;color:var(--charcoal-3);margin-bottom:1rem;line-height:1.55">Save inspiration photos, reference images, or ideas for your home. Paste image URLs or upload from your device.</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <input id="inspo-url-inp" type="text" class="form-inp" placeholder="Paste image URL — Pinterest, Houzz, manufacturer site..." style="flex:1;min-width:200px;font-size:13px;padding:9px 12px"/>
+      <button class="doc-btn primary" onclick="addInspoUrl()" style="padding:9px 18px;font-size:12px">Add URL</button>
+    </div>
+    <div class="inspo-grid" id="inspo-grid">
+      ${items.map((item, i) => `
+        <div class="inspo-thumb">
+          <div class="inspo-thumb-img-wrap">
+            <img src="${item.url}" alt="${item.label||''}" onerror="this.style.opacity='.3'">
+          </div>
+          <button class="inspo-thumb-del" onclick="removeInspo(${i})">×</button>
+          <input class="inspo-label-inp" value="${item.label||''}" placeholder="Add label..." onchange="labelInspo(${i},this.value)">
+        </div>`).join('')}
+      <label style="aspect-ratio:1;border:1.5px dashed var(--border-2);border-radius:var(--r-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:all .15s;background:var(--white)" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border-2)'">
+        <div style="font-size:22px">+</div>
+        <div style="font-size:11px;color:var(--charcoal-3)">Upload photo</div>
+        <input type="file" accept="image/*" multiple style="display:none" onchange="handleInspoFiles(this)">
+      </label>
+    </div>`;
+}
+
+function addInspoUrl() {
+  const inp = document.getElementById('inspo-url-inp');
+  const url = inp?.value.trim();
+  if (!url) return;
+  const items = loadInspo();
+  items.push({ url, label:'' });
+  saveInspo(items);
+  inp.value = '';
+  renderInspo();
+}
+function removeInspo(idx) {
+  const items = loadInspo(); items.splice(idx, 1);
+  saveInspo(items); renderInspo();
+}
+function labelInspo(idx, val) {
+  const items = loadInspo();
+  if (items[idx]) { items[idx].label = val; saveInspo(items); }
+}
+function handleInspoFiles(input) {
+  const items = loadInspo();
+  const files = Array.from(input.files);
+  let loaded = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      items.push({ url: e.target.result, label: file.name.replace(/\.[^.]+$/,'') });
+      loaded++;
+      if (loaded === files.length) { saveInspo(items); renderInspo(); }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Mount and boot ────────────────────────────────────
+mountLayout('documents', 'Documents', `
+  <div class="page-eyebrow">Project Files</div>
+  <div class="page-title">Documents & Photos</div>
+  <p class="page-sub">Architectural plans, contracts, build progress photos, and your inspiration — all in one place.</p>
+
+  <div id="section-tabs" class="doc-filters" style="margin-bottom:.75rem"></div>
+  <div id="doc-filters" class="doc-filters"></div>
+  <div id="main-content"></div>
+`);
+
+render();
+</script>
+</body>
+</html>

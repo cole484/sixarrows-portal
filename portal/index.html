@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Six Arrows — Client Portal</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="data.js"></script>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+
+    <div class="login-hero">
+      <div class="login-hero-content">
+        <div class="login-brand">
+          <img id="hero-logo" src="" alt="Six Arrows Construction" style="width:48px;height:48px;object-fit:contain">
+          <div>
+            <div class="login-brand-name">Six Arrows</div>
+            <div class="login-brand-sub">Blueprint™ Portal</div>
+          </div>
+        </div>
+        <div class="login-headline">Your home.<br>Your process.<br>Your command center.</div>
+        <p class="login-tagline">Every phase, decision, and milestone — in one place. Built so you always know exactly where your project stands.</p>
+        <div class="login-pillars">
+          <div class="login-pillar">
+            <div class="pillar-ico"><svg viewBox="0 0 10 10"><path d="M1.5 5l2 2 4-4" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div>
+            <div class="pillar-title">Clarity</div>
+            <div class="pillar-desc">Always know what's done, what's next, and what needs your decision.</div>
+          </div>
+          <div class="login-pillar">
+            <div class="pillar-ico"><svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="3.8" stroke="white" stroke-width="1.2" fill="none"/><line x1="5" y1="2.5" x2="5" y2="5.2" stroke="white" stroke-width="1.2" stroke-linecap="round"/><line x1="5" y1="5.2" x2="6.8" y2="6.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+            <div class="pillar-title">Momentum</div>
+            <div class="pillar-desc">Track progress phase by phase, step by step, from concept to keys.</div>
+          </div>
+          <div class="login-pillar">
+            <div class="pillar-ico"><svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" stroke="white" stroke-width="1.2" fill="none"/><line x1="1" y1="3.8" x2="9" y2="3.8" stroke="white" stroke-width="1.2"/><line x1="3.8" y1="3.8" x2="3.8" y2="9" stroke="white" stroke-width="1.2"/></svg></div>
+            <div class="pillar-title">Transparency</div>
+            <div class="pillar-desc">Live budget, timeline, and selections — no surprises, ever.</div>
+          </div>
+          <div class="login-pillar">
+            <div class="pillar-ico"><svg viewBox="0 0 10 10"><path d="M1.5 8V3.2a.8.8 0 01.8-.8h5.4a.8.8 0 01.8.8V7a.8.8 0 01-.8.8H3.5L1.5 9.5V8z" stroke="white" stroke-width="1.2" fill="none"/></svg></div>
+            <div class="pillar-title">Communication</div>
+            <div class="pillar-desc">Updates, decisions, and notes — all in one organized feed.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="login-panel">
+      <div class="login-panel-title">Sign in to your portal</div>
+      <p class="login-panel-sub">Enter the email and access code provided by your Six Arrows team.</p>
+      <div class="form-stack">
+        <div>
+          <label class="form-lbl" for="email">Email address</label>
+          <input class="form-inp" type="email" id="email" placeholder="you@email.com" autocomplete="email"/>
+        </div>
+        <div>
+          <label class="form-lbl" for="pw">Access code</label>
+          <input class="form-inp" type="password" id="pw" placeholder="Your access code" autocomplete="current-password"/>
+        </div>
+        <div id="login-err" class="login-err">That email and access code combination wasn't found. Please check your credentials.</div>
+        <button class="login-btn" id="login-btn">Enter Command Center →</button>
+      </div>
+      <p class="login-foot">Don't have your access code?<br>Contact <strong>cole@sixarrowsconstruction.com</strong></p>
+    </div>
+
+  </div>
+</div>
+<script>
+// If already logged in go to dashboard
+const existing = AUTH.getSession();
+if (existing) window.location.href = 'dashboard.html';
+
+// Load stacked logo dynamically (avoid inline base64 in HTML)
+const LOGO_DATA_KEY = 'sa_stacked_logo';
+document.addEventListener('DOMContentLoaded', () => {
+  // We'll fetch from app.js once it loads
+});
+
+async function attemptLogin() {
+  const email = document.getElementById('email').value;
+  const pw    = document.getElementById('pw').value;
+  const err   = document.getElementById('login-err');
+  const btn   = document.getElementById('login-btn');
+  err.classList.remove('show');
+  btn.textContent = 'Checking…';
+  btn.disabled = true;
+  const project = await AUTH.loginAsync(email, pw);
+  if (project) {
+    btn.textContent = 'Welcome back →';
+    setTimeout(() => window.location.href = 'dashboard.html', 300);
+  } else {
+    err.classList.add('show');
+    btn.textContent = 'Enter Command Center →';
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('login-btn').addEventListener('click', attemptLogin);
+document.addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin(); });
+</script>
+<script src="app.js"></script>
+<script>
+// Set logo after app.js loads
+document.getElementById('hero-logo').src = LOGO_STACKED;
+</script>
+</body>
+</html>

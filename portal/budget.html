@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Budget — Six Arrows</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="data.js"></script><script src="app.js"></script>
+<style>
+
+/* ── Category status indicator ── */
+.bcat-row {
+  padding:11px 0;
+  border-bottom:0.5px solid var(--border);
+}
+.bcat-row:last-child { border-bottom:none; }
+.bcat-head {
+  display:flex; align-items:center;
+  justify-content:space-between; gap:8px;
+  margin-bottom:7px;
+}
+.bcat-name {
+  font-size:13px; font-weight:600; color:var(--charcoal);
+}
+.bcat-detail {
+  font-size:11px; color:var(--charcoal-4);
+  margin-bottom:6px;
+}
+.bcat-amounts {
+  display:flex; align-items:center;
+  justify-content:space-between; gap:8px;
+  font-size:12px; color:var(--charcoal-3);
+  margin-top:5px;
+}
+.bcat-amounts strong { color:var(--charcoal); font-weight:600; }
+
+/* ── SAB status dot ── */
+.status-dot {
+  width:8px; height:8px; border-radius:50%; flex-shrink:0;
+}
+.status-dot.confirmed { background:var(--green); }
+.status-dot.progress  { background:#c87000; }
+.status-dot.pending   { background:var(--cream-3); border:1px solid var(--border-3); }
+
+/* ── SAB category row ── */
+.sab-cat-row {
+  display:flex; align-items:center; gap:12px;
+  padding:11px 0; border-bottom:0.5px solid var(--border);
+}
+.sab-cat-row:last-child { border-bottom:none; }
+.sab-cat-name { flex:1; font-size:13px; font-weight:500; color:var(--charcoal); }
+.sab-cat-status { font-size:11px; font-weight:600; }
+.sab-cat-status.confirmed { color:var(--green-dk); }
+.sab-cat-status.progress  { color:#7a4800; }
+.sab-cat-status.pending   { color:var(--charcoal-4); }
+
+/* ── Subcategory rows ── */
+.sub-cat-wrap {
+  margin-top:0;
+  padding-top:0;
+  overflow:hidden;
+  transition:max-height .3s cubic-bezier(.4,0,.2,1);
+}
+.sub-cat-wrap.open {
+  border-top:0.5px solid var(--border);
+  margin-top:8px;
+  padding-top:4px;
+}
+.sub-cat-row {
+  display:flex; align-items:center; gap:10px;
+  padding:7px 0;
+  border-bottom:0.5px solid var(--border);
+}
+.sub-cat-row:last-child { border-bottom:none; }
+.sub-cat-name {
+  font-size:12px; color:var(--charcoal-3);
+  min-width:140px; flex-shrink:0;
+}
+.sub-cat-amt {
+  font-size:11px; color:var(--charcoal-4);
+  white-space:nowrap; flex-shrink:0;
+}
+
+/* ── Health bar ── */
+.health-bar-wrap {
+  position:relative; height:12px;
+  background:var(--cream-2); border-radius:999px;
+  overflow:hidden; margin-bottom:8px;
+}
+.health-bar-fill {
+  height:100%; border-radius:999px;
+  transition:width .6s cubic-bezier(.4,0,.2,1);
+}
+.health-bar-fill.good { background:var(--green); }
+.health-bar-fill.warn { background:#c87000; }
+.health-bar-fill.over { background:var(--danger); }
+
+/* ── Forecast callout ── */
+.forecast-row {
+  display:flex; align-items:center;
+  justify-content:space-between; gap:10px;
+  padding:10px 0;
+  border-bottom:0.5px solid var(--border);
+}
+.forecast-row:last-child { border-bottom:none; }
+.forecast-lbl { font-size:12px; color:var(--charcoal-3); }
+.forecast-val { font-size:13px; font-weight:600; color:var(--charcoal); }
+.forecast-val.positive { color:var(--green-dk); }
+.forecast-val.negative { color:var(--danger); }
+
+</style>
+</head>
+<body>
+<script>
+const p = AUTH.requireAuth();
+if (!p) throw new Error('Not authed');
+
+const isSAB = p.statusType === 'sab';
+
+// ── Budget categories — using your standard structure ──
+// Status meanings:
+//   SAB phase:          'pending' | 'in_progress' | 'confirmed'
+//   Construction phase: 'not_started' | 'in_progress' | 'complete' | 'over_budget'
+const cats = p.budgetCategories || [];
+
+if (isSAB) {
+  // ── SAB MODE — no dollar amounts, show category completion status ──
+
+  const total     = cats.length;
+  // Status values: 'pending' | 'active' | 'complete' (set via admin panel)
+  const confirmed = cats.filter(c => c.status === 'complete').length;
+  const inProg    = cats.filter(c => c.status === 'active').length;
+  const pending   = cats.filter(c => c.status === 'pending').length;
+  const pct       = total ? Math.round(confirmed / total * 100) : 0;
+  const budgetLink = p.links?.budget || '';
+
+  function sabStatus(status) {
+    if (status === 'complete') return { cls:'confirmed', label:'Numbers confirmed', dotCls:'confirmed' };
+    if (status === 'active')   return { cls:'progress',  label:'In progress',       dotCls:'progress' };
+    return                            { cls:'pending',   label:'Not started',       dotCls:'pending' };
+  }
+
+  mountLayout('budget', 'Budget', `
+    <div class="page-eyebrow">Financials</div>
+    <div class="page-title">Budget</div>
+    <p class="page-sub">Every cost category gets confirmed numbers before we break ground. Here is where each one stands.</p>
+
+    <!-- Progress overview -->
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin-bottom:2px">Budget Completion</div>
+          <div style="font-size:13px;color:var(--charcoal-3)">${confirmed} of ${total} categories have confirmed numbers</div>
+        </div>
+        <div style="font-size:32px;font-weight:700;color:var(--charcoal);line-height:1">${pct}%</div>
+      </div>
+      <div class="health-bar-wrap">
+        <div class="health-bar-fill good" style="width:${pct}%"></div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <div class="status-dot confirmed"></div>
+          <span style="font-size:11px;color:var(--charcoal-3)">${confirmed} confirmed</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px">
+          <div class="status-dot progress"></div>
+          <span style="font-size:11px;color:var(--charcoal-3)">${inProg} in progress</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px">
+          <div class="status-dot pending"></div>
+          <span style="font-size:11px;color:var(--charcoal-3)">${pending} not started</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category list with expandable subcategories -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh">
+        <div class="sh-title">Category Status</div>
+        ${budgetLink ? `<a href="${budgetLink}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;font-weight:500">View Budget Sheet →</a>` : ''}
+      </div>
+      ${cats.map((cat, ci) => {
+        const s = sabStatus(cat.status);
+        const hasSubs = cat.subCategories && cat.subCategories.length > 0;
+        const subRows = hasSubs ? cat.subCategories.map(sub => `
+          <div class="sub-cat-row">
+            <div class="sub-cat-name">${sub.name}</div>
+            <span class="sub-cat-amt" style="color:var(--charcoal-4);font-style:italic;font-size:11px">TBD</span>
+          </div>`).join('') : '';
+        return `<div class="bcat-row" id="sab-cat-${ci}">
+          <div class="bcat-head" onclick="${hasSubs ? `toggleSabCat(${ci})` : ''}" style="${hasSubs ? 'cursor:pointer' : ''}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="status-dot ${s.dotCls}"></div>
+              <span class="bcat-name">${cat.name}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="sab-cat-status ${s.cls}">${s.label}</span>
+              ${hasSubs ? `<svg id="sab-chev-${ci}" style="width:12px;height:12px;color:var(--charcoal-4);transition:transform .2s;flex-shrink:0" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5l4 3.5-4 3.5"/></svg>` : ''}
+            </div>
+          </div>
+          ${hasSubs ? `<div class="sub-cat-wrap" id="sab-sub-${ci}" style="max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1)">${subRows}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- What this means callout -->
+    <div class="card" style="background:var(--cream-pale);border:0.5px solid var(--border-2)">
+      <div style="font-size:12px;font-weight:600;color:var(--charcoal);margin-bottom:4px">How this works</div>
+      <div style="font-size:12px;color:var(--charcoal-3);line-height:1.6">Each category gets confirmed pricing before we break ground. As bids come in and selections are made, categories move from Not Started to In Progress to Confirmed. No surprises at groundbreaking.</div>
+    </div>
+  `);
+
+  // Toggle SAB subcategory expand/collapse
+  const sabExpandState = {};
+  window.toggleSabCat = function(ci) {
+    sabExpandState[ci] = !sabExpandState[ci];
+    const wrap = document.getElementById('sab-sub-' + ci);
+    const chev = document.getElementById('sab-chev-' + ci);
+    if (wrap) wrap.style.maxHeight = sabExpandState[ci] ? '600px' : '0';
+    if (chev) chev.style.transform = sabExpandState[ci] ? 'rotate(90deg)' : '';
+  };
+
+} else {
+  // ── CONSTRUCTION MODE — full transparency ────────────
+
+  const totalBudget      = p.budgetTotal || 0;
+  const totalSpent       = cats.reduce((a, c) => a + (c.spent || 0), 0);
+  const changeOrderItems = p.changeOrderItems || [];
+  const changeOrders     = changeOrderItems.reduce((a, co) => a + (co.amount || 0), 0);
+  const forecasted       = totalBudget + changeOrders;
+  const remaining        = forecasted - totalSpent;
+  const spentPct         = forecasted ? Math.round(totalSpent / forecasted * 100) : 0;
+  const healthCls        = spentPct > 95 ? 'over' : spentPct > 80 ? 'warn' : 'good';
+
+  mountLayout('budget', 'Budget', `
+    <div class="page-eyebrow">Financials</div>
+    <div class="page-title">Budget</div>
+    <p class="page-sub">Every cost was locked before groundbreaking. Here's how actual spend tracks against each category.</p>
+
+    <!-- Budget health -->
+    <div class="card dark" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.14em;color:var(--green);font-weight:700;margin-bottom:4px">Budget Health</div>
+          <div style="font-size:11px;color:rgba(235,233,222,.4)">${spentPct}% of forecasted total spent</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:28px;font-weight:700;color:var(--cream);line-height:1;letter-spacing:-.02em">${currency(totalSpent)}</div>
+          <div style="font-size:11px;color:rgba(235,233,222,.35);margin-top:2px">spent to date</div>
+        </div>
+      </div>
+      <div class="health-bar-wrap" style="background:rgba(255,255,255,.1)">
+        <div class="health-bar-fill ${healthCls}" style="width:${Math.min(spentPct,100)}%"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:0">
+        <div class="forecast-row" style="border-color:rgba(255,255,255,.07)">
+          <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">Total build budget</span>
+          <span class="forecast-val" style="color:var(--cream)">${currency(totalBudget)}</span>
+        </div>
+        <div class="forecast-row" style="border-color:rgba(255,255,255,.07)">
+          <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">
+            Change orders
+            ${changeOrderItems.length > 0 ? `<span style="font-size:10px;opacity:.5;font-weight:400"> · ${changeOrderItems.length} approved</span>` : `<span style="font-size:10px;opacity:.4;font-weight:400"> · none to date</span>`}
+          </span>
+          <span class="forecast-val" style="color:${changeOrders > 0 ? '#f4a460' : changeOrders < 0 ? 'var(--green)' : 'rgba(235,233,222,.35)'}">
+            ${changeOrders === 0 ? '—' : (changeOrders > 0 ? '+' : '') + currency(changeOrders)}
+          </span>
+        </div>
+        <div class="forecast-row" style="border-color:rgba(255,255,255,.07)">
+          <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">Forecasted total</span>
+          <span class="forecast-val" style="color:var(--cream);font-size:14px">${currency(forecasted)}</span>
+        </div>
+        <div class="forecast-row" style="border:none">
+          <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">Remaining</span>
+          <span class="forecast-val" style="color:var(--green)">${currency(remaining)}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category breakdown -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh">
+        <div class="sh-title">Category Breakdown</div>
+        <a href="${p.links?.budget||'#'}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;font-weight:500">Full budget →</a>
+      </div>
+      ${cats.map((cat, ci) => {
+        const spent    = cat.spent  || 0;
+        const budget   = cat.total  || 0;
+        const pct      = budget ? Math.round(spent / budget * 100) : 0;
+        const over     = spent > budget;
+        const barCls   = over ? 'over' : (pct > 90 ? 'warn' : 'good');
+        const hasSubs  = cat.subCategories && cat.subCategories.length > 0;
+        const statusTag = {
+          complete:  '<span class="tag ok" style="font-size:9px">Complete</span>',
+          locked:    '<span class="tag ok" style="font-size:9px">Complete</span>',
+          active:    '<span class="tag neutral" style="font-size:9px">In Progress</span>',
+          reviewing: '<span class="tag neutral" style="font-size:9px">In Progress</span>',
+          pending:   '<span class="tag" style="font-size:9px;background:var(--cream-2);color:var(--charcoal-4)">Upcoming</span>',
+        }[cat.status] || '';
+
+        const subRows = hasSubs ? cat.subCategories.map(sub => {
+          const ss = sub.spent || 0;
+          const sb = sub.total || 0;
+          const sp = sb ? Math.round(ss / sb * 100) : 0;
+          const so = ss > sb && sb > 0;
+          return `<div class="sub-cat-row">
+            <div class="sub-cat-name">${sub.name}</div>
+            ${sb > 0 ? `
+            <div style="display:flex;align-items:center;gap:8px;flex:1">
+              <div class="health-bar-wrap" style="height:4px;flex:1;margin-bottom:0">
+                <div class="health-bar-fill ${so?'over':sp>90?'warn':'good'}" style="width:${Math.min(sp,100)}%"></div>
+              </div>
+              <span class="sub-cat-amt">${currency(ss)} / ${currency(sb)}</span>
+            </div>` : `<span class="sub-cat-amt" style="color:var(--charcoal-4);font-style:italic">TBD</span>`}
+          </div>`;
+        }).join('') : '';
+
+        return `<div class="bcat-row" id="bcat-${ci}">
+          <div class="bcat-head" onclick="${hasSubs ? `toggleCat(${ci})` : ''}" style="${hasSubs ? 'cursor:pointer' : ''}">
+            <span class="bcat-name">${cat.name}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${statusTag}
+              ${hasSubs ? `<svg id="bcat-chev-${ci}" style="width:12px;height:12px;color:var(--charcoal-4);transition:transform .2s;flex-shrink:0" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5l4 3.5-4 3.5"/></svg>` : ''}
+            </div>
+          </div>
+          <div class="health-bar-wrap" style="height:7px;margin-bottom:6px">
+            <div class="health-bar-fill ${barCls}" style="width:${Math.min(pct,100)}%"></div>
+          </div>
+          <div class="bcat-amounts">
+            <span>${currency(spent)} spent</span>
+            <span style="color:var(--charcoal-4)">of <strong>${budget > 0 ? currency(budget) : 'TBD'}</strong></span>
+            ${budget > 0 ? `<span style="color:${over?'var(--danger)':pct>90?'#c87000':'var(--charcoal-4)'}">${pct}%</span>` : ''}
+          </div>
+          ${hasSubs ? `<div class="sub-cat-wrap" id="sub-${ci}" style="max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1)">${subRows}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+  `);
+
+  // Toggle subcategory expand/collapse
+  const expandState = {};
+  window.toggleCat = function(ci) {
+    expandState[ci] = !expandState[ci];
+    const wrap = document.getElementById('sub-' + ci);
+    const chev = document.getElementById('bcat-chev-' + ci);
+    if (wrap) {
+      wrap.style.maxHeight = expandState[ci] ? '1200px' : '0';
+      wrap.classList.toggle('open', expandState[ci]);
+    }
+    if (chev) chev.style.transform = expandState[ci] ? 'rotate(90deg)' : '';
+  };
+}
+</script></body></html>
