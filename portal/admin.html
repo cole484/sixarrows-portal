@@ -806,6 +806,18 @@ async function updateBudgetCatStatus(projectId, catIndex, newStatus) {
         if (PROJECTS[projectId] && PROJECTS[projectId].budgetCategories[catIndex]) {
           PROJECTS[projectId].budgetCategories[catIndex].status = newStatus;
         }
+        // Invalidate client session so they get fresh data on next load
+        try {
+          const raw = localStorage.getItem('sa_session_v3');
+          if (raw) {
+            const s = JSON.parse(raw);
+            if (s.id === projectId) {
+              // Force re-fetch by zeroing the timestamp
+              s.ts = 0;
+              localStorage.setItem('sa_session_v3', JSON.stringify(s));
+            }
+          }
+        } catch(e) {}
       }
     }
   } catch(e) { console.log('Budget status update error:', e); }

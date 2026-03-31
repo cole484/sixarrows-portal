@@ -581,15 +581,23 @@ const AUTH = {
       });
       if (res.ok) {
         const { clientId } = await res.json();
-        // Fetch full client record
+        // Store minimal session immediately using local PROJECTS as base
+        // This ensures dashboard loads correctly before full Supabase data arrives
+        const localMatch = PROJECTS[clientId];
+        if (localMatch) {
+          localStorage.setItem('sa_session_v3', JSON.stringify({ id: localMatch.id, ts: Date.now(), data: localMatch }));
+        }
+        // Fetch full client record from Supabase
         const dataRes = await fetch(`/.netlify/functions/client-auth?clientId=${clientId}`);
         if (dataRes.ok) {
           const clientData = await dataRes.json();
-          // Normalize to portal format
           const p = AUTH._normalize(clientData);
+          // Upgrade session with full Supabase data
           localStorage.setItem('sa_session_v3', JSON.stringify({ id: p.id, ts: Date.now(), data: p }));
           return p;
         }
+        // If full fetch failed, return local match
+        return localMatch || null;
       }
     } catch(e) {
       console.log('Supabase login unavailable, falling back to local:', e.message);
@@ -600,7 +608,6 @@ const AUTH = {
     );
     if (match) {
       localStorage.setItem('sa_session_v3', JSON.stringify({ id: match.id, ts: Date.now(), data: match }));
-      // Also keep v2 for backwards compat
       localStorage.setItem('sa_session_v2', JSON.stringify({ id: match.id, ts: Date.now() }));
       return match;
     }
@@ -679,8 +686,12 @@ const AUTH = {
       let raw = localStorage.getItem('sa_session_v3');
       if (raw) {
         const s = JSON.parse(raw);
-        if (Date.now() - s.ts > 10 * 60 * 60 * 1000) { localStorage.removeItem('sa_session_v3'); }
-        else if (s.data) return s.data;
+        // Expire after 10 hours OR if ts=0 (forced invalidation by admin)
+        if (s.ts === 0 || Date.now() - s.ts > 10 * 60 * 60 * 1000) {
+          localStorage.removeItem('sa_session_v3');
+        } else if (s.data) {
+          return s.data;
+        }
       }
       // Fall back to v2 (data.js) session
       raw = localStorage.getItem('sa_session_v2');
