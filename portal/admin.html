@@ -159,11 +159,103 @@ function setTrackerState(p, TS) {
 }
 
 // ── Auth ─────────────────────────────────────────────────
-function checkAdminAuth() {
+async function checkAdminAuth() {
   if (sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS) {
-    adminAuthed = true; renderAdmin(); return;
+    adminAuthed = true;
+    await loadAllClientsFromSupabase();
+    renderAdmin();
+    return;
   }
   renderAdminLogin();
+}
+
+// Load all client data from Supabase into PROJECTS
+async function loadAllClientsFromSupabase() {
+  try {
+    const sbHeaders = {
+      'apikey': SUPABASE_ANON,
+      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'Content-Type': 'application/json',
+    };
+
+    // Fetch all clients
+    const clientsRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?select=*&order=client_name.asc`, { headers: sbHeaders });
+    if (!clientsRes.ok) { console.warn('Could not load clients from Supabase'); return; }
+    const clients = await clientsRes.json();
+
+    // Fetch all budget categories in one call
+    const budgetRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories?select=*&order=sort_order.asc`, { headers: sbHeaders });
+    const allBudget = budgetRes.ok ? await budgetRes.json() : [];
+
+    // Fetch all updates
+    const updatesRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/updates?select=*&approved=eq.true&order=created_at.desc`, { headers: sbHeaders });
+    const allUpdates = updatesRes.ok ? await updatesRes.json() : [];
+
+    // Fetch all milestones
+    const milestonesRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/milestones?select=*&order=sort_order.asc`, { headers: sbHeaders });
+    const allMilestones = milestonesRes.ok ? await milestonesRes.json() : [];
+
+    // Merge into PROJECTS
+    for (const client of clients) {
+      const id = client.id;
+      const existing = PROJECTS[id] || {};
+
+      const budgetCats = allBudget
+        .filter(b => b.client_id === id)
+        .map(cat => ({
+          name:          cat.name,
+          total:         cat.total || 0,
+          spent:         cat.spent || 0,
+          status:        cat.status || 'pending',
+          subCategories: (cat.sub_categories || []).map(sub => ({
+            name: sub.name, total: sub.total || 0, spent: sub.spent || 0,
+          })),
+        }));
+
+      const updates = allUpdates
+        .filter(u => u.client_id === id)
+        .map(u => ({ id: u.id, date: u.date, title: u.title, body: u.body }));
+
+      const timeline = allMilestones
+        .filter(m => m.client_id === id)
+        .map(m => ({ date: m.date, title: m.title, note: m.note, done: m.done }));
+
+      PROJECTS[id] = {
+        ...existing,
+        id,
+        email:               client.email,
+        password:            client.password,
+        clientName:          client.client_name,
+        projectName:         client.project_name,
+        location:            client.location,
+        statusType:          client.status_type,
+        phaseLabel:          client.phase_label,
+        constructionPct:     client.construction_pct || 0,
+        groundbreakingDate:  client.groundbreaking_date || '',
+        budgetTotal:         client.budget_total || 0,
+        budgetCommitted:     client.budget_committed || 0,
+        budgetAllowance:     client.budget_allowance || 0,
+        budgetContingency:   client.budget_contingency || 0,
+        timelineStart:       client.timeline_start || 'TBD',
+        timelineTarget:      client.timeline_target || 'TBD',
+        quickSummary:        client.quick_summary || '',
+        notionTrackerPageId: client.notion_tracker_page_id || null,
+        selectionsClientKey: client.selections_client_key || id,
+        links:               { budget: client.budget_link || (existing.links?.budget || '#'), timeline: '#' },
+        budgetCategories:    budgetCats,
+        updates:             updates.length ? updates : (existing.updates || []),
+        timeline:            timeline.length ? timeline : (existing.timeline || []),
+        sabPhases:           existing.sabPhases || JSON.parse(JSON.stringify(DEFAULT_SAB_PHASES)),
+        badges:              existing.badges    || JSON.parse(JSON.stringify(DEFAULT_BADGES)),
+        decisions:           existing.decisions || [],
+        documents:           existing.documents || [],
+        changeOrderItems:    existing.changeOrderItems || [],
+      };
+    }
+    console.log(`Admin: loaded ${clients.length} clients from Supabase`);
+  } catch(e) {
+    console.warn('Supabase load failed, using local data:', e.message);
+  }
 }
 
 function renderAdminLogin() {
@@ -708,22 +800,12 @@ async function updateBudgetCatStatus(projectId, catIndex, newStatus) {
           headers: { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
           body: JSON.stringify({ status: newStatus }),
         });
-        showMsg('bcat-status-msg','success','Saved ✓ — client will see on next login');
-        setTimeout(() => document.getElementById('bcat-status-msg').textContent = '', 3000);
-        // Invalidate client session cache so they get fresh data on next login
-        try {
-          const raw = localStorage.getItem('sa_session_v3');
-          if (raw) {
-            const s = JSON.parse(raw);
-            if (s.data && s.data.id === projectId) {
-              // Update the cached budget category status
-              if (s.data.budgetCategories && s.data.budgetCategories[catIndex]) {
-                s.data.budgetCategories[catIndex].status = newStatus;
-                localStorage.setItem('sa_session_v3', JSON.stringify(s));
-              }
-            }
-          }
-        } catch(e) {}
+        showMsg('bcat-status-msg','success','Saved ✓');
+        setTimeout(() => document.getElementById('bcat-status-msg').textContent = '', 2000);
+        // Update PROJECTS in memory immediately
+        if (PROJECTS[projectId] && PROJECTS[projectId].budgetCategories[catIndex]) {
+          PROJECTS[projectId].budgetCategories[catIndex].status = newStatus;
+        }
       }
     }
   } catch(e) { console.log('Budget status update error:', e); }
@@ -856,10 +938,18 @@ function saveProjectInfo(projectId) {
     }
   } catch(e) {}
   // Push to Supabase
-  fetch(`/.netlify/functions/admin-clients?clientId=${projectId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ADMIN_PASS },
-    body: JSON.stringify({ client_name: p.clientName, project_name: p.projectName, location: p.location, status_type: p.statusType, phase_label: p.phaseLabel, construction_pct: p.constructionPct, timeline_start: p.timelineStart, timeline_target: p.timelineTarget, notion_tracker_page_id: p.notionTrackerPageId }),
+  // Push to Supabase directly
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+    method: 'PATCH',
+    headers: sbH,
+    body: JSON.stringify({
+      client_name: p.clientName, project_name: p.projectName, location: p.location,
+      status_type: p.statusType, phase_label: p.phaseLabel, construction_pct: p.constructionPct,
+      timeline_start: p.timelineStart, timeline_target: p.timelineTarget,
+      notion_tracker_page_id: p.notionTrackerPageId,
+      budget_link: budgetLink,
+    }),
   }).catch(() => {});
   showMsg('pi-msg','success','Saved ✓');
 }

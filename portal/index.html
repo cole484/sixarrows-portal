@@ -89,7 +89,9 @@ async function attemptLogin() {
   const project = await AUTH.loginAsync(email, pw);
   if (project) {
     btn.textContent = 'Welcome back →';
-    setTimeout(() => window.location.href = 'dashboard.html', 300);
+    // Small delay to ensure session is fully written before redirect
+    await new Promise(r => setTimeout(r, 100));
+    window.location.href = 'dashboard.html';
   } else {
     err.classList.add('show');
     btn.textContent = 'Enter Command Center →';

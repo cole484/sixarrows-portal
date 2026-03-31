@@ -20,6 +20,17 @@ export const handler = async (event) => {
     return { statusCode: 200, headers: corsHeaders(), body: '' };
   }
 
+  // Env var health check
+  const url = SB_URL();
+  const key = SB_KEY();
+  if (!url || !key) {
+    console.error('MISSING ENV VARS — SUPABASE_URL:', !!url, 'SUPABASE_ANON_KEY:', !!key);
+    return respond(503, { 
+      error: 'Storage not configured', 
+      detail: `SUPABASE_URL: ${url ? 'set' : 'MISSING'}, SUPABASE_ANON_KEY: ${key ? 'set' : 'MISSING'}` 
+    });
+  }
+
   const clientKey = event.queryStringParameters?.clientKey;
   if (!clientKey) return respond(400, { error: 'clientKey required' });
 
@@ -42,8 +53,8 @@ export const handler = async (event) => {
       (rows || []).forEach(r => { data[r.suffix] = r.data; });
       return respond(200, { clientKey, data });
     } catch (err) {
-      console.error('selections GET error:', err.message);
-      return respond(500, { error: err.message });
+      console.error('selections GET error:', err.message, 'URL:', url, 'KEY set:', !!key);
+      return respond(500, { error: err.message, debug: `URL: ${url}` });
     }
   }
 

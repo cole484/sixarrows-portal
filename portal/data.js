@@ -637,14 +637,16 @@ const AUTH = {
       selectionsClientKey:  d.selections_client_key || d.id,
       notionTrackerPageId:  d.notion_tracker_page_id || null,
       notionTimelineDbId:   d.notion_timeline_db_id || null,
-      links: (() => {
-        // Try to load budget link from admin localStorage override
-        try {
-          const override = JSON.parse(localStorage.getItem(`sa_admin_${d.id}_projectOverride`) || 'null');
-          if (override && override.budgetLink) return { budget: override.budgetLink, timeline: '#' };
-        } catch(e) {}
-        return { budget: '#', timeline: '#' };
-      })(),
+      links: {
+        // budget_link comes from Supabase clients table
+        budget: d.budget_link || (() => {
+          try {
+            const override = JSON.parse(localStorage.getItem(`sa_admin_${d.id}_projectOverride`) || 'null');
+            return override?.budgetLink || '#';
+          } catch(e) { return '#'; }
+        })(),
+        timeline: '#',
+      },
       decisions:            (d.decisions || []).map(dec => ({ title: dec.title, due: dec.due, status: dec.status, note: dec.note })),
       updates:              (d.updates || []).map(u => ({ date: u.date, title: u.title, body: u.body })),
       timeline:             (d.timeline || []).map(m => ({ date: m.date, title: m.title, note: m.note, done: m.done })),
