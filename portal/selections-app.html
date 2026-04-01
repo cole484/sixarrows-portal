@@ -336,7 +336,8 @@ const _localCache = {};
 
 function _parseKey(key) {
   // key format: sab8_{clientKey}_{suffix}
-  const match = key.match(/^sab8_(.+?)_([^_]+)$/);
+  // Suffixes are always exactly: ans, sav, fpu, spc, rms, pfx, ltx
+  const match = key.match(/^sab8_(.+)_(ans|sav|fpu|spc|rms|pfx|ltx)$/);
   if (!match) return { clientKey: null, suffix: key };
   return { clientKey: match[1], suffix: match[2] };
 }
@@ -380,10 +381,10 @@ async function storageSet(key, val) {
         });
         if (res.ok) break; // Success
         retries++;
-        await new Promise(r => setTimeout(r, 200 * retries));
+        await new Promise(r => setTimeout(r, 50 * retries));
       } catch(e) {
         retries++;
-        if (retries < 3) await new Promise(r => setTimeout(r, 200 * retries));
+        if (retries < 3) await new Promise(r => setTimeout(r, 50 * retries));
       }
     }
   }
@@ -482,18 +483,43 @@ function sumThumbImg(url, label){
 
 let _persistLock=false;
 async function persist(){
-  // Prevent concurrent saves — wait if one is in progress
-  while(_persistLock){await new Promise(r=>setTimeout(r,50));}
+  while(_persistLock){await new Promise(r=>setTimeout(r,30));}
   _persistLock=true;
+  // Write to localStorage immediately as backup
   try{
-  await storageSet(sk("ans"),JSON.stringify(ST.answers));
-  await storageSet(sk("sav"),JSON.stringify(ST.saved));
-  await storageSet(sk("fpu"),JSON.stringify(ST.fpUnits));
-  await storageSet(sk("spc"),JSON.stringify(ST.specSel));
-  await storageSet(sk("rms"),JSON.stringify(ST.rooms));
-  await storageSet(sk("pfx"),JSON.stringify(ST.plumbingFixtures));
-  await storageSet(sk("ltx"),JSON.stringify(ST.lightingTypes));
-  }finally{_persistLock=false;}
+    localStorage.setItem(sk("ans"),JSON.stringify(ST.answers));
+    localStorage.setItem(sk("sav"),JSON.stringify(ST.saved));
+    localStorage.setItem(sk("fpu"),JSON.stringify(ST.fpUnits));
+    localStorage.setItem(sk("spc"),JSON.stringify(ST.specSel));
+    localStorage.setItem(sk("rms"),JSON.stringify(ST.rooms));
+    localStorage.setItem(sk("pfx"),JSON.stringify(ST.plumbingFixtures));
+    localStorage.setItem(sk("ltx"),JSON.stringify(ST.lightingTypes));
+  }catch(e){}
+  // Send ALL data in a single batch request to Netlify
+  try{
+    const batch = {
+      ans: ST.answers,
+      sav: ST.saved,
+      fpu: ST.fpUnits,
+      spc: ST.specSel,
+      rms: ST.rooms,
+      pfx: ST.plumbingFixtures,
+      ltx: ST.lightingTypes,
+    };
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${ST.clientKey}&batch=1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batch }),
+    });
+    if(!res.ok){
+      const err = await res.text();
+      console.error('Batch save failed:', res.status, err);
+    }
+  }catch(e){
+    console.error('persist error:', e);
+  }finally{
+    _persistLock=false;
+  }
 }
 
 // ── Validation ────────────────────────────────────────────
@@ -642,6 +668,16 @@ function validate(){
     }
   }
   return{ok:true};
+}
+
+async function saveProgress(btn){
+  const orig=btn.textContent;
+  btn.textContent='Saving...';
+  btn.disabled=true;
+  await persist();
+  btn.textContent='Saved ✓';
+  btn.style.color='var(--sage)';
+  setTimeout(()=>{btn.textContent=orig;btn.style.color='';btn.disabled=false;},2000);
 }
 
 async function advance(){
@@ -1335,7 +1371,7 @@ function renderForm(){
   const inspoHtml=INSPO_CATS.includes(ST.catId)?inspoSection(ST.catId):'';
   return`<div class="card"><span class="wlbl">${wv.label} — ${wv.name}</span><div class="ctitle">${cat.name}</div><div class="guidance">${cat.guidance}</div><div class="fields">${body}</div>${inspoHtml}
     <div id="val-msg" class="val-msg"></div>
-    <div class="btn-row"><button class="btn" onclick="goBack()">${isFirst?"← Setup":"Back"}</button><button class="btn-s" onclick="persist()">Save progress</button><button class="btn btn-p" onclick="advance()">${isLast?"View Summary →":"Save & Continue →"}</button></div>
+    <div class="btn-row"><button class="btn" onclick="goBack()">${isFirst?"← Setup":"Back"}</button><button class="btn-s" id="save-prog-btn" onclick="saveProgress(this)">Save progress</button><button class="btn btn-p" onclick="advance()">${isLast?"View Summary →":"Save & Continue →"}</button></div>
   </div>`;
 }
 
@@ -1793,14 +1829,34 @@ async function portalInit(){
     ST.answers={};ST.saved={};ST.fpUnits=[];ST.specSel={};
     ST.rooms=[];ST.plumbingFixtures={};ST.lightingTypes={};ST.roomOpen={};
     try{
-      const a=await storageGet(sk("ans"));if(a)ST.answers=JSON.parse(a);
-      const s=await storageGet(sk("sav"));if(s)ST.saved=JSON.parse(s);
-      const f=await storageGet(sk("fpu"));if(f)ST.fpUnits=JSON.parse(f);
-      const sp=await storageGet(sk("spc"));if(sp)ST.specSel=JSON.parse(sp);
-      const rm=await storageGet(sk("rms"));if(rm)ST.rooms=JSON.parse(rm);
-      const px=await storageGet(sk("pfx"));if(px)ST.plumbingFixtures=JSON.parse(px);
-      const lx=await storageGet(sk("ltx"));if(lx)ST.lightingTypes=JSON.parse(lx);
-    }catch(e){}
+      // Load all selections in a single request (much faster than 7 individual calls)
+      const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${pClientKey}`);
+      if(res.ok){
+        const result = await res.json();
+        const d = result.data || {};
+        // Populate cache and state from bulk response
+        const parse = (v,fb) => { try{ return v ? (typeof v === 'string' ? JSON.parse(v) : v) : fb; }catch(e){return fb;} };
+        if(d.ans !== undefined){ _localCache[sk("ans")]=JSON.stringify(d.ans); ST.answers=parse(d.ans,{}); }
+        if(d.sav !== undefined){ _localCache[sk("sav")]=JSON.stringify(d.sav); ST.saved=parse(d.sav,{}); }
+        if(d.fpu !== undefined){ _localCache[sk("fpu")]=JSON.stringify(d.fpu); ST.fpUnits=parse(d.fpu,[]); }
+        if(d.spc !== undefined){ _localCache[sk("spc")]=JSON.stringify(d.spc); ST.specSel=parse(d.spc,{}); }
+        if(d.rms !== undefined){ _localCache[sk("rms")]=JSON.stringify(d.rms); ST.rooms=parse(d.rms,[]); }
+        if(d.pfx !== undefined){ _localCache[sk("pfx")]=JSON.stringify(d.pfx); ST.plumbingFixtures=parse(d.pfx,{}); }
+        if(d.ltx !== undefined){ _localCache[sk("ltx")]=JSON.stringify(d.ltx); ST.lightingTypes=parse(d.ltx,{}); }
+      } else {
+        // Fall back to localStorage if server unavailable
+        const tryLS = (k,fb) => { try{ return JSON.parse(localStorage.getItem(k)||'null')||fb; }catch(e){return fb;} };
+        ST.answers=tryLS(`sab8_${pClientKey}_ans`,{});
+        ST.saved=tryLS(`sab8_${pClientKey}_sav`,{});
+        ST.fpUnits=tryLS(`sab8_${pClientKey}_fpu`,[]);
+        ST.specSel=tryLS(`sab8_${pClientKey}_spc`,{});
+        ST.rooms=tryLS(`sab8_${pClientKey}_rms`,[]);
+        ST.plumbingFixtures=tryLS(`sab8_${pClientKey}_pfx`,{});
+        ST.lightingTypes=tryLS(`sab8_${pClientKey}_ltx`,{});
+      }
+    }catch(e){
+      console.error('Failed to load selections:', e);
+    }
     ST.screen=ST.rooms.length?"app":"setup";
     ST.wave=pWave;
     // Find first cat of target wave

@@ -61,7 +61,37 @@ export const handler = async (event) => {
   // ── POST ─────────────────────────────────────────────────────
   if (event.httpMethod === 'POST') {
     try {
-      const { suffix, data } = JSON.parse(event.body || '{}');
+      const body = JSON.parse(event.body || '{}');
+      const isBatch = event.queryStringParameters?.batch === '1';
+
+      if (isBatch && body.batch) {
+        // Batch save: upsert all suffixes in one Supabase call
+        const rows = Object.entries(body.batch).map(([suffix, data]) => ({
+          client_id: clientKey,
+          suffix,
+          data,
+          updated_at: new Date().toISOString(),
+        }));
+
+        const url = `${SB_URL()}/rest/v1/selections`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            ...sbHeaders(),
+            'Prefer': 'return=minimal,resolution=merge-duplicates,on_conflict=client_id,suffix',
+          },
+          body: JSON.stringify(rows),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('Supabase batch POST failed:', res.status, errText);
+          throw new Error(`Supabase batch POST: ${res.status} ${errText}`);
+        }
+        return respond(200, { success: true, saved: rows.length });
+      }
+
+      // Single suffix save
+      const { suffix, data } = body;
       if (!suffix) return respond(400, { error: 'suffix required' });
 
       const url = `${SB_URL()}/rest/v1/selections`;
