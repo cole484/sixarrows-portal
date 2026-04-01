@@ -363,20 +363,29 @@ async function storageGet(key) {
 
 async function storageSet(key, val) {
   _localCache[key] = val;
-  // Also write to localStorage as instant backup
+  // Write to localStorage immediately as backup
   try { localStorage.setItem(key, val); } catch(e) {}
-  // Write to server
+  // Write to Supabase via Netlify function
   const { clientKey, suffix } = _parseKey(key);
   if (clientKey) {
-    try {
-      let parsed;
-      try { parsed = JSON.parse(val); } catch(e) { parsed = val; }
-      await fetch(`/.netlify/functions/selections-storage?clientKey=${clientKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ suffix, data: parsed }),
-      });
-    } catch(e) {}
+    let retries = 0;
+    while (retries < 3) {
+      try {
+        let parsed;
+        try { parsed = JSON.parse(val); } catch(e) { parsed = val; }
+        const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${clientKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ suffix, data: parsed }),
+        });
+        if (res.ok) break; // Success
+        retries++;
+        await new Promise(r => setTimeout(r, 200 * retries));
+      } catch(e) {
+        retries++;
+        if (retries < 3) await new Promise(r => setTimeout(r, 200 * retries));
+      }
+    }
   }
   return Promise.resolve();
 }
@@ -471,7 +480,12 @@ function sumThumbImg(url, label){
   return '<img class="sum-thumb" src="'+safe+'" title="'+label+'" onerror="imgErr(this)" data-href="'+safe+'" onclick="window.open(this.dataset.href)">';
 }
 
+let _persistLock=false;
 async function persist(){
+  // Prevent concurrent saves — wait if one is in progress
+  while(_persistLock){await new Promise(r=>setTimeout(r,50));}
+  _persistLock=true;
+  try{
   await storageSet(sk("ans"),JSON.stringify(ST.answers));
   await storageSet(sk("sav"),JSON.stringify(ST.saved));
   await storageSet(sk("fpu"),JSON.stringify(ST.fpUnits));
@@ -479,6 +493,7 @@ async function persist(){
   await storageSet(sk("rms"),JSON.stringify(ST.rooms));
   await storageSet(sk("pfx"),JSON.stringify(ST.plumbingFixtures));
   await storageSet(sk("ltx"),JSON.stringify(ST.lightingTypes));
+  }finally{_persistLock=false;}
 }
 
 // ── Validation ────────────────────────────────────────────
@@ -629,9 +644,17 @@ function validate(){
   return{ok:true};
 }
 
-function advance(){
+async function advance(){
   const v=validate();if(!v.ok){showMsg(v.msg);return}
-  ST.saved[ST.catId]=true;persist();
+  ST.saved[ST.catId]=true;
+  // Show saving indicator
+  const btn=document.querySelector('.btn-p');
+  if(btn){const orig=btn.textContent;btn.textContent='Saving...';btn.disabled=true;
+    await persist();
+    btn.textContent=orig;btn.disabled=false;
+  } else {
+    await persist();
+  }
   const idx=ALL_IDS.indexOf(ST.catId);
   if(idx<ALL_IDS.length-1){const nid=ALL_IDS[idx+1];ST.catId=nid;ST.wave=CATS[nid].wave;}
   else ST.view="summary";
@@ -653,7 +676,14 @@ function showMsg(msg){
 function pickR(fid,val,el){val=decVal(val);
   const current=ga(fid);
   if(current===val){
-    // Deselect
+    // Check if this field is required — if so, don't allow deselect
+    const cat=CATS[ST.catId];
+    const field=cat&&cat.fields&&cat.fields.find(f=>f.id===fid);
+    if(field&&field.req){
+      // Required field — can't deselect, just return
+      return;
+    }
+    // Optional field — allow deselect
     sa(fid,"");
     el.querySelector("input").checked=false;
     el.classList.remove("sel");
