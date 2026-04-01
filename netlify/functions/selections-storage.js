@@ -68,12 +68,13 @@ export const handler = async (event) => {
         // Save all suffixes in parallel individual upserts
         const entries = Object.entries(body.batch);
         const results = await Promise.all(entries.map(async ([suffix, data]) => {
-          const url = `${SB_URL()}/rest/v1/selections`;
+          // Use URL param for on_conflict (works with all PostgREST versions)
+          const url = `${SB_URL()}/rest/v1/selections?on_conflict=client_id%2Csuffix`;
           const res = await fetch(url, {
             method: 'POST',
             headers: {
               ...sbHeaders(),
-              'Prefer': 'return=minimal,resolution=merge-duplicates,on_conflict=client_id,suffix',
+              'Prefer': 'return=minimal,resolution=merge-duplicates',
             },
             body: JSON.stringify({
               client_id: clientKey,
@@ -102,12 +103,12 @@ export const handler = async (event) => {
       const { suffix, data } = body;
       if (!suffix) return respond(400, { error: 'suffix required' });
 
-      const url = `${SB_URL()}/rest/v1/selections`;
+      const url = `${SB_URL()}/rest/v1/selections?on_conflict=client_id%2Csuffix`;
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           ...sbHeaders(),
-          'Prefer': 'return=minimal,resolution=merge-duplicates,on_conflict=client_id,suffix',
+          'Prefer': 'return=minimal,resolution=merge-duplicates',
         },
         body: JSON.stringify({ client_id: clientKey, suffix, data, updated_at: new Date().toISOString() }),
       });
