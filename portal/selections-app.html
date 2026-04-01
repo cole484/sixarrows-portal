@@ -302,6 +302,16 @@ const CATS={
     {id:"ct_notes",label:"Notes",type:"textarea",ph:"Waterfall edge, laundry surface, outdoor kitchen..."}
   ]},
 
+  hardware:{name:"Hardware",wave:2,type:"standard",guidance:"Door knobs, cabinet pulls, hinges, and bathroom accessories need to be selected before trim work and cabinet installation. Finish consistency matters — everything in a room should match.",fields:[
+    {id:"hw_door_style",label:"Door knob / lever style",type:"radio",opts:["Round knob","Lever handle","Barn door pull","Pocket door pull","Undecided"],req:true},
+    {id:"hw_finish",label:"Hardware finish",type:"radio",opts:["Satin nickel","Matte black","Oil-rubbed bronze","Brushed gold / champagne","Polished chrome","Mixed finishes","Undecided"],req:true},
+    {id:"hw_cabinet",label:"Cabinet pull style",type:"radio",opts:["Bar pull","Cup pull","Knob","No pull (push-to-open)","Undecided"],req:true},
+    {id:"hw_hinge",label:"Hinge finish",type:"radio",opts:["Match door hardware","Concealed (Euro)","Antique / decorative","Undecided"],req:true},
+    {id:"hw_bath",label:"Bathroom accessories finish",type:"radio",opts:["Match hardware finish","Contrasting finish","Chrome","Undecided"],req:true},
+    {id:"hw_product",label:"Exact product / brand selected",type:"text",ph:"e.g. Emtek Sandcast Bronze lever, Rejuvenation pulls..."},
+    {id:"hw_notes",label:"Notes",type:"textarea",ph:"Smart locks, keyed alike, exterior hardware..."}
+  ]},
+
   paint:{name:"Paint & Stain Colors",wave:2,type:"paint",guidance:"Select paint colors for each room. All rooms require wall, trim, ceiling color, and sheen. Exterior surfaces including porch ceiling and posts are also covered here.",fields:[]},
   doors:{name:"Interior Doors & Trim",wave:2,type:"standard",guidance:"Door style and trim profile drive millwork orders. Decide before framing completes so openings are sized correctly.",fields:[
     {id:"dr_sty",label:"Door style",type:"radio",opts:["2-panel shaker","5-panel traditional","Flat / flush modern","French (glass panels)","Undecided"],req:true},
@@ -315,7 +325,7 @@ const CATS={
     {id:"tr_notes",label:"Notes",type:"textarea",ph:"Wainscoting, board & batten, picture rail..."}
   ]}
 };
-const ALL_IDS=["fireplace","appliances","exterior_finishes","specialty_trim","flooring","tile","plumbing","lighting","countertops","paint","doors"];
+const ALL_IDS=["fireplace","appliances","exterior_finishes","specialty_trim","flooring","tile","plumbing","lighting","countertops","hardware","paint","doors"];
 
 // ── State ─────────────────────────────────────────────────
 let ST={
