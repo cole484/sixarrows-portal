@@ -195,6 +195,10 @@ async function loadAllClientsFromSupabase() {
     const milestonesRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/milestones?select=*&order=sort_order.asc`, { headers: sbHeaders });
     const allMilestones = milestonesRes.ok ? await milestonesRes.json() : [];
 
+    // Fetch all documents
+    const docsRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/documents?select=*&order=created_at.asc`, { headers: sbHeaders });
+    const allDocs = docsRes.ok ? await docsRes.json() : [];
+
     // Merge into PROJECTS
     for (const client of clients) {
       const id = client.id;
@@ -248,7 +252,10 @@ async function loadAllClientsFromSupabase() {
         sabPhases:           existing.sabPhases || JSON.parse(JSON.stringify(DEFAULT_SAB_PHASES)),
         badges:              existing.badges    || JSON.parse(JSON.stringify(DEFAULT_BADGES)),
         decisions:           existing.decisions || [],
-        documents:           existing.documents || [],
+        documents:           allDocs.filter(d => d.client_id === id).map(d => ({
+          id: d.id, name: d.name, category: d.category, url: d.url,
+          type: d.type, date: d.date, note: d.note || '',
+        })),
         changeOrderItems:    existing.changeOrderItems || [],
       };
     }
@@ -881,6 +888,23 @@ function renderProjectView(p) {
           <input class="adm-inp" id="pi-notionId" type="text" placeholder="2fb4737b-ea6f-80dc-9b3b-..." value="${p.notionTrackerPageId||''}">
         </div>
       </div>
+      <div style="border-top:0.5px solid var(--border);padding-top:12px;margin-top:4px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:8px">Project Lead Contact</div>
+        <div class="adm-grid2">
+          <div class="adm-field">
+            <label>Name</label>
+            <input class="adm-inp" id="pi-teamLead" type="text" value="${p.teamLead||'Cole Borders'}">
+          </div>
+          <div class="adm-field">
+            <label>Phone</label>
+            <input class="adm-inp" id="pi-teamPhone" type="text" value="${p.teamPhone||'(270) 782-5388'}">
+          </div>
+          <div class="adm-field" style="grid-column:span 2">
+            <label>Email</label>
+            <input class="adm-inp" id="pi-teamEmail" type="email" value="${p.teamEmail||'cole@sixarrowsconstruction.com'}">
+          </div>
+        </div>
+      </div>
       <div id="pi-msg" class="adm-msg success"></div>
       <button class="adm-btn adm-btn-green" style="margin-top:4px" onclick="saveProjectInfo('${p.id}')">Save Changes</button>
     </div>
@@ -925,14 +949,22 @@ function saveProjectInfo(projectId) {
   p.timelineTarget  = document.getElementById('pi-tlTarget')?.value.trim()    || p.timelineTarget;
   const budgetLink = document.getElementById('pi-budgetLink')?.value.trim() || '';
   const notionId   = document.getElementById('pi-notionId')?.value.trim()   || '';
+  const teamLead   = document.getElementById('pi-teamLead')?.value.trim()   || p.teamLead;
+  const teamPhone  = document.getElementById('pi-teamPhone')?.value.trim()  || p.teamPhone;
+  const teamEmail  = document.getElementById('pi-teamEmail')?.value.trim()  || p.teamEmail;
   if (!p.links) p.links = {};
   p.links.budget = budgetLink;
   p.notionTrackerPageId = notionId || p.notionTrackerPageId;
-  // Also update PROJECTS in memory so admin re-render picks it up
+  p.teamLead  = teamLead;
+  p.teamPhone = teamPhone;
+  p.teamEmail = teamEmail;
   if (PROJECTS[projectId]) {
     if (!PROJECTS[projectId].links) PROJECTS[projectId].links = {};
     PROJECTS[projectId].links.budget = budgetLink;
     PROJECTS[projectId].notionTrackerPageId = p.notionTrackerPageId;
+    PROJECTS[projectId].teamLead  = teamLead;
+    PROJECTS[projectId].teamPhone = teamPhone;
+    PROJECTS[projectId].teamEmail = teamEmail;
   }
   // Persist to localStorage override
   adminSet(projectId, 'projectOverride', { clientName:p.clientName, projectName:p.projectName, location:p.location, statusType:p.statusType, phaseLabel:p.phaseLabel, constructionPct:p.constructionPct, timelineStart:p.timelineStart, timelineTarget:p.timelineTarget, budgetLink, notionTrackerPageId: p.notionTrackerPageId });
@@ -961,6 +993,7 @@ function saveProjectInfo(projectId) {
       timeline_start: p.timelineStart, timeline_target: p.timelineTarget,
       notion_tracker_page_id: p.notionTrackerPageId,
       budget_link: budgetLink,
+      team_lead: teamLead, team_phone: teamPhone, team_email: teamEmail,
     }),
   }).catch(() => {});
   showMsg('pi-msg','success','Saved ✓');
@@ -1088,63 +1121,83 @@ function buildSelectionsContent(ck, p, saved, answers) {
 //  DOCUMENTS + PHOTOS VIEWS (delegated to existing logic)
 // ════════════════════════════════════════════════════════
 function renderDocumentsView(p) {
-  const DOC_KEY = `sa_docs_${p.id}`;
-  let adminDocs = [];
-  try { adminDocs = JSON.parse(localStorage.getItem(DOC_KEY) || '[]'); } catch(e) {}
-  const allDocs  = [...(p.documents||[]).filter(d=>d.category!=='photos'), ...adminDocs.filter(d=>d.category!=='photos')];
+  // Documents now come from Supabase via loadAllClientsFromSupabase()
+  const allDocs = (p.documents||[]).filter(d=>d.category!=='photos');
   const CAT_LABELS = {plans:'Architectural Plans',budget:'Budget & Financials',selections:'Selections',contracts:'Contracts',permits:'Permits',photos:'Site Photos',other:'Other'};
 
   return `
     <div class="card" style="margin-bottom:1rem">
       <div class="sh"><div class="sh-title">Add Document</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Documents added here are immediately visible to the client on their Documents page.</p>
       <div class="adm-grid2">
         <div class="adm-field"><label>Document name</label><input class="adm-inp" id="adm-doc-name" type="text" placeholder="e.g. Architectural Plans Rev 3"></div>
         <div class="adm-field"><label>Category</label><select class="adm-inp adm-sel" id="adm-doc-cat">${Object.entries(CAT_LABELS).filter(([k])=>k!=='photos').map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
       </div>
-      <div class="adm-field"><label>Google Drive URL</label><input class="adm-inp" id="adm-doc-url" type="text" placeholder="https://drive.google.com/file/d/..."></div>
+      <div class="adm-field"><label>Google Drive or direct URL</label><input class="adm-inp" id="adm-doc-url" type="text" placeholder="https://drive.google.com/file/d/..."></div>
       <div class="adm-grid2">
         <div class="adm-field"><label>Type</label><select class="adm-inp adm-sel" id="adm-doc-type"><option value="pdf">PDF</option><option value="sheet">Google Sheet</option><option value="img">Image</option><option value="other">Other</option></select></div>
         <div class="adm-field"><label>Note (optional)</label><input class="adm-inp" id="adm-doc-note" type="text" placeholder="e.g. Final approved set"></div>
       </div>
-      <button class="adm-btn adm-btn-green" onclick="addAdminDoc('${p.id}')">Add Document →</button>
-      <span id="adm-doc-msg" class="adm-msg success" style="margin-left:10px"></span>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
+        <button class="adm-btn adm-btn-green" onclick="addAdminDoc('${p.id}')">Add Document</button>
+        <span id="adm-doc-msg" class="adm-msg success" style="margin:0"></span>
+      </div>
     </div>
     <div class="card">
-      <div class="sh"><div class="sh-title">All Documents (${allDocs.length})</div></div>
-      ${allDocs.length===0?`<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No documents yet.</div>`
-        :allDocs.map((doc,i)=>{const isAdmin=i>=(p.documents||[]).filter(d=>d.category!=='photos').length;return`<div class="list-item-row"><div class="list-item-body"><div class="list-item-title">${doc.name}</div><div class="list-item-meta">${CAT_LABELS[doc.category]||doc.category} · ${doc.type?.toUpperCase()||''} · ${doc.date||''}${doc.note?' · '+doc.note:''}</div></div><a href="${doc.url}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;flex-shrink:0;margin-right:8px">Open</a>${isAdmin?`<button class="adm-btn adm-btn-danger" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="removeAdminDoc('${p.id}',${i-(p.documents||[]).filter(d=>d.category!=='photos').length})">×</button>`:''}</div>`;}).join('')}
+      <div class="sh"><div class="sh-title">Documents (${allDocs.length})</div></div>
+      ${allDocs.length===0
+        ? `<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No documents yet. Add one above.</div>`
+        : allDocs.map(doc => `<div class="list-item-row">
+            <div class="list-item-body">
+              <div class="list-item-title">${doc.name}</div>
+              <div class="list-item-meta">${CAT_LABELS[doc.category]||doc.category} · ${doc.type?.toUpperCase()||''} · ${doc.date||''}${doc.note?' · '+doc.note:''}</div>
+            </div>
+            <a href="${doc.url}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;flex-shrink:0;margin-right:8px">Open</a>
+            <button class="adm-btn adm-btn-danger" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="removeAdminDoc('${p.id}','${doc.id}')">×</button>
+          </div>`).join('')}
     </div>`;
 }
 
-function addAdminDoc(projectId) {
+async function addAdminDoc(projectId) {
   const name = document.getElementById('adm-doc-name')?.value.trim();
   const url  = document.getElementById('adm-doc-url')?.value.trim();
   const cat  = document.getElementById('adm-doc-cat')?.value;
   const type = document.getElementById('adm-doc-type')?.value;
   const note = document.getElementById('adm-doc-note')?.value.trim();
   if (!name || !url) { showMsg('adm-doc-msg','error','Name and URL required.'); return; }
-  const DOC_KEY = `sa_docs_${projectId}`;
-  let docs = [];
-  try { docs = JSON.parse(localStorage.getItem(DOC_KEY)||'[]'); } catch(e) {}
   const now = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   let previewUrl = url;
   if (type==='pdf' && url.includes('drive.google.com/file/d/')) {
     previewUrl = url.replace('/view','/preview').replace('/edit','/preview');
     if (!previewUrl.includes('/preview')) previewUrl += '/preview';
   }
-  docs.push({ id:'adm'+Date.now(), category:cat, name, url:previewUrl, type, date:now, note });
-  localStorage.setItem(DOC_KEY, JSON.stringify(docs));
-  showMsg('adm-doc-msg','success','Added ✓');
-  setTimeout(() => renderAdmin(), 600);
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  try {
+    const res = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/documents`, {
+      method: 'POST',
+      headers: sbH,
+      body: JSON.stringify({ client_id: projectId, name, category: cat, url: previewUrl, type, date: now, note: note||'' }),
+    });
+    if (!res.ok) { const err = await res.text(); showMsg('adm-doc-msg','error','Save failed: '+err); return; }
+    // Also update PROJECTS in memory
+    if (!PROJECTS[projectId].documents) PROJECTS[projectId].documents = [];
+    PROJECTS[projectId].documents.push({ id:'adm'+Date.now(), category:cat, name, url:previewUrl, type, date:now, note });
+    showMsg('adm-doc-msg','success','Added ✓ — visible to client immediately');
+    setTimeout(() => renderAdmin(), 600);
+  } catch(e) { showMsg('adm-doc-msg','error','Error: '+e.message); }
 }
 
-function removeAdminDoc(projectId, idx) {
-  const DOC_KEY = `sa_docs_${projectId}`;
-  let docs = [];
-  try { docs = JSON.parse(localStorage.getItem(DOC_KEY)||'[]'); } catch(e) {}
-  docs.splice(idx, 1);
-  localStorage.setItem(DOC_KEY, JSON.stringify(docs));
-  renderAdmin();
+async function removeAdminDoc(projectId, docId) {
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Prefer': 'return=minimal' };
+  try {
+    await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/documents?id=eq.${docId}&client_id=eq.${projectId}`, {
+      method: 'DELETE', headers: sbH,
+    });
+    if (PROJECTS[projectId].documents) {
+      PROJECTS[projectId].documents = PROJECTS[projectId].documents.filter(d => d.id != docId);
+    }
+    renderAdmin();
+  } catch(e) { console.error('removeAdminDoc error:', e); }
 }
 
 function renderPhotosView(p) {

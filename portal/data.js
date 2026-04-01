@@ -657,7 +657,15 @@ const AUTH = {
       decisions:            (d.decisions || []).map(dec => ({ title: dec.title, due: dec.due, status: dec.status, note: dec.note })),
       updates:              (d.updates || []).map(u => ({ date: u.date, title: u.title, body: u.body })),
       timeline:             (d.timeline || []).map(m => ({ date: m.date, title: m.title, note: m.note, done: m.done })),
-      documents:            (d.documents || []).map(doc => ({ id: doc.id, name: doc.name, category: doc.category, url: doc.url, type: doc.type, date: doc.date, note: doc.note })),
+      documents:            (d.documents || []).map(doc => ({
+        id:       doc.id,
+        name:     doc.name,
+        category: doc.category,
+        url:      doc.url,
+        type:     doc.type,
+        date:     doc.date,
+        note:     doc.note || '',
+      })),
       budgetCategories:     (d.budgetCategories || []).map(cat => ({
         name:          cat.name,
         total:         cat.total || 0,
@@ -671,6 +679,9 @@ const AUTH = {
         })),
       })),
       changeOrderItems:     (d.changeOrderItems || []).map(co => ({ date: co.date, description: co.description, amount: co.amount })),
+      teamLead:             d.team_lead  || 'Cole Borders',
+      teamPhone:            d.team_phone || '(270) 782-5388',
+      teamEmail:            d.team_email || 'cole@sixarrowsconstruction.com',
       sabPhases:            JSON.parse(JSON.stringify(DEFAULT_SAB_PHASES)),
       badges:               JSON.parse(JSON.stringify(DEFAULT_BADGES)),
     };

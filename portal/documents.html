@@ -258,18 +258,11 @@ const PHOTO_KEY = `sa_photos_${p.id}`;
 const INSPO_KEY = `sa_inspo_${p.id}`;
 
 function loadDocs() {
-  let extra = [];
-  try { extra = JSON.parse(localStorage.getItem(DOC_KEY) || '[]'); } catch(e) {}
-  // Exclude photo entries from docs list
-  const baseDocs = (p.documents || []).filter(d => d.category !== 'photos');
-  return [...baseDocs, ...extra.filter(d => d.category !== 'photos')];
+  // Documents come from Supabase via client session (p.documents)
+  return (p.documents || []).filter(d => d.category !== 'photos');
 }
 function loadPhotos() {
-  // Combine data.js photos + admin-added photos from localStorage
-  const basePhotos = (p.documents || []).filter(d => d.category === 'photos');
-  let extra = [];
-  try { extra = JSON.parse(localStorage.getItem(PHOTO_KEY) || '[]'); } catch(e) {}
-  return [...basePhotos, ...extra];
+  return (p.documents || []).filter(d => d.category === 'photos');
 }
 function loadInspo() {
   try { return JSON.parse(localStorage.getItem(INSPO_KEY) || '[]'); } catch(e) { return []; }

@@ -200,7 +200,7 @@ async function initBudget() {
     <div class="card" style="margin-bottom:1rem">
       <div class="sh">
         <div class="sh-title">Category Status</div>
-        ${budgetLink ? `<a href="${budgetLink}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;font-weight:500">View Budget Sheet →</a>` : ''}
+        ${budgetLink && confirmed === total && total > 0 ? `<a href="${budgetLink}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;font-weight:500">View Budget Sheet →</a>` : ''}
       </div>
       ${cats.map((cat, ci) => {
         const s = sabStatus(cat.status);

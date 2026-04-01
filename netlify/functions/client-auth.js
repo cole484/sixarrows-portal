@@ -23,7 +23,7 @@ export const handler = async (event) => {
       if (!client) return respond(404, { error: 'Client not found' });
 
       // Fetch related data in parallel
-      const [budgetCats, changeOrders, milestones, updates, decisions] = await Promise.all([
+      const [budgetCats, changeOrders, milestones, updates, decisions, documents] = await Promise.all([
         supabase('budget_categories', {
           filters: [{ col: 'client_id', op: 'eq', val: clientId }],
           order: 'sort_order.asc',
@@ -45,6 +45,10 @@ export const handler = async (event) => {
           filters: [{ col: 'client_id', op: 'eq', val: clientId }],
           order: 'sort_order.asc',
         }),
+        supabase('documents', {
+          filters: [{ col: 'client_id', op: 'eq', val: clientId }],
+          order: 'created_at.asc',
+        }),
       ]);
 
       return respond(200, {
@@ -54,6 +58,7 @@ export const handler = async (event) => {
         timeline:          milestones  || [],
         updates:           updates     || [],
         decisions:         decisions   || [],
+        documents:         documents   || [],
       });
     } catch (err) {
       console.error('client-auth GET error:', err);
