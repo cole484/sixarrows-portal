@@ -124,6 +124,25 @@ async function initBudget() {
 
   const isSAB = p.statusType === 'sab';
 
+  // ── Sync from Google Sheet if budget link is set (SAB phase) ──
+  if (isSAB && p.links?.budget && p.links.budget !== '#') {
+    try {
+      const syncRes = await fetch(
+        `/.netlify/functions/sheet-budget-sync?clientId=${p.id}&sheetUrl=${encodeURIComponent(p.links.budget)}`
+      );
+      if (syncRes.ok) {
+        const syncData = await syncRes.json();
+        if (syncData.synced > 0) {
+          // Refresh session to pick up updated statuses
+          const fresh = await AUTH.refreshSession(p.id);
+          if (fresh) p = fresh;
+        }
+      }
+    } catch(e) {
+      console.log('Sheet sync unavailable:', e.message);
+    }
+  }
+
   // ── Budget categories ──
   const cats = p.budgetCategories || [];
 
