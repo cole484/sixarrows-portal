@@ -65,29 +65,37 @@ export const handler = async (event) => {
       const isBatch = event.queryStringParameters?.batch === '1';
 
       if (isBatch && body.batch) {
-        // Batch save: upsert all suffixes in one Supabase call
-        const rows = Object.entries(body.batch).map(([suffix, data]) => ({
-          client_id: clientKey,
-          suffix,
-          data,
-          updated_at: new Date().toISOString(),
+        // Save all suffixes in parallel individual upserts
+        const entries = Object.entries(body.batch);
+        const results = await Promise.all(entries.map(async ([suffix, data]) => {
+          const url = `${SB_URL()}/rest/v1/selections`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              ...sbHeaders(),
+              'Prefer': 'return=minimal,resolution=merge-duplicates,on_conflict=client_id,suffix',
+            },
+            body: JSON.stringify({
+              client_id: clientKey,
+              suffix,
+              data,
+              updated_at: new Date().toISOString(),
+            }),
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            console.error(`Supabase upsert failed for ${suffix}:`, res.status, errText);
+            return { suffix, ok: false, error: errText };
+          }
+          return { suffix, ok: true };
         }));
 
-        const url = `${SB_URL()}/rest/v1/selections`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            ...sbHeaders(),
-            'Prefer': 'return=minimal,resolution=merge-duplicates,on_conflict=client_id,suffix',
-          },
-          body: JSON.stringify(rows),
-        });
-        if (!res.ok) {
-          const errText = await res.text();
-          console.error('Supabase batch POST failed:', res.status, errText);
-          throw new Error(`Supabase batch POST: ${res.status} ${errText}`);
+        const failed = results.filter(r => !r.ok);
+        if (failed.length > 0) {
+          console.error('Some upserts failed:', failed);
+          return respond(207, { success: false, results, failed });
         }
-        return respond(200, { success: true, saved: rows.length });
+        return respond(200, { success: true, saved: entries.length });
       }
 
       // Single suffix save
