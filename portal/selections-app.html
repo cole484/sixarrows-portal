@@ -1297,10 +1297,21 @@ function rfStandard(){
   const cat=CATS[ST.catId];
   return cat.fields.map(f=>{const val=ga(f.id);
     const reqMark=f.req&&!val?` <span class="req">*</span>`:"";
-    if(f.type==="radio"){const opts=f.opts.map(o=>`<label class="ro${val===o?" sel":""}" onclick="pickR('${f.id}','${o.replace(/'/g,'&#39;').replace(/"/g,'&#34;')}',this)"><input type="radio" name="${f.id}" ${val===o?"checked":""}>${o}</label>`).join("");return`<div class="fg"><label>${f.label}${reqMark}</label><div class="rg">${opts}</div></div>`;}
+    if(f.type==="radio"){
+      // Use data-fid and data-val attributes to avoid quote-in-JS-string bugs
+      const opts=f.opts.map(o=>`<label class="ro${val===o?" sel":""}" data-fid="${f.id}" data-val="${o.replace(/"/g,'&quot;')}" onclick="pickRData(this)"><input type="radio" name="${f.id}" ${val===o?"checked":""}>${o}</label>`).join("");
+      return`<div class="fg"><label>${f.label}${reqMark}</label><div class="rg">${opts}</div></div>`;
+    }
     if(f.type==="textarea")return`<div class="fg"><label>${f.label}${reqMark}</label><textarea placeholder="${f.ph||""}" onchange="sa('${f.id}',this.value)" onkeyup="sa('${f.id}',this.value)">${val}</textarea></div>`;
     return`<div class="fg"><label>${f.label}${reqMark}</label><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="${(f.ph||"").replace(/"/g,'&quot;')}" onchange="sa('${f.id}',this.value)" onkeyup="sa('${f.id}',this.value)"></div>`;
   }).join("");
+}
+
+// pickRData: reads fid/val from data attributes — safe for values containing quotes
+function pickRData(el){
+  const fid=el.getAttribute('data-fid');
+  const val=el.getAttribute('data-val');
+  pickR(fid,val,el);
 }
 function toggleFixture(rid,fid,el){setFixture(rid,fid,el.checked);el.closest(".fix-check").className="fix-check"+(el.checked?" checked":"");render();}
 function toggleLight(rid,ltid,el){setLight(rid,ltid,el.checked);const lt=LIGHT_TYPES.find(l=>l.id===ltid);el.closest(".lt-check").className="lt-check"+(el.checked?" checked":"")+(lt&&lt.defaultOn?" default-on":"");render();}
