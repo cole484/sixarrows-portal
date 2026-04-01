@@ -84,30 +84,34 @@ function extractCategoryStatuses(rows) {
     const colB = (row[1] || '').trim();
     const colC = (row[2] || '').trim();
 
-    if (!colA || !colC) continue;
-    // Skip header row
+    // Skip empty rows and header
+    if (!colA) continue;
     if (colA.toLowerCase() === 'category') continue;
 
-    // Main category = col B is empty (no contractor)
+    // Main category rows have NO contractor in column B
     if (colB !== '') continue;
 
-    // Check if col A fuzzy-matches any main category
-    const matched = MAIN_CATEGORIES.find(cat => {
-      const catLower  = cat.toLowerCase();
-      const aLower    = colA.toLowerCase();
-      // Match if either contains the other
-      return aLower.includes(catLower.split(' ')[0].toLowerCase()) ||
-             catLower.includes(aLower.split(' ')[0].toLowerCase()) ||
-             aLower === catLower;
-    });
+    // Check if col A exactly or fuzzy-matches any main category
+    // Try exact match first, then fuzzy
+    let matched = MAIN_CATEGORIES.find(cat => cat.toLowerCase() === colA.toLowerCase());
+    if (!matched) {
+      matched = MAIN_CATEGORIES.find(cat => {
+        const catLower = cat.toLowerCase();
+        const aLower   = colA.toLowerCase();
+        const catFirst = catLower.split(' ')[0];
+        const aFirst   = aLower.split(' ')[0];
+        // Both first words must match (prevents "Other Costs" matching "Other Costs & Management Fee" ambiguously)
+        return catFirst === aFirst && (catLower.includes(aFirst) && aLower.includes(catFirst));
+      });
+    }
 
     if (matched) {
-      const normalized = normalizeStatus(colC);
+      // Use the status if present, default to "pending" if col C is empty (e.g. Miscellaneous header)
+      const normalized = colC ? normalizeStatus(colC) : 'pending';
       if (normalized) {
-        // Use the canonical category name from MAIN_CATEGORIES
         statuses[matched] = {
-          sheetName:  colA,
-          sheetStatus: colC,
+          sheetName:   colA,
+          sheetStatus: colC || 'Not Started',
           status:      normalized,
         };
       }
@@ -185,14 +189,19 @@ export const handler = async (event) => {
     const updates = [];
 
     for (const dbCat of dbCats) {
-      // Find matching sheet status (fuzzy match on name)
-      const match = Object.entries(categoryStatuses).find(([catName]) => {
-        const catLower = catName.toLowerCase();
-        const dbLower  = dbCat.name.toLowerCase();
-        return catLower.includes(dbLower.split(' ')[0].toLowerCase()) ||
-               dbLower.includes(catLower.split(' ')[0].toLowerCase()) ||
-               dbLower === catLower;
-      });
+      // Find matching sheet status — exact match first, then first-word match
+      const dbLower = dbCat.name.toLowerCase();
+      let match = Object.entries(categoryStatuses).find(([catName]) =>
+        catName.toLowerCase() === dbLower
+      );
+      if (!match) {
+        match = Object.entries(categoryStatuses).find(([catName]) => {
+          const catLower = catName.toLowerCase();
+          const catFirst = catLower.split(' ')[0];
+          const dbFirst  = dbLower.split(' ')[0];
+          return catFirst === dbFirst;
+        });
+      }
 
       if (match) {
         const [, { status }] = match;
