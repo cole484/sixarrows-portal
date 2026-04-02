@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Command Center — Six Arrows</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<style>
+
+/* ── Countdown block ── */
+.countdown-block {
+  background:var(--charcoal);
+  border-radius:var(--r-2xl);
+  margin-bottom:1rem;
+  overflow:hidden;
+  position:relative;
+}
+.countdown-block::before {
+  content:'';
+  position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(117,127,105,.06) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(117,127,105,.06) 1px,transparent 1px);
+  background-size:28px 28px;
+  pointer-events:none;
+}
+.cd-inner {
+  position:relative; z-index:1;
+  padding:1.125rem 1.375rem;
+}
+.cd-eyebrow {
+  font-size:9px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.16em;
+  color:var(--green); margin-bottom:4px;
+}
+.cd-headline {
+  font-size:12px; font-weight:400;
+  color:rgba(235,233,222,.4); margin-bottom:.875rem;
+}
+/* Desktop: big digits stacked */
+.cd-digits {
+  display:flex; align-items:flex-end; gap:4px;
+  margin-bottom:.875rem;
+}
+.cd-unit {
+  display:flex; flex-direction:column;
+  align-items:center; min-width:48px;
+}
+.cd-num {
+  font-size:36px; font-weight:700;
+  color:var(--cream); line-height:1;
+  letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;
+}
+.cd-lbl {
+  font-size:8px; text-transform:uppercase;
+  letter-spacing:.14em; color:rgba(235,233,222,.28);
+  margin-top:3px;
+}
+.cd-sep {
+  font-size:28px; font-weight:300;
+  color:rgba(235,233,222,.15);
+  line-height:1; padding-bottom:6px;
+}
+.cd-foot {
+  display:flex; align-items:center; gap:8px;
+  flex-wrap:wrap; padding-top:.75rem;
+  border-top:0.5px solid rgba(255,255,255,.07);
+}
+.cd-foot-lbl {
+  font-size:10px; color:rgba(235,233,222,.28);
+}
+.cd-date-input {
+  background:rgba(255,255,255,.07);
+  border:0.5px solid rgba(255,255,255,.12);
+  border-radius:var(--r-xs); color:var(--cream);
+  font-family:'Work Sans',sans-serif; font-size:11px;
+  padding:4px 9px; outline:none; cursor:pointer;
+  transition:border-color .14s;
+}
+.cd-date-input:focus { border-color:var(--green); }
+
+/* Mobile: compact single-row countdown strip */
+@media (max-width:640px) {
+  .cd-inner { padding:.875rem 1.125rem; }
+  .cd-headline { display:none; }
+  .cd-digits { gap:2px; margin-bottom:.625rem; }
+  .cd-num { font-size:26px; }
+  .cd-unit { min-width:36px; }
+  .cd-sep { font-size:20px; padding-bottom:4px; }
+  .cd-foot { padding-top:.5rem; }
+  /* On mobile show start/target/days inline */
+  .cd-meta-row {
+    display:flex; gap:12px; flex-wrap:wrap;
+    font-size:10px; color:rgba(235,233,222,.35);
+  }
+  .cd-meta-row strong { color:rgba(235,233,222,.65); }
+}
+@media (min-width:641px) {
+  .cd-meta-row { display:none; }
+}
+
+/* ── Construction block removed from main content ── */
+/* Progress lives in sidebar only */
+
+/* ── Action required banner ── */
+.action-banner {
+  background:var(--warning-lt);
+  border:0.5px solid rgba(149,98,0,.2);
+  border-radius:var(--r-xl);
+  padding:1rem 1.375rem;
+  margin-bottom:1rem;
+  display:flex; align-items:center; gap:14px;
+}
+.action-banner.urgent {
+  background:#fdf3f0;
+  border-color:rgba(184,50,50,.18);
+}
+.action-dot {
+  width:10px; height:10px; border-radius:50%;
+  background:var(--warning); flex-shrink:0;
+  animation:pulse 2s infinite;
+}
+.action-banner.urgent .action-dot { background:var(--danger); }
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:.5; transform:scale(.85); }
+}
+.action-body { flex:1; min-width:0; }
+.action-eyebrow {
+  font-size:9px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.13em; color:var(--warning); margin-bottom:2px;
+}
+.action-banner.urgent .action-eyebrow { color:var(--danger); }
+.action-title {
+  font-size:14px; font-weight:700; color:var(--charcoal);
+  margin-bottom:1px;
+}
+.action-note { font-size:12px; color:var(--charcoal-3); line-height:1.4; }
+.action-due {
+  font-size:22px; font-weight:700;
+  color:var(--warning); flex-shrink:0; text-align:right;
+  line-height:1;
+}
+.action-banner.urgent .action-due { color:var(--danger); }
+.action-due-lbl {
+  font-size:9px; text-transform:uppercase;
+  letter-spacing:.1em; opacity:.6;
+}
+
+/* ── Quick summary card ── */
+.summary-card {
+  background:var(--white);
+  border:0.5px solid var(--border);
+  border-radius:var(--r-xl);
+  padding:1.25rem 1.5rem;
+  margin-bottom:1rem;
+}
+.summary-from {
+  display:flex; align-items:center; gap:8px; margin-bottom:10px;
+}
+.summary-from-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--green); flex-shrink:0;
+}
+.summary-from-lbl {
+  font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.12em; color:var(--green-dk);
+}
+.summary-text {
+  font-size:14px; color:var(--charcoal-2);
+  line-height:1.65; font-weight:400;
+}
+
+/* ── Module grid cards ── */
+.mc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:9px; }
+.mc-ico {
+  width:28px; height:28px; background:var(--green-lt);
+  border-radius:var(--r-sm); display:flex; align-items:center;
+  justify-content:center; flex-shrink:0;
+}
+.mc-eyebrow {
+  font-size:9px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.12em; color:var(--charcoal-4); margin-bottom:3px;
+}
+.mc-title { font-size:15px; font-weight:700; color:var(--charcoal); margin-bottom:3px; }
+.mc-sub   { font-size:12px; color:var(--charcoal-3); margin-bottom:8px; }
+.mc-foot  { display:flex; align-items:center; gap:8px; margin-top:auto; }
+.mc-arrow { width:12px; height:12px; flex-shrink:0; margin-left:auto; opacity:.4; }
+
+/* ── Decision item ── */
+.dec-item {
+  padding:10px 0; border-bottom:0.5px solid var(--border);
+}
+.dec-item:last-child { border-bottom:none; padding-bottom:0; }
+.dec-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:2px; }
+.dec-title { font-size:13px; font-weight:600; color:var(--charcoal); line-height:1.3; }
+.dec-due   { font-size:11px; color:var(--charcoal-4); margin-bottom:2px; }
+.dec-note  { font-size:12px; color:var(--charcoal-3); line-height:1.4; }
+
+/* ── Selections complete badge (construction phase) ── */
+.sel-complete-badge {
+  display:flex; align-items:center; gap:10px;
+  background:var(--green-pale); border:0.5px solid rgba(117,127,105,.2);
+  border-radius:var(--r-lg); padding:.875rem 1.125rem;
+}
+.scb-check {
+  width:28px; height:28px; border-radius:50%;
+  background:var(--green); display:flex; align-items:center;
+  justify-content:center; flex-shrink:0;
+}
+.scb-check svg { width:13px; height:13px; }
+.scb-body { flex:1; }
+.scb-title { font-size:13px; font-weight:600; color:var(--green-deep); }
+.scb-sub   { font-size:11px; color:var(--green-dk); opacity:.7; }
+
+/* ── Mobile responsive ── */
+@media (max-width:640px) {
+  .cd-num { font-size:32px; }
+  .cd-unit { min-width:40px; }
+  .cb-pct  { font-size:40px; }
+  .cd-inner, .cb-inner { padding:1.25rem 1.125rem; }
+}
+</style>
+</head>
+<body>
+<script>
+// Async initialization — fetches fresh session from Supabase before rendering
+async function initDashboard() {
+  let p = AUTH.requireAuth();
+  if (!p) return;
+
+  // Always refresh from Supabase on dashboard load (fast — ~200ms)
+  try {
+    const fresh = await AUTH.refreshSession(p.id);
+    if (fresh) p = fresh;
+  } catch(e) {}
+
+// ── Load tracker state (Notion first, localStorage fallback) ─────
+let TS = {};
+try { const r = localStorage.getItem('sa_tracker_v3_' + p.id); if (r) TS = JSON.parse(r); } catch(e) {}
+let liveReadiness = buildReadinessPct(p, TS);
+
+// Async Notion sync — updates readiness % after initial render
+if (p.notionTrackerPageId) {
+  fetch(`/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data?.steps) return;
+      p.sabPhases.forEach((ph,pi) => {
+        ph.steps.forEach((st,si) => {
+          const notionStep = data.steps[`${pi}-${si}`];
+          if (notionStep?.complete) {
+            getStepAllItems(st).forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = true; });
+          }
+        });
+      });
+      try { localStorage.setItem('sa_tracker_v3_' + p.id, JSON.stringify(TS)); } catch(e) {}
+      // Update the readiness bars on the page without full re-render
+      const newPct = buildReadinessPct(p, TS);
+      document.querySelectorAll('[data-readiness]').forEach(el => {
+        el.textContent = newPct + '%';
+      });
+      document.querySelectorAll('[data-readiness-bar]').forEach(el => {
+        el.style.width = newPct + '%';
+      });
+    })
+    .catch(() => {}); // silently fail if offline
+}
+
+// ── Load live selections data (server first, localStorage fallback) ──
+const ck = p.selectionsClientKey || p.id;
+let selSaved = {}, selAnswers = {};
+try { selSaved   = JSON.parse(localStorage.getItem(`sab8_${ck}_sav`) || '{}'); } catch(e) {}
+try { selAnswers = JSON.parse(localStorage.getItem(`sab8_${ck}_ans`) || '{}'); } catch(e) {}
+// Async update from server — refreshes selection % after initial render
+fetch(`/.netlify/functions/selections-storage?clientKey=${ck}`)
+  .then(r => r.ok ? r.json() : null)
+  .then(data => {
+    if (!data?.data) return;
+    selSaved   = data.data.sav || selSaved;
+    selAnswers = data.data.ans || selAnswers;
+    // Update selection % display if visible
+    const selPctNew = Math.round(
+      Object.keys({fireplace:0,appliances:0,exterior_finishes:0,specialty_trim:0,flooring:0,tile:0,plumbing:0,lighting:0,countertops:0,hardware:0,paint:0,doors:0})
+        .filter(id => selSaved[id] || (id==='fireplace' && selAnswers['fireplace_fp_want']==='No — no fireplace')).length / 12 * 100
+    );
+    document.querySelectorAll('[data-sel-pct]').forEach(el => { el.textContent = selPctNew + '%'; });
+  })
+  .catch(() => {});
+const SEL_ALL = ['fireplace','appliances','exterior_finishes','specialty_trim','flooring','tile','plumbing','lighting','countertops','hardware','paint','doors'];
+function selCatDone(id) {
+  if (id==='fireplace' && selAnswers['fireplace_fp_want']==='No — no fireplace') return true;
+  return !!selSaved[id];
+}
+const selDone  = SEL_ALL.filter(id => selCatDone(id)).length;
+const selTotal = SEL_ALL.length;
+const selPct   = Math.round(selDone / selTotal * 100);
+
+// ── Helper: decision urgency tag ────────────────────
+function decTag(status) {
+  const map = {
+    urgent: `<span class="tag" style="font-size:9px;background:var(--danger-lt);color:var(--danger)">Urgent</span>`,
+    active: `<span class="tag neutral" style="font-size:9px">Active</span>`,
+    queued: `<span class="tag" style="font-size:9px;background:var(--cream-2);color:var(--charcoal-4)">Queued</span>`,
+  };
+  return map[status] || '';
+}
+
+// ── Build the page HTML based on phase ──────────────
+const isSAB          = p.statusType === 'sab';
+const isConstruction = p.statusType === 'construction';
+const budPct         = Math.round(p.budgetCommitted / p.budgetTotal * 100);
+const conPct         = p.constructionPct || 0;
+const urgentDecision = p.decisions.find(d => d.status === 'urgent');
+const nextMilestone  = p.timeline.find(t => !t.done);
+
+// ────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────
+// SAB PHASE LAYOUT
+// ────────────────────────────────────────────────────
+function sabLayout() {
+  const hasGB = !!p.groundbreakingDate;
+
+  // ── Find active SAB step ──────────────────────────
+  let activeStep = null, activePhase = null;
+  for (let pi = 0; pi < p.sabPhases.length; pi++) {
+    const ph = p.sabPhases[pi];
+    for (let si = 0; si < ph.steps.length; si++) {
+      // Check if step is complete using tracker state
+      const items = getStepAllItems(ph.steps[si]);
+      const allDone = items.length === 0 ? ph.steps[si].complete
+        : items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
+      if (!allDone && !ph.steps[si].isFinal) {
+        activeStep  = ph.steps[si];
+        activePhase = pi;
+        break;
+      }
+    }
+    if (activeStep) break;
+  }
+
+  // ── Budget completion (locked categories = finalized) ──
+  const budCats     = p.budgetCategories || [];
+  const budTotal    = budCats.filter(c => c.status !== 'reserved').length;
+  const budLocked   = budCats.filter(c => c.status === 'locked').length;
+  const budPctComp  = budTotal ? Math.round(budLocked / budTotal * 100) : 0;
+
+  // ── Owner label for active step ──────────────────
+  const ownerMap = {
+    sa:     { label:'Six Arrows is handling this', color:'var(--green)'  },
+    client: { label:'Your decision required',       color:'#c87000'       },
+    both:   { label:'Collaborative',                color:'var(--green)'  },
+  };
+  const ownerCfg = ownerMap[activeStep?.owner || 'both'];
+
+  // ── Due date for active step ─────────────────────
+  let dueLine = '';
+  if (activeStep && activePhase !== null) {
+    const si      = p.sabPhases[activePhase].steps.indexOf(activeStep);
+    const dateKey = `date-${activePhase}-${si}`;
+    const dateVal = TS[dateKey] || '';
+    if (dateVal) {
+      const diff = Math.ceil((new Date(dateVal+'T00:00:00') - new Date()) / 86400000);
+      const label = diff < 0  ? `${Math.abs(diff)} days overdue`
+                  : diff === 0 ? 'Due today'
+                  : `${diff} days away`;
+      const color = diff < 0  ? 'var(--danger)'
+                  : diff <= 3 ? '#c87000'
+                  : 'rgba(235,233,222,.55)';
+      dueLine = `<span style="font-size:11px;color:${color};font-weight:600">${label}</span>`;
+    }
+  }
+
+  // ── Review card: show when all non-final steps done, review not yet left ──
+  const sabAllDone     = activeStep === null;
+  const reviewLeft     = !!p.reviewLeft;
+  const showReviewCard = sabAllDone && !reviewLeft;
+
+  const reviewCard = showReviewCard ? `
+    <a href="share.html" style="text-decoration:none;display:block;margin-bottom:1rem">
+      <div style="background:var(--charcoal);border-radius:var(--r-2xl);padding:1.125rem 1.375rem;position:relative;overflow:hidden;cursor:pointer">
+        <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(117,127,105,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(117,127,105,.07) 1px,transparent 1px);background-size:28px 28px;pointer-events:none"></div>
+        <div style="position:relative;z-index:1">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+            <div style="flex:1">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--green);margin-bottom:5px">Final Step · SAB™ Complete</div>
+              <div style="font-size:16px;font-weight:700;color:var(--cream);line-height:1.2;margin-bottom:5px">Share Your Experience</div>
+              <div style="font-size:12px;color:rgba(235,233,222,.42);line-height:1.5">You've finished the SAB™ process. Your story helps other families choose the right builder — and we've made it easy.</div>
+            </div>
+            <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:3px;margin-top:2px">
+              <div style="font-size:18px;line-height:1;color:var(--cream)">★★★★★</div>
+              <svg style="width:12px;height:12px;opacity:.35;margin-top:6px" viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:0.5px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:8px">
+            <svg style="width:16px;height:16px;flex-shrink:0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            <span style="font-size:11px;font-weight:600;color:rgba(235,233,222,.5)">Leave a Google review → takes about 60 seconds</span>
+          </div>
+        </div>
+      </div>
+    </a>` : '';
+
+  return `
+    ${reviewCard}
+    <!-- 1. Current SAB step — compact card matching module card size -->
+    <div class="card dark" style="margin-bottom:1rem">
+      <div class="mc-top">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--green)">You Are Here · Phase ${activePhase !== null ? activePhase + 1 : '—'}, Step ${activeStep ? activeStep.id + 1 : '—'}</div>
+        ${dueLine || ''}
+      </div>
+      <div style="font-size:15px;font-weight:700;color:var(--cream);line-height:1.2;margin:4px 0 5px">${activeStep?.title || 'All steps complete — Build Ready!'}</div>
+      <div style="font-size:12px;color:rgba(235,233,222,.45);line-height:1.5;margin-bottom:10px">${activeStep?.desc || 'All phases of the SAB™ process are complete.'}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:${ownerCfg.color}">${ownerCfg.label}</span>
+        <a href="tracker.html" style="font-size:11px;color:rgba(235,233,222,.35);text-decoration:none;white-space:nowrap">Open Tracker →</a>
+      </div>
+    </div>
+
+    <!-- 2. SAB progress bar — directly below -->
+    <div style="background:var(--white);border:0.5px solid var(--border);border-radius:var(--r-xl);padding:1rem 1.375rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4)">SAB™ Build Readiness</div>
+        <div style="font-size:22px;font-weight:700;color:var(--charcoal);line-height:1">${liveReadiness}%</div>
+      </div>
+      <div class="track" style="height:8px;margin-bottom:6px"><div class="bar" style="width:${liveReadiness}%"></div></div>
+      <div style="font-size:11px;color:var(--charcoal-4)">${p.phaseLabel}</div>
+    </div>
+
+    <!-- 3. Tracker + Selections cards -->
+    <div class="grid g2" style="margin-bottom:1rem">
+      <a class="card dark card-link" href="tracker.html">
+        <div class="mc-top">
+          <div class="mc-ico" style="background:rgba(255,255,255,.08)">
+            <svg viewBox="0 0 14 14" fill="none" stroke="var(--cream)" stroke-width="1.4" stroke-linecap="round"><line x1="1" y1="3.5" x2="13" y2="3.5"/><line x1="1" y1="7" x2="9" y2="7"/><line x1="1" y1="10.5" x2="11" y2="10.5"/></svg>
+          </div>
+          <span class="tag neutral" style="font-size:9px">${p.status}</span>
+        </div>
+        <div class="mc-eyebrow">Blueprint™</div>
+        <div class="mc-title">SAB™ Tracker</div>
+        <div class="mc-sub">All 14 steps · 3 phases</div>
+        <div class="mc-foot">
+          <div class="track sm" style="flex:1;background:rgba(255,255,255,.1)"><div class="bar" style="width:${liveReadiness}%"></div></div>
+          <span style="font-size:11px;color:rgba(235,233,222,.5)">${liveReadiness}%</span>
+          <svg class="mc-arrow" style="opacity:.5" viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
+        </div>
+      </a>
+      <a class="card card-link" href="selections.html">
+        <div class="mc-top">
+          <div class="mc-ico"><svg viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.3"><path d="M1 3.5l2 2 2.5-2.5"/><line x1="7" y1="4.5" x2="13" y2="4.5"/><path d="M1 9l2 2 2.5-2.5"/><line x1="7" y1="10" x2="13" y2="10"/></svg></div>
+          <span class="tag ${selPct>=100?'ok':'neutral'}" style="font-size:9px">${selPct}% done</span>
+        </div>
+        <div class="mc-eyebrow">Finishes</div>
+        <div class="mc-title">Selections</div>
+        <div class="mc-sub" style="margin-bottom:10px">${selDone} of ${selTotal} categories complete</div>
+        <div class="track sm"><div class="bar" style="width:${selPct}%"></div></div>
+        <svg class="mc-arrow" viewBox="0 0 14 14" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
+      </a>
+    </div>
+
+    <!-- 4. Budget completion (no dollar amounts) -->
+    <div style="background:var(--white);border:0.5px solid var(--border);border-radius:var(--r-xl);padding:1rem 1.375rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin-bottom:2px">Budget</div>
+          <div style="font-size:13px;color:var(--charcoal-3)">${budLocked} of ${budTotal} categories finalized</div>
+        </div>
+        <div style="font-size:22px;font-weight:700;color:var(--charcoal);line-height:1">${budPctComp}%</div>
+      </div>
+      <div class="track" style="height:6px;margin-bottom:6px"><div class="bar" style="width:${budPctComp}%"></div></div>
+      <a href="budget.html" style="font-size:11px;color:var(--charcoal-4);text-decoration:none">View Budget →</a>
+    </div>
+
+    <!-- 5. Groundbreaking countdown — lower priority, compact -->
+    <div class="countdown-block" style="margin-bottom:1rem">
+      <div class="cd-inner">
+        <div class="cd-eyebrow">Groundbreaking Countdown</div>
+        <div class="cd-headline" id="cd-headline">${hasGB ? 'Days Until We Break Ground' : 'Groundbreaking Date TBD'}</div>
+        <div class="cd-digits">
+          <div class="cd-unit"><span class="cd-num" id="cd-d">—</span><span class="cd-lbl">Days</span></div>
+          <span class="cd-sep">:</span>
+          <div class="cd-unit"><span class="cd-num" id="cd-h">—</span><span class="cd-lbl">Hrs</span></div>
+          <span class="cd-sep">:</span>
+          <div class="cd-unit"><span class="cd-num" id="cd-m">—</span><span class="cd-lbl">Min</span></div>
+          <span class="cd-sep">:</span>
+          <div class="cd-unit"><span class="cd-num" id="cd-s">—</span><span class="cd-lbl">Sec</span></div>
+        </div>
+        <div class="cd-foot">
+          ${hasGB
+            ? `<span class="cd-foot-lbl">Target:</span><span style="font-size:12px;color:rgba(235,233,222,.55)">${new Date(p.groundbreakingDate+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</span>`
+            : `<span style="font-size:11px;color:rgba(235,233,222,.35)">Date to be confirmed by Six Arrows</span>`}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// CONSTRUCTION PHASE LAYOUT
+// ────────────────────────────────────────────────────
+function constructionLayout() {
+  let daysLeft = null;
+  try {
+    const t = new Date(p.timelineTarget);
+    if (!isNaN(t)) daysLeft = Math.max(0, Math.ceil((t - new Date()) / 86400000));
+  } catch(e) {}
+
+  return `
+    <!-- 1. Move-in countdown — compact strip -->
+    <div class="countdown-block" style="margin-bottom:1rem">
+      <div class="cd-inner" style="padding:.875rem 1.25rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <div class="cd-eyebrow" style="margin-bottom:3px">Move-In Countdown</div>
+            <div class="cd-digits" style="margin-bottom:0;gap:3px">
+              <div class="cd-unit" style="min-width:38px"><span class="cd-num" id="cd-d" style="font-size:28px">—</span><span class="cd-lbl">Days</span></div>
+              <span class="cd-sep" style="font-size:22px;padding-bottom:5px">:</span>
+              <div class="cd-unit" style="min-width:38px"><span class="cd-num" id="cd-h" style="font-size:28px">—</span><span class="cd-lbl">Hrs</span></div>
+              <span class="cd-sep" style="font-size:22px;padding-bottom:5px">:</span>
+              <div class="cd-unit" style="min-width:38px"><span class="cd-num" id="cd-m" style="font-size:28px">—</span><span class="cd-lbl">Min</span></div>
+              <span class="cd-sep" style="font-size:22px;padding-bottom:5px">:</span>
+              <div class="cd-unit" style="min-width:38px"><span class="cd-num" id="cd-s" style="font-size:28px">—</span><span class="cd-lbl">Sec</span></div>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:10px;color:rgba(235,233,222,.3);margin-bottom:2px">Started <strong style="color:rgba(235,233,222,.55)">${p.timelineStart}</strong></div>
+            <div style="font-size:10px;color:rgba(235,233,222,.3);margin-bottom:2px">Target <strong style="color:rgba(235,233,222,.55)">${p.timelineTarget}</strong></div>
+            ${daysLeft !== null ? `<div style="font-size:10px;color:rgba(235,233,222,.3)"><strong style="color:var(--green)">${daysLeft} days</strong> remaining</div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Urgent decision if exists -->
+    ${urgentDecision ? `
+    <div class="action-banner urgent">
+      <div class="action-dot"></div>
+      <div class="action-body">
+        <div class="action-eyebrow">Decision Required</div>
+        <div class="action-title">${urgentDecision.title}</div>
+        <div class="action-note">${urgentDecision.note}</div>
+      </div>
+      <div>
+        <div class="action-due">${p.nextDecisionDueDays}d</div>
+        <div class="action-due-lbl">until due</div>
+      </div>
+    </div>` : ''}
+
+    <!-- 3. Budget commitment removed (shown in Budget card below) -->
+    <!-- 4. Next milestone only -->
+    <div style="margin-bottom:1rem">
+      <div class="card">
+        <div class="kpi">
+          <div class="kpi-lbl">Next Milestone</div>
+          <div class="kpi-val" style="font-size:17px;line-height:1.25">${nextMilestone?.title||'On track'}</div>
+          <div class="kpi-sub">${nextMilestone?.date||''} ${nextMilestone?.note?'· '+nextMilestone.note:''}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Timeline, Budget, Updates -->
+    <div class="grid g3" style="margin-bottom:1rem">
+      <a class="card card-link" href="timeline.html">
+        <div class="mc-top">
+          <div class="mc-ico"><svg viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.3"><circle cx="2.5" cy="3.5" r="1.5"/><line x1="5" y1="3.5" x2="13" y2="3.5"/><circle cx="2.5" cy="7" r="1.5"/><line x1="5" y1="7" x2="13" y2="7"/><circle cx="2.5" cy="10.5" r="1.5"/><line x1="5" y1="10.5" x2="13" y2="10.5"/></svg></div>
+          <span class="tag ok" style="font-size:9px">Active</span>
+        </div>
+        <div class="mc-eyebrow">Schedule</div>
+        <div class="mc-title">Build Timeline</div>
+        <div class="mrow" style="padding:6px 0;margin-top:8px"><span class="lbl">Started</span><span class="val" style="font-size:12px">${p.timelineStart}</span></div>
+        <div class="mrow" style="padding:5px 0;border:none"><span class="lbl">Target</span><span class="val" style="font-size:12px">${p.timelineTarget}</span></div>
+        <svg class="mc-arrow" viewBox="0 0 14 14" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
+      </a>
+      <a class="card card-link" href="budget.html">
+        <div class="mc-top">
+          <div class="mc-ico"><svg viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.3"><rect x=".5" y="1.5" width="13" height="11" rx="1"/><line x1=".5" y1="5" x2="13.5" y2="5"/><line x1="4.5" y1="5" x2="4.5" y2="12.5"/></svg></div>
+          <span class="tag ${budPct>88?'warn':'ok'}" style="font-size:9px">${budPct}% committed</span>
+        </div>
+        <div class="mc-eyebrow">Financials</div>
+        <div class="mc-title">Budget</div>
+        <div style="font-size:20px;font-weight:700;color:var(--charcoal);letter-spacing:-.02em;margin:8px 0 3px">${currency(p.budgetCommitted)}</div>
+        <div class="mc-sub" style="margin-bottom:8px">of ${currency(p.budgetTotal)}</div>
+        <div class="track sm"><div class="bar ${budPct>88?'warn':''}" style="width:${budPct}%"></div></div>
+        <svg class="mc-arrow" viewBox="0 0 14 14" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
+      </a>
+      <a class="card card-link" href="updates.html">
+        <div class="mc-top">
+          <div class="mc-ico"><svg viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.3"><path d="M1 10V3a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H4L1 12V10z"/></svg></div>
+          <span class="tag neutral" style="font-size:9px">Latest</span>
+        </div>
+        <div class="mc-eyebrow">Communication</div>
+        <div class="mc-title">Updates</div>
+        <div style="font-size:11px;color:var(--charcoal-4);margin-top:8px;margin-bottom:2px">${p.updates[0].date}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--charcoal);margin-bottom:4px">${p.updates[0].title}</div>
+        <div style="font-size:12px;color:var(--charcoal-3);line-height:1.45">${p.updates[0].body.substring(0,80)}…</div>
+        <svg class="mc-arrow" viewBox="0 0 14 14" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
+      </a>
+    </div>
+
+    <!-- 6. Decisions + Selections locked + Recent Photos -->
+    <div class="grid g3">
+      <div class="card">
+        <div class="sh"><div class="sh-title">Open Decisions</div></div>
+        ${p.decisions.length ? p.decisions.map(d => `
+          <div class="dec-item">
+            <div class="dec-head"><div class="dec-title">${d.title}</div>${decTag(d.status)}</div>
+            <div class="dec-due">Due ${d.due}</div>
+            <div class="dec-note">${d.note}</div>
+          </div>`).join('') : `<div style="font-size:13px;color:var(--charcoal-4);padding:8px 0">No open decisions.</div>`}
+      </div>
+      <div class="card">
+        <div class="sh"><div class="sh-title">Selections</div></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:8px;border-bottom:0.5px solid var(--border)">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg style="width:12px;height:12px" viewBox="0 0 14 14"><path d="M2.5 7l3 3 6-6" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--green-deep)">All selections complete</div>
+            <div style="font-size:11px;color:var(--green-dk);opacity:.7">12 of 12 finalized</div>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--charcoal-3);line-height:1.55;margin-bottom:8px">Finishes are locked in — no further decisions needed.</p>
+        <a href="documents.html" style="font-size:12px;color:var(--green-dk);text-decoration:none;font-weight:500">Review selections →</a>
+      </div>
+      <a class="card card-link" href="documents.html" id="photos-preview-card">
+        <div class="sh" style="margin-bottom:10px">
+          <div class="sh-title">Recent Photos</div>
+          <span style="font-size:11px;color:var(--charcoal-4)" id="photo-count-lbl"></span>
+        </div>
+        <div id="photos-preview-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px"></div>
+        <svg class="mc-arrow" style="margin-top:4px" viewBox="0 0 14 14" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
+      </a>
+    </div>
+  `;
+}
+
+// ── Mount the correct layout ────────────────────────
+mountLayout('overview', 'Command Center',
+  isSAB ? sabLayout() : constructionLayout(),
+  TS
+);
+
+// ── Recent photos preview (construction phase) ──────
+if (isConstruction) {
+  const PHOTO_KEY = `sa_photos_${p.id}`;
+  const basePhotos = (p.documents||[]).filter(d => d.category === 'photos');
+  let adminPhotos = [];
+  try { adminPhotos = JSON.parse(localStorage.getItem(PHOTO_KEY) || '[]'); } catch(e) {}
+  const allPhotos = [...basePhotos, ...adminPhotos].reverse();
+  const grid = document.getElementById('photos-preview-grid');
+  const lbl  = document.getElementById('photo-count-lbl');
+  if (grid) {
+    if (allPhotos.length === 0) {
+      grid.innerHTML = `<div style="font-size:12px;color:var(--charcoal-4);grid-column:span 3;padding:4px 0;line-height:1.5">Photos will appear here as the build progresses.</div>`;
+    } else {
+      grid.innerHTML = allPhotos.slice(0,6).map(ph => {
+        const match = (ph.url||'').match(/\/file\/d\/([^\/\?]+)/);
+        const imgUrl = match ? `https://drive.google.com/uc?export=view&id=${match[1]}` : ph.url;
+        return `<div style="aspect-ratio:1;border-radius:5px;overflow:hidden;background:var(--cream-2)"><img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'"></div>`;
+      }).join('');
+    }
+  }
+  if (lbl) lbl.textContent = allPhotos.length > 0 ? `${allPhotos.length} photo${allPhotos.length!==1?'s':''}` : '';
+}
+
+// ── Countdown timer ─────────────────────────────────
+(function() {
+  // For SAB: count down to groundbreaking date
+  // For Construction: count down to completion date
+  let targetDateStr = isSAB
+    ? (p.groundbreakingDate || '')
+    : p.timelineTarget;
+
+  // Parse construction target date — may be "Oct 14, 2025" format
+  function parseDate(str) {
+    if (!str) return null;
+    // Try ISO first
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return new Date(str + 'T00:00:00');
+    // Try "Month DD, YYYY"
+    const d = new Date(str);
+    return isNaN(d) ? null : d;
+  }
+
+  let targetDate = parseDate(targetDateStr);
+
+  function tick() {
+    if (!targetDate) return;
+    const diff = targetDate - new Date();
+    const dEl = document.getElementById('cd-d');
+    const hEl = document.getElementById('cd-h');
+    const mEl = document.getElementById('cd-m');
+    const sEl = document.getElementById('cd-s');
+    if (!dEl) return;
+    if (diff <= 0) {
+      const hl = document.getElementById('cd-headline');
+      if (hl) hl.textContent = isSAB ? 'Groundbreaking Day!' : 'Completion Day!';
+      [dEl,hEl,mEl,sEl].forEach(el => { if(el) el.textContent = '00'; });
+      return;
+    }
+    const f = n => String(Math.floor(n)).padStart(2,'0');
+    if (dEl) dEl.textContent = f(diff/86400000);
+    if (hEl) hEl.textContent = f((diff%86400000)/3600000);
+    if (mEl) mEl.textContent = f((diff%3600000)/60000);
+    if (sEl) sEl.textContent = f((diff%60000)/1000);
+  }
+
+  tick();
+  setInterval(tick, 1000);
+
+  // SAB: groundbreaking date is set by admin only — no client input
+
+  // Construction: days remaining in cb-foot
+  if (isConstruction && targetDate) {
+    const daysLeft = Math.max(0, Math.ceil((targetDate - new Date()) / 86400000));
+    const el = document.getElementById('cb-days-remaining');
+    if (el) el.innerHTML = `Days remaining: <strong>${daysLeft}</strong>`;
+  }
+})();
+
+}
+initDashboard();
+</script>
+</body>
+</html>
