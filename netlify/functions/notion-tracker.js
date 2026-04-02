@@ -81,7 +81,7 @@ const STEP_DEFINITIONS = [
   {
     phase: 2, step: 5,
     title: 'Share Your SAB™ Experience',
-    markers: ['Quick Review Request', 'Share Your SAB'],
+    markers: ['Review shared'],
   },
 ];
 
