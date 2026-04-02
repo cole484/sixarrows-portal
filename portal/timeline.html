@@ -146,30 +146,100 @@ if (!p) throw new Error('Not authed');
 
 const isSAB = p.statusType === 'sab';
 
-// ── Build phase nodes (shared between both modes) ──────
+// ── Load TS from localStorage (same source as dashboard & tracker) ──
+let TS = {};
+try { const r = localStorage.getItem('sa_tracker_v3_' + p.id); if (r) TS = JSON.parse(r); } catch(e) {}
+
+// ── Phase/step completion derived from TS ──────────────
+function isStepDone(pi, si) {
+  const step = p.sabPhases[pi]?.steps[si];
+  if (!step) return false;
+  const items = getStepAllItems(step);
+  if (items.length === 0) return !!step.complete;
+  return items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
+}
+function isPhaseDone(pi) {
+  const ph = p.sabPhases[pi];
+  if (!ph) return false;
+  return ph.steps.every((_, si) => isStepDone(pi, si));
+}
+function isPhaseActive(pi) {
+  if (isPhaseDone(pi)) return false;
+  return pi === 0 || isPhaseDone(pi - 1);
+}
+function activeStepLabel(pi) {
+  const ph = p.sabPhases[pi];
+  for (let si = 0; si < ph.steps.length; si++) {
+    if (!isStepDone(pi, si)) return ph.steps[si].title;
+  }
+  return '';
+}
+
+// ── Async Notion sync — updates TS then re-renders ─────
+async function renderPage() {
+  // Fetch Notion BEFORE rendering so phases show correctly on first visit
+  // even if localStorage TS is empty
+  if (isSAB && p.notionTrackerPageId) {
+    try {
+      const res  = await fetch(`/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}`);
+      const data = res.ok ? await res.json() : null;
+      if (data?.steps) {
+        p.sabPhases.forEach((ph, pi) => {
+          ph.steps.forEach((st, si) => {
+            const notionStep = data.steps[`${pi}-${si}`];
+            if (notionStep?.complete) {
+              getStepAllItems(st).forEach((_, ii) => { TS[`${pi}-${si}-${ii}`] = true; });
+            }
+          });
+        });
+        try { localStorage.setItem('sa_tracker_v3_' + p.id, JSON.stringify(TS)); } catch(e) {}
+      }
+    } catch(e) {}
+  }
+  mountLayout('timeline', 'Timeline', isSAB ? sabLayout() : constructionLayout());
+}
+
+// ── Journey nodes ──────────────────────────────────────
 function buildJourneyNodes() {
   const phaseNodes = p.sabPhases.map((ph, pi) => {
-    const done   = ph.complete;
-    const active = !done && (pi === 0 || p.sabPhases[pi-1].complete);
+    const done   = isPhaseDone(pi);
+    const active = isPhaseActive(pi);
     const state  = done ? 'done' : active ? 'active' : 'future';
-    const cardBg = done ? 'background:var(--green-pale);border-color:rgba(117,127,105,.25)'
+    const cardBg = done   ? 'background:var(--green-pale);border-color:rgba(117,127,105,.25)'
                  : active ? 'border-color:rgba(117,127,105,.4)'
-                 : 'background:var(--cream-pale)';
-    const eyeColor = done || active ? 'color:var(--green-dk)' : 'color:var(--charcoal-4)';
+                 :          'background:var(--cream-pale)';
+    const eyeColor   = done || active ? 'color:var(--green-dk)' : 'color:var(--charcoal-4)';
     const titleColor = state === 'future' ? 'color:var(--charcoal-3)' : 'color:var(--charcoal)';
-    const tag = done ? '<span class="tag ok">Complete</span>'
-              : active ? '<span class="tag" style="background:var(--green-lt);color:var(--green-deep)">In Progress</span>'
-              : '<span class="tag neutral">Upcoming</span>';
+    const tag = done
+      ? '<span class="tag ok">Complete</span>'
+      : active
+      ? '<span class="tag" style="background:var(--green-lt);color:var(--green-deep)">In Progress</span>'
+      : '<span class="tag neutral">Upcoming</span>';
     const dotContent = done
       ? `<svg viewBox="0 0 8 8"><path d="M1 4l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`
       : active ? `<div class="journey-dot-inner"></div>` : '';
+
+    const totalSteps  = ph.steps.length;
+    const doneSteps   = ph.steps.filter((_, si) => isStepDone(pi, si)).length;
+    const currentStep = active ? activeStepLabel(pi) : '';
+    const progressLine = active
+      ? `<div style="font-size:11px;color:var(--charcoal-4);margin-bottom:7px">
+           Step ${doneSteps + 1} of ${totalSteps} — <span style="color:var(--charcoal-3);font-weight:500">${currentStep}</span>
+         </div>
+         <div style="height:4px;background:var(--cream-2);border-radius:999px;margin-bottom:10px">
+           <div style="height:100%;width:${Math.round(doneSteps/totalSteps*100)}%;background:var(--green);border-radius:999px"></div>
+         </div>`
+      : done
+      ? `<div style="font-size:11px;color:var(--green-dk);margin-bottom:8px;font-weight:500">✓ All ${totalSteps} steps complete</div>`
+      : '';
 
     return `<div class="journey-node">
       <div class="journey-dot ${state}">${dotContent}</div>
       <div class="card" style="${cardBg}">
         <div class="journey-card-eyebrow" style="${eyeColor}">Pre-Construction · Phase ${pi+1}</div>
         <div class="journey-card-title" style="${titleColor}">${ph.label}</div>
-        <div class="journey-card-desc">${ph.milestoneDesc}</div>
+        <div class="journey-card-desc">${ph.goal || ph.milestoneDesc}</div>
+        ${progressLine}
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
           ${tag}
           ${ph.milestoneDate ? `<span style="font-size:11px;color:var(--charcoal-4)">${done?'Completed':'Target'}: ${ph.milestoneDate}</span>` : ''}
@@ -178,15 +248,15 @@ function buildJourneyNodes() {
     </div>`;
   }).join('');
 
-  const allDone = p.sabPhases.every(ph => ph.complete);
+  const allSABDone     = p.sabPhases.every((_, pi) => isPhaseDone(pi));
   const isConstruction = p.statusType === 'construction';
-
-  const constructionDot = isConstruction ? 'active' : allDone ? 'active' : 'future';
+  const constructionDot = isConstruction ? 'active' : allSABDone ? 'active' : 'future';
   const constructionBg  = isConstruction ? 'border-color:rgba(117,127,105,.4)' : 'background:var(--cream-pale)';
-  const constructionEye = isConstruction || allDone ? 'color:var(--green-dk)' : 'color:var(--charcoal-4)';
+  const constructionEye = isConstruction || allSABDone ? 'color:var(--green-dk)' : 'color:var(--charcoal-4)';
   const constructionTag = isConstruction
     ? `<span class="tag" style="background:var(--green-lt);color:var(--green-deep)">In Progress — ${p.phaseLabel}</span>`
-    : allDone ? '<span class="tag neutral">Build Ready — Pending Groundbreaking</span>'
+    : allSABDone
+    ? '<span class="tag neutral">Build Ready — Pending Groundbreaking</span>'
     : '<span class="tag neutral">Unlocks at Build Ready</span>';
 
   const buildSteps = [
@@ -226,14 +296,13 @@ function buildJourneyNodes() {
   </div>`;
 }
 
-if (isSAB) {
-  // ── SAB MODE ─────────────────────────────────────────
-  mountLayout('timeline', 'Timeline', `
+// ── SAB layout ─────────────────────────────────────────
+function sabLayout() {
+  return `
     <div class="page-eyebrow">Schedule</div>
     <div class="page-title">Project Timeline</div>
     <p class="page-sub">From first site visit to the day you walk through your front door.</p>
 
-    <!-- Projected start date — matches groundbreaking countdown -->
     <div class="date-card" style="margin-bottom:1.25rem">
       <div class="date-card-inner">
         <div class="date-card-eyebrow">Pre-Construction Schedule</div>
@@ -245,27 +314,25 @@ if (isSAB) {
               : 'To be confirmed'}</div>
           </div>
         </div>
-        ${!p.groundbreakingDate ? `<div style="font-size:11px;color:rgba(235,233,222,.35);margin-top:8px">Set the groundbreaking date on the Command Center to update this.</div>` : ''}
+        ${!p.groundbreakingDate ? `<div style="font-size:11px;color:rgba(235,233,222,.35);margin-top:8px">Your Six Arrows team will confirm this date as you approach Build Ready.</div>` : ''}
       </div>
     </div>
 
-    <!-- Full build journey -->
     <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:1rem;letter-spacing:-.01em">Your Full Build Journey</div>
     ${buildJourneyNodes()}
-  `);
+  `;
+}
 
-} else {
-  // ── CONSTRUCTION MODE ────────────────────────────────
+// ── Construction layout ────────────────────────────────
+function constructionLayout() {
   const milestones = p.timeline || [];
   const doneCount  = milestones.filter(t => t.done).length;
-  const nextUp     = milestones.find(t => !t.done);
 
-  mountLayout('timeline', 'Timeline', `
+  return `
     <div class="page-eyebrow">Schedule</div>
     <div class="page-title">Project Timeline</div>
     <p class="page-sub">Your build schedule from groundbreaking to the day you get your keys.</p>
 
-    <!-- Start + Target in one compact card -->
     <div class="date-card" style="margin-bottom:1rem">
       <div class="date-card-inner">
         <div class="date-card-eyebrow">Build Schedule</div>
@@ -282,7 +349,6 @@ if (isSAB) {
       </div>
     </div>
 
-    <!-- Live schedule link -->
     <a class="notion-link" href="${p.links?.timeline||'#'}" target="_blank">
       <div class="notion-link-left">
         <div class="notion-link-ico">
@@ -296,7 +362,6 @@ if (isSAB) {
       <svg class="notion-link-arrow" viewBox="0 0 12 12" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M2 10L10 2M4 2h6v6"/></svg>
     </a>
 
-    <!-- Milestones -->
     <div class="card" style="margin-bottom:1rem">
       <div class="sh">
         <div class="sh-title">Build Milestones</div>
@@ -330,9 +395,10 @@ if (isSAB) {
       }
     </div>
 
-    <!-- Full build journey -->
     <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:1rem;letter-spacing:-.01em">Your Full Build Journey</div>
     ${buildJourneyNodes()}
-  `);
+  `;
 }
+
+renderPage();
 </script></body></html>
