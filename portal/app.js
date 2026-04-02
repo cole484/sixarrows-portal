@@ -53,16 +53,25 @@ function buildReadinessPct(p, TS) {
 
 // ─── Sidebar builder ───────────────────────────
 function buildSidebar(p, activeKey, TS) {
+  // Always load TS from localStorage so sidebar phases are accurate on all pages
+  if (!TS || Object.keys(TS).length === 0) {
+    try { const r = localStorage.getItem('sa_tracker_v3_' + p.id); if (r) TS = JSON.parse(r); } catch(e) {}
+  }
   TS = TS || {};
   const pct = buildReadinessPct(p, TS);
   const total = sabTotalItems(p);
   const checked = sabCheckedItems(p, TS);
 
-  const phaseRows = p.sabPhases.map((ph,pi) => {
-    const done = ph.complete || (ph.steps.length && ph.steps.every((_,si) =>
+  // Pre-compute per-phase done state from TS so active logic is correct
+  const phaseDone = p.sabPhases.map((ph, pi) =>
+    ph.complete || (ph.steps.length > 0 && ph.steps.every((_,si) =>
       getStepAllItems(ph.steps[si]).every((_,ii) => TS[`${pi}-${si}-${ii}`])
-    ));
-    const active = !done && (pi === 0 || p.sabPhases[pi-1].complete);
+    ))
+  );
+
+  const phaseRows = p.sabPhases.map((ph, pi) => {
+    const done   = phaseDone[pi];
+    const active = !done && (pi === 0 || phaseDone[pi - 1]);
     const cls = done ? 'done' : active ? 'active' : '';
     const dotInner = done
       ? `<svg viewBox="0 0 8 8"><path d="M1 4l2 2 4-4" stroke="white" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>`
@@ -74,6 +83,7 @@ function buildSidebar(p, activeKey, TS) {
         <div class="sb-phase-status">${done ? 'Complete' : active ? 'In progress' : 'Upcoming'}</div>
       </div>
     </div>`;
+  }).join('');
   }).join('');
 
   const navLinks = NAV.filter(n => !(n.sabOnly && p.statusType !== 'sab')).map(n => {

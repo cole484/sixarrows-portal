@@ -439,17 +439,27 @@ function renderStepCard(pi, si, step, phaseComplete) {
     ? `<svg viewBox="0 0 12 12"><path d="M2 6l2.8 3 5.2-5.5" stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`
     : step.isFinal ? '★' : (step.id+1);
 
-  // Step 14 complete state
-  if (step.isFinal && done) {
+  // Step 14 — isFinal: show share button regardless of done state
+  if (step.isFinal) {
+    const isReviewDone = !!p.reviewLeft;
     return `<div class="step-card final-step">
       <div class="final-step-inner">
         <img class="final-step-logo" src="${LOGO_CIRCLE}" alt="Six Arrows">
-        <div class="final-step-title">You've done it. You're Build Ready.</div>
-        <p class="final-step-body">You've just completed one of the most thorough pre-construction processes in the industry. Your story helps other families understand why planning properly makes all the difference.</p>
-        <button class="final-step-cta" onclick="alert('Thank you! Cole will be in touch to coordinate your review.')">
-          <svg style="width:13px;height:13px;fill:white" viewBox="0 0 14 14"><path d="M7 2l1.4 3H12l-2.6 1.9.9 3.1L7 8.2l-3.3 1.8.9-3.1L2 5H5.6z"/></svg>
-          Share Your SAB™ Experience
-        </button>
+        <div class="final-step-title">${isReviewDone ? 'Thank you for sharing.' : "You've done it. You're Build Ready."}</div>
+        <p class="final-step-body">${isReviewDone
+          ? 'Your review has been shared. Your Six Arrows team is grateful — it means a lot to us and will help the next family find the right builder.'
+          : "You've completed one of the most thorough pre-construction processes in the industry. Your story helps other families understand why planning properly makes all the difference."
+        }</p>
+        ${isReviewDone
+          ? `<div style="display:flex;align-items:center;gap:8px;justify-content:center;font-size:13px;color:var(--green-dk);font-weight:600">
+               <svg style="width:16px;height:16px" viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 7l3 3 6-6"/></svg>
+               Review shared
+             </div>`
+          : `<a href="share.html" class="final-step-cta" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+               <svg style="width:13px;height:13px;fill:white" viewBox="0 0 14 14"><path d="M7 2l1.4 3H12l-2.6 1.9.9 3.1L7 8.2l-3.3 1.8.9-3.1L2 5H5.6z"/></svg>
+               Share Your SAB™ Experience
+             </a>`
+        }
       </div>
     </div>`;
   }
@@ -586,7 +596,7 @@ function renderStepCard(pi, si, step, phaseComplete) {
       <div class="step-meta">
         <div class="step-name">Step ${step.id+1}: ${step.title}</div>
         <div class="step-inforow">
-          <span class="step-cnt">${cnt} of ${tot} complete</span>
+          <span class="step-cnt">${step.isFinal ? (p.reviewLeft ? 'Review shared ✓' : 'Tap to share') : `${cnt} of ${tot} complete`}</span>
           ${ownerBadgeHTML(step.owner)}
           ${dueBadge}
         </div>

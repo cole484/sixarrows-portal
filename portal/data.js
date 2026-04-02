@@ -144,9 +144,9 @@ const DEFAULT_SAB_PHASES = [
           {
             id: 13, title: 'Share Your SAB™ Experience',
             owner: 'client', isFinal: true,
-            desc: 'You\'ve just completed one of the most thorough pre-construction processes in the industry. Your story helps other families understand why planning properly makes all the difference.',
+            desc: 'You\'ve completed one of the most thorough pre-construction processes in the industry. Your story helps other families find the right path.',
             complete: false,
-            items: ['Review request acknowledged','Feedback shared with Six Arrows team']
+            items: []
           }
         ]
       }
