@@ -448,7 +448,7 @@ function sabLayout() {
     <div class="countdown-block" style="margin-bottom:1rem">
       <div class="cd-inner">
         <div class="cd-eyebrow">Groundbreaking Countdown</div>
-        <div class="cd-headline" id="cd-headline">${hasGB ? 'Days Until We Break Ground' : 'Set your target groundbreaking date'}</div>
+        <div class="cd-headline" id="cd-headline">${hasGB ? 'Days Until We Break Ground' : 'Groundbreaking Date TBD'}</div>
         <div class="cd-digits">
           <div class="cd-unit"><span class="cd-num" id="cd-d">—</span><span class="cd-lbl">Days</span></div>
           <span class="cd-sep">:</span>
@@ -459,8 +459,9 @@ function sabLayout() {
           <div class="cd-unit"><span class="cd-num" id="cd-s">—</span><span class="cd-lbl">Sec</span></div>
         </div>
         <div class="cd-foot">
-          <span class="cd-foot-lbl">Target:</span>
-          <input type="date" class="cd-date-input" id="gb-input" value="${p.groundbreakingDate||''}">
+          ${hasGB
+            ? `<span class="cd-foot-lbl">Target:</span><span style="font-size:12px;color:rgba(235,233,222,.55)">${new Date(p.groundbreakingDate+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</span>`
+            : `<span style="font-size:11px;color:rgba(235,233,222,.35)">Date to be confirmed by Six Arrows</span>`}
         </div>
       </div>
     </div>
@@ -678,17 +679,7 @@ if (isConstruction) {
   tick();
   setInterval(tick, 1000);
 
-  // SAB: groundbreaking date input
-  if (isSAB) {
-    const gbInput = document.getElementById('gb-input');
-    if (gbInput) {
-      gbInput.addEventListener('change', function() {
-        targetDate = parseDate(this.value);
-        p.groundbreakingDate = this.value;
-        tick();
-      });
-    }
-  }
+  // SAB: groundbreaking date is set by admin only — no client input
 
   // Construction: days remaining in cb-foot
   if (isConstruction && targetDate) {

@@ -880,6 +880,10 @@ function renderProjectView(p) {
           </div>
         </div>
         <div class="adm-field" style="margin-top:8px">
+          <label>Groundbreaking date <span style="font-size:10px;font-weight:400;color:var(--charcoal-4)">(shown on client countdown — set by admin only)</span></label>
+          <input class="adm-inp" id="pi-gbDate" type="date" value="${p.groundbreakingDate||''}">
+        </div>
+        <div class="adm-field" style="margin-top:8px">
           <label>Budget Google Sheet URL <span style="font-size:10px;font-weight:400;color:var(--charcoal-4)">(shown as "View Budget Sheet →" link on client budget page)</span></label>
           <input class="adm-inp" id="pi-budgetLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." value="${p.links?.budget||''}">
         </div>
@@ -889,19 +893,34 @@ function renderProjectView(p) {
         </div>
       </div>
       <div style="border-top:0.5px solid var(--border);padding-top:12px;margin-top:4px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:8px">Project Lead Contact</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:8px">Customer Experience Contact <span style="font-weight:400;color:var(--charcoal-4)">(primary)</span></div>
         <div class="adm-grid2">
           <div class="adm-field">
             <label>Name</label>
-            <input class="adm-inp" id="pi-teamLead" type="text" value="${p.teamLead||'Cole Borders'}">
+            <input class="adm-inp" id="pi-cxName" type="text" value="${p.cxName||'Cole Borders'}">
           </div>
           <div class="adm-field">
             <label>Phone</label>
-            <input class="adm-inp" id="pi-teamPhone" type="text" value="${p.teamPhone||'(270) 782-5388'}">
+            <input class="adm-inp" id="pi-cxPhone" type="text" value="${p.cxPhone||'(270) 782-5388'}">
           </div>
           <div class="adm-field" style="grid-column:span 2">
             <label>Email</label>
-            <input class="adm-inp" id="pi-teamEmail" type="email" value="${p.teamEmail||'cole@sixarrowsconstruction.com'}">
+            <input class="adm-inp" id="pi-cxEmail" type="email" value="${p.cxEmail||'cole@sixarrowsconstruction.com'}">
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:8px;margin-top:12px">Project Manager</div>
+        <div class="adm-grid2">
+          <div class="adm-field">
+            <label>Name</label>
+            <input class="adm-inp" id="pi-pmName" type="text" value="${p.pmName||''}">
+          </div>
+          <div class="adm-field">
+            <label>Phone</label>
+            <input class="adm-inp" id="pi-pmPhone" type="text" value="${p.pmPhone||''}">
+          </div>
+          <div class="adm-field" style="grid-column:span 2">
+            <label>Email</label>
+            <input class="adm-inp" id="pi-pmEmail" type="email" value="${p.pmEmail||''}">
           </div>
         </div>
       </div>
@@ -945,26 +964,33 @@ function saveProjectInfo(projectId) {
   p.statusType      = document.getElementById('pi-statusType')?.value         || p.statusType;
   p.phaseLabel      = document.getElementById('pi-phaseLabel')?.value.trim()  || p.phaseLabel;
   p.constructionPct = parseInt(document.getElementById('pi-conPct')?.value)   || 0;
-  p.timelineStart   = document.getElementById('pi-tlStart')?.value.trim()     || p.timelineStart;
-  p.timelineTarget  = document.getElementById('pi-tlTarget')?.value.trim()    || p.timelineTarget;
+  p.timelineStart      = document.getElementById('pi-tlStart')?.value.trim()  || p.timelineStart;
+  p.timelineTarget     = document.getElementById('pi-tlTarget')?.value.trim() || p.timelineTarget;
+  p.groundbreakingDate = document.getElementById('pi-gbDate')?.value           || p.groundbreakingDate || '';
+  if (PROJECTS[projectId]) PROJECTS[projectId].groundbreakingDate = p.groundbreakingDate;
   const budgetLink = document.getElementById('pi-budgetLink')?.value.trim() || '';
   const notionId   = document.getElementById('pi-notionId')?.value.trim()   || '';
-  const teamLead   = document.getElementById('pi-teamLead')?.value.trim()   || p.teamLead;
-  const teamPhone  = document.getElementById('pi-teamPhone')?.value.trim()  || p.teamPhone;
-  const teamEmail  = document.getElementById('pi-teamEmail')?.value.trim()  || p.teamEmail;
+  const cxName  = document.getElementById('pi-cxName')?.value.trim()  || p.cxName  || 'Cole Borders';
+  const cxPhone = document.getElementById('pi-cxPhone')?.value.trim() || p.cxPhone || '(270) 782-5388';
+  const cxEmail = document.getElementById('pi-cxEmail')?.value.trim() || p.cxEmail || 'cole@sixarrowsconstruction.com';
+  const pmName  = document.getElementById('pi-pmName')?.value.trim()  || p.pmName  || '';
+  const pmPhone = document.getElementById('pi-pmPhone')?.value.trim() || p.pmPhone || '';
+  const pmEmail = document.getElementById('pi-pmEmail')?.value.trim() || p.pmEmail || '';
+  // Keep legacy teamLead for backwards compat
+  const teamLead  = cxName; const teamPhone = cxPhone; const teamEmail = cxEmail;
   if (!p.links) p.links = {};
   p.links.budget = budgetLink;
   p.notionTrackerPageId = notionId || p.notionTrackerPageId;
-  p.teamLead  = teamLead;
-  p.teamPhone = teamPhone;
-  p.teamEmail = teamEmail;
+  p.cxName = cxName; p.cxPhone = cxPhone; p.cxEmail = cxEmail;
+  p.pmName = pmName; p.pmPhone = pmPhone; p.pmEmail = pmEmail;
+  p.teamLead = cxName; p.teamPhone = cxPhone; p.teamEmail = cxEmail;
   if (PROJECTS[projectId]) {
     if (!PROJECTS[projectId].links) PROJECTS[projectId].links = {};
     PROJECTS[projectId].links.budget = budgetLink;
     PROJECTS[projectId].notionTrackerPageId = p.notionTrackerPageId;
-    PROJECTS[projectId].teamLead  = teamLead;
-    PROJECTS[projectId].teamPhone = teamPhone;
-    PROJECTS[projectId].teamEmail = teamEmail;
+    PROJECTS[projectId].cxName  = cxName;  PROJECTS[projectId].cxPhone = cxPhone;  PROJECTS[projectId].cxEmail = cxEmail;
+    PROJECTS[projectId].pmName  = pmName;  PROJECTS[projectId].pmPhone = pmPhone;  PROJECTS[projectId].pmEmail = pmEmail;
+    PROJECTS[projectId].teamLead = cxName; PROJECTS[projectId].teamPhone = cxPhone; PROJECTS[projectId].teamEmail = cxEmail;
   }
   // Persist to localStorage override
   adminSet(projectId, 'projectOverride', { clientName:p.clientName, projectName:p.projectName, location:p.location, statusType:p.statusType, phaseLabel:p.phaseLabel, constructionPct:p.constructionPct, timelineStart:p.timelineStart, timelineTarget:p.timelineTarget, budgetLink, notionTrackerPageId: p.notionTrackerPageId });
@@ -993,7 +1019,10 @@ function saveProjectInfo(projectId) {
       timeline_start: p.timelineStart, timeline_target: p.timelineTarget,
       notion_tracker_page_id: p.notionTrackerPageId,
       budget_link: budgetLink,
-      team_lead: teamLead, team_phone: teamPhone, team_email: teamEmail,
+      team_lead: cxName, team_phone: cxPhone, team_email: cxEmail,
+      cx_name: cxName, cx_phone: cxPhone, cx_email: cxEmail,
+      pm_name: pmName, pm_phone: pmPhone, pm_email: pmEmail,
+      groundbreaking_date: p.groundbreakingDate || null,
     }),
   }).catch(() => {});
   showMsg('pi-msg','success','Saved ✓');

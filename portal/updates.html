@@ -82,13 +82,26 @@ if (p) {
           }
         </div>
         <div class="card">
-          <div class="sh"><div class="sh-title">Your Project Lead</div></div>
-          <div style="display:flex;align-items:center;gap:11px;margin-bottom:13px">
-            <div style="width:42px;height:42px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:var(--green-deep);flex-shrink:0">${p.teamLead.split(' ').map(n=>n[0]).join('')}</div>
-            <div><div style="font-size:14px;font-weight:600;color:var(--charcoal)">${p.teamLead}</div><div style="font-size:12px;color:var(--charcoal-3)">Six Arrows Construction</div></div>
+          <div class="sh"><div class="sh-title">Your Project Team</div></div>
+          <!-- Customer Experience (primary) -->
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--green-dk);margin-bottom:7px">Customer Experience</div>
+          <div style="display:flex;align-items:center;gap:11px;margin-bottom:10px">
+            <div style="width:38px;height:38px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--green-deep);flex-shrink:0">${(p.cxName||p.teamLead||'').split(' ').map(n=>n[0]).join('')}</div>
+            <div><div style="font-size:13px;font-weight:600;color:var(--charcoal)">${p.cxName||p.teamLead||'Cole Borders'}</div><div style="font-size:11px;color:var(--charcoal-3)">Six Arrows Construction</div></div>
           </div>
-          <div class="mrow"><span class="lbl">Phone</span><span class="val" style="font-size:12px">${p.teamPhone}</span></div>
-          <div class="mrow" style="border:none"><span class="lbl">Email</span><span class="val" style="font-size:12px">${p.teamEmail}</span></div>
+          <div class="mrow"><span class="lbl">Phone</span><a href="tel:${p.cxPhone||p.teamPhone}" class="val" style="font-size:12px;color:var(--charcoal);text-decoration:none">${p.cxPhone||p.teamPhone}</a></div>
+          <div class="mrow" style="${p.pmName?'':'border:none'}"><span class="lbl">Email</span><a href="mailto:${p.cxEmail||p.teamEmail}" class="val" style="font-size:12px;color:var(--charcoal);text-decoration:none">${p.cxEmail||p.teamEmail}</a></div>
+          ${p.pmName ? `
+          <!-- Project Manager -->
+          <div style="border-top:0.5px solid var(--border);padding-top:10px;margin-top:6px">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--charcoal-4);margin-bottom:7px">Project Manager</div>
+            <div style="display:flex;align-items:center;gap:11px;margin-bottom:10px">
+              <div style="width:38px;height:38px;border-radius:50%;background:var(--cream-2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--charcoal-3);flex-shrink:0">${p.pmName.split(' ').map(n=>n[0]).join('')}</div>
+              <div><div style="font-size:13px;font-weight:600;color:var(--charcoal)">${p.pmName}</div><div style="font-size:11px;color:var(--charcoal-3)">Six Arrows Construction</div></div>
+            </div>
+            ${p.pmPhone?`<div class="mrow"><span class="lbl">Phone</span><a href="tel:${p.pmPhone}" class="val" style="font-size:12px;color:var(--charcoal);text-decoration:none">${p.pmPhone}</a></div>`:''}
+            ${p.pmEmail?`<div class="mrow" style="border:none"><span class="lbl">Email</span><a href="mailto:${p.pmEmail}" class="val" style="font-size:12px;color:var(--charcoal);text-decoration:none">${p.pmEmail}</a></div>`:''}
+          </div>` : ''}
         </div>
       </div>
     </div>
