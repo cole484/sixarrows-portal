@@ -644,6 +644,9 @@ const AUTH = {
       selectionsClientKey:  d.selections_client_key || d.id,
       notionTrackerPageId:  d.notion_tracker_page_id || null,
       notionTimelineDbId:   d.notion_timeline_db_id || null,
+      reviewDraft:          d.review_draft || '',
+      reviewLeft:           !!d.review_left,
+      showReviewCard:       !!d.show_review_card,
       links: {
         // budget_link comes from Supabase clients table
         budget: d.budget_link || (() => {

@@ -9,13 +9,14 @@ const LOGO_STACKED = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABDkAAAQ5CAYA
 
 // ─── Nav definitions ───────────────────────────
 const NAV = [
-  { key:'overview',   label:'Command Center',  file:'dashboard.html'  },
-  { key:'tracker',    label:'SAB™ Tracker',    file:'tracker.html'    },
-  { key:'budget',     label:'Budget',          file:'budget.html'     },
-  { key:'timeline',   label:'Timeline',        file:'timeline.html'   },
-  { key:'selections', label:'Selections',      file:'selections.html' },
-  { key:'documents',  label:'Documents',       file:'documents.html'  },
-  { key:'updates',    label:'Updates',         file:'updates.html'    },
+  { key:'overview',   label:'Command Center',        file:'dashboard.html'  },
+  { key:'tracker',    label:'SAB™ Tracker',          file:'tracker.html'    },
+  { key:'budget',     label:'Budget',                file:'budget.html'     },
+  { key:'timeline',   label:'Timeline',              file:'timeline.html'   },
+  { key:'selections', label:'Selections',            file:'selections.html' },
+  { key:'documents',  label:'Documents',             file:'documents.html'  },
+  { key:'updates',    label:'Updates',               file:'updates.html'    },
+  { key:'share',      label:'Share Your Experience', file:'share.html', sabOnly:true },
 ];
 
 const NAV_SVGS = {
@@ -26,6 +27,7 @@ const NAV_SVGS = {
   selections: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 3.5l2 2 2.5-2.5"/><line x1="7" y1="4.5" x2="13" y2="4.5"/><path d="M1 9l2 2 2.5-2.5"/><line x1="7" y1="10" x2="13" y2="10"/></svg>`,
   documents:  `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 1h5.5L11 3.5V13H3V1z"/><polyline points="8.5,1 8.5,4 11,4"/><line x1="5" y1="6.5" x2="9" y2="6.5"/><line x1="5" y1="9" x2="9" y2="9"/></svg>`,
   updates:    `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 10V3a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H4L1 12V10z"/></svg>`,
+  share:      `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="2.5" r="1.5"/><circle cx="11" cy="11.5" r="1.5"/><circle cx="3" cy="7" r="1.5"/><line x1="4.5" y1="6.2" x2="9.5" y2="3.3"/><line x1="4.5" y1="7.8" x2="9.5" y2="10.7"/></svg>`,
 };
 
 // ─── SAB helpers ───────────────────────────────
@@ -74,7 +76,7 @@ function buildSidebar(p, activeKey, TS) {
     </div>`;
   }).join('');
 
-  const navLinks = NAV.map(n => {
+  const navLinks = NAV.filter(n => !(n.sabOnly && p.statusType !== 'sab')).map(n => {
     const active = n.key === activeKey;
     const badge = n.key === 'updates' && p.updates?.length
       ? `<span class="sb-nav-badge">${p.updates.length}</span>` : '';

@@ -246,6 +246,9 @@ async function loadAllClientsFromSupabase() {
         notionTrackerPageId: client.notion_tracker_page_id || null,
         selectionsClientKey: client.selections_client_key || id,
         links:               { budget: client.budget_link || (existing.links?.budget || '#'), timeline: '#' },
+        reviewDraft:         client.review_draft || '',
+        reviewLeft:          !!client.review_left,
+        showReviewCard:      !!client.show_review_card,
         budgetCategories:    budgetCats,
         updates:             updates.length ? updates : (existing.updates || []),
         timeline:            timeline.length ? timeline : (existing.timeline || []),
@@ -953,6 +956,32 @@ function renderProjectView(p) {
       </div>
       <button class="adm-btn adm-btn-green" onclick="saveSummary('${p.id}')">Save</button>
       <span id="pi-sum-msg" class="adm-msg success" style="margin-left:10px"></span>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="sh">
+        <div class="sh-title">Review Draft <span style="font-size:10px;font-weight:400;color:var(--charcoal-4)">(SAB final step)</span></div>
+        ${p.reviewLeft ? `<span class="tag ok" style="font-size:10px">✓ Review left</span>` : `<span class="tag neutral" style="font-size:10px">Pending</span>`}
+      </div>
+      <p style="font-size:12px;color:var(--charcoal-4);line-height:1.55;margin-bottom:10px">
+        Write a custom review for this client — personalize it with their lot, design details, or a specific moment from the process. They'll see it on the Share Your Experience page, can copy it, and paste it into Google.
+      </p>
+      <div class="adm-field">
+        <label>Review draft <span style="font-weight:400;color:var(--charcoal-4)">(client will see this and can copy it)</span></label>
+        <textarea class="adm-inp adm-textarea" id="pi-reviewDraft" style="min-height:130px">${p.reviewDraft||''}</textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px">
+        <button class="adm-btn adm-btn-green" onclick="saveReviewDraft('${p.id}')">Save Draft</button>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--charcoal-3);cursor:pointer">
+          <input type="checkbox" id="pi-showReviewCard" ${p.showReviewCard?'checked':''} onchange="saveShowReviewCard('${p.id}', this.checked)" style="cursor:pointer">
+          Show review card on dashboard
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--charcoal-3);cursor:pointer">
+          <input type="checkbox" id="pi-reviewLeft" ${p.reviewLeft?'checked':''} onchange="saveReviewLeft('${p.id}', this.checked)" style="cursor:pointer">
+          Mark as review left (hides card)
+        </label>
+        <span id="pi-review-msg" class="adm-msg success" style="margin-left:0"></span>
+      </div>
     </div>`;
 }
 
@@ -1040,6 +1069,40 @@ function saveSummary(projectId) {
   p.quickSummary = document.getElementById('pi-summary')?.value.trim() || p.quickSummary;
   adminSet(projectId, 'quickSummary', p.quickSummary);
   showMsg('pi-sum-msg','success','Saved ✓');
+}
+
+function saveReviewDraft(projectId) {
+  const p = PROJECTS[projectId];
+  const draft = document.getElementById('pi-reviewDraft')?.value.trim() || '';
+  p.reviewDraft = draft;
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+    method: 'PATCH', headers: sbH,
+    body: JSON.stringify({ review_draft: draft }),
+  }).then(() => showMsg('pi-review-msg','success','Draft saved ✓'))
+    .catch(() => showMsg('pi-review-msg','success','Saved locally ✓'));
+}
+
+function saveReviewLeft(projectId, checked) {
+  const p = PROJECTS[projectId];
+  p.reviewLeft = checked;
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+    method: 'PATCH', headers: sbH,
+    body: JSON.stringify({ review_left: checked }),
+  }).then(() => showMsg('pi-review-msg','success', checked ? 'Marked as reviewed ✓' : 'Cleared ✓'))
+    .catch(() => {});
+}
+
+function saveShowReviewCard(projectId, checked) {
+  const p = PROJECTS[projectId];
+  p.showReviewCard = checked;
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+    method: 'PATCH', headers: sbH,
+    body: JSON.stringify({ show_review_card: checked }),
+  }).then(() => showMsg('pi-review-msg','success', checked ? 'Review card enabled ✓' : 'Review card hidden ✓'))
+    .catch(() => {});
 }
 
 // ════════════════════════════════════════════════════════
