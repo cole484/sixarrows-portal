@@ -84,7 +84,6 @@ function buildSidebar(p, activeKey, TS) {
       </div>
     </div>`;
   }).join('');
-  }).join('');
 
   const navLinks = NAV.filter(n => !(n.sabOnly && p.statusType !== 'sab')).map(n => {
     const active = n.key === activeKey;
