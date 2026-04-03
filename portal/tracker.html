@@ -901,7 +901,18 @@ mountLayout('tracker','SAB™ Tracker',`
   <div id="step-list"></div>
 `,TS);
 
-rerender();
+// For remodel clients with no cached dynamic data yet, show a loading state
+// until the async Notion fetch in loadState() completes and calls rerender()
+if (p.projectType === 'remodel' && !notionDynamicData) {
+  document.getElementById('step-list').innerHTML = `
+    <div style="padding:2rem;text-align:center">
+      <div style="font-size:13px;color:var(--charcoal-4);margin-bottom:8px">Loading your project tracker…</div>
+      <div style="font-size:11px;color:var(--charcoal-4);opacity:.6">Syncing with Notion</div>
+    </div>`;
+  document.getElementById('phase-tabs').innerHTML = '';
+} else {
+  rerender();
+}
 </script>
 </body>
 </html>
