@@ -390,7 +390,7 @@ function renderYAH() {
     const topDone  = activeStep.items.filter(it => it.depth <= 1 && it.checked).length;
     const topTotal = activeStep.items.filter(it => it.depth <= 1).length;
     el.innerHTML = `<div class="yah-banner"><div class="yah-inner"><div class="yah-left">
-      <div class="yah-eyebrow">You Are Here · Phase ${activePi+1}, Step ${activeSi+1}</div>
+      <div class="yah-eyebrow">You Are Here · Phase ${activePi+1}, Step ${activeStep.notionNum || (activeStep.globalIndex + 1)}</div>
       <div class="yah-step">${activeStep.title}</div>
       <div class="yah-desc">${activePhase.goal || ''}</div>
       <div class="yah-who" style="margin-top:8px">
@@ -548,10 +548,10 @@ function renderDynamicSteps(dynData) {
         <div class="step-num ${done ? 'complete' : doneItems > 0 ? 'progress' : 'pending'}">
           ${done
             ? `<svg viewBox="0 0 12 12"><path d="M2 6l2.8 3 5.2-5.5" stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`
-            : step.index + 1}
+            : (step.notionNum || step.globalIndex + 1)}
         </div>
         <div class="step-meta">
-          <div class="step-name">Step ${si + 1}: ${step.title}</div>
+          <div class="step-name">Step ${step.notionNum || (step.globalIndex + 1)}: ${step.title}</div>
           <div class="step-inforow">
             <span class="step-cnt">${done ? 'Complete' : `${doneItems} of ${total} complete`}</span>
             <span class="owner-badge both">

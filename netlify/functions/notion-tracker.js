@@ -116,6 +116,7 @@ function parseDynamicStructure(allItems) {
   const phases = [];
   let currentPhase = null;
   let currentStep  = null;
+  let globalStepIndex = 0; // tracks step number across all phases
 
   for (const item of allItems) {
     // H2 = new phase
@@ -148,10 +149,12 @@ function parseDynamicStructure(allItems) {
       const match = item.text.match(/Step\s+(\d+)\s*:\s*(.+)/i);
       if (match) {
         currentStep = {
-          index:     currentPhase.steps.length,
+          index:       currentPhase.steps.length,  // position within phase (0-based)
+          globalIndex: globalStepIndex++,           // position across all phases (0-based)
+          notionNum:   parseInt(match[1]),          // step number as written in Notion
           globalIdx: allItems.indexOf(item),
           title:     match[2].trim(),
-          items:     [],   // { text, checked, depth }
+          items:     [],
           complete:  false,
           isFinal:   false,
         };
