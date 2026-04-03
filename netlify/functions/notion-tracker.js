@@ -201,7 +201,8 @@ function computePhaseState(stepStates) {
   const phases = [
     { steps: [0,1,2,3], label: 'Design & Architecture', milestoneDesc: 'Complete buildable drawings ready for selections.' },
     { steps: [4,5,6,7], label: 'Selections & Specifications', milestoneDesc: 'All finishes and specifications chosen before construction.' },
-    { steps: [8,9,10,11,12,13], label: 'Budget, Timeline & Build-Ready', milestoneDesc: 'Full budget approved, timeline set, ready to break ground.' },
+    { steps: [8,9,10,11,12], label: 'Budget, Timeline & Build-Ready', milestoneDesc: 'Full budget approved, timeline set, ready to break ground.' },
+    // Note: step index 13 (isFinal "Share Your SAB") is excluded — it does not block phase completion
   ];
 
   return phases.map((ph, pi) => {

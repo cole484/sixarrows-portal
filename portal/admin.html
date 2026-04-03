@@ -1052,6 +1052,8 @@ function saveProjectInfo(projectId) {
       cx_name: cxName, cx_phone: cxPhone, cx_email: cxEmail,
       pm_name: pmName, pm_phone: pmPhone, pm_email: pmEmail,
       groundbreaking_date: p.groundbreakingDate || null,
+      show_review_card: !!p.showReviewCard,
+      review_left: !!p.reviewLeft,
     }),
   }).catch(() => {});
   showMsg('pi-msg','success','Saved ✓');
@@ -1101,8 +1103,18 @@ function saveShowReviewCard(projectId, checked) {
   fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
     method: 'PATCH', headers: sbH,
     body: JSON.stringify({ show_review_card: checked }),
-  }).then(() => showMsg('pi-review-msg','success', checked ? 'Review card enabled ✓' : 'Review card hidden ✓'))
-    .catch(() => {});
+  }).then(async res => {
+    if (res.ok) {
+      showMsg('pi-review-msg','success', checked ? 'Review card enabled ✓' : 'Review card hidden ✓');
+    } else {
+      const err = await res.text();
+      console.error('saveShowReviewCard PATCH failed:', res.status, err);
+      showMsg('pi-review-msg','error', `Save failed: ${res.status} — run add-review-fields.sql in Supabase`);
+    }
+  }).catch(err => {
+    console.error('saveShowReviewCard error:', err);
+    showMsg('pi-review-msg','error','Network error — check console');
+  });
 }
 
 // ════════════════════════════════════════════════════════

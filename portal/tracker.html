@@ -163,6 +163,9 @@ async function loadState() {
     });
   }));
 
+  // Update badges from local TS immediately (before Notion sync)
+  updateBadges(null);
+
   // Restore last active tab
   try { const t = localStorage.getItem(SK+'tab_'+p.id); if (t !== null) activeTab = parseInt(t); } catch(e) {}
 
@@ -206,18 +209,22 @@ function saveState() { try { localStorage.setItem(SK+p.id, JSON.stringify(TS)); 
 
 function updateBadges(notionData) {
   if (!p.badges) return;
-  const readiness = notionData?.readiness || 0;
-  const phases    = notionData?.phases    || [];
+  // Derive from local TS first (always available), supplement with Notion readiness
+  const readiness = notionData?.readiness ?? buildReadinessPct(p, TS);
+  // phase done = all non-isFinal steps checked in TS
+  const ph0Done = p.sabPhases[0]?.steps.every((_,si) => isStepDone(0,si));
+  const ph1Done = p.sabPhases[1]?.steps.every((_,si) => isStepDone(1,si));
+  const ph2Done = p.sabPhases[2]?.steps.every((_,si) => isStepDone(2,si));
   // first_step — any item checked
   if (readiness > 0) earnBadge('first_step');
   // halfway — 50%+ readiness
   if (readiness >= 50) earnBadge('halfway');
   // phase1 — Plan Ready (phase 0 complete)
-  if (phases[0]?.complete) earnBadge('phase1');
+  if (ph0Done) earnBadge('phase1');
   // phase2 — Design Locked (phase 1 complete)
-  if (phases[1]?.complete) earnBadge('phase2');
+  if (ph1Done) earnBadge('phase2');
   // phase3 — Build Ready (phase 2 complete)
-  if (phases[2]?.complete) earnBadge('phase3');
+  if (ph2Done) earnBadge('phase3');
 }
 function earnBadge(id) {
   const b = (p.badges||[]).find(b => b.id === id);
@@ -227,7 +234,13 @@ function earnBadge(id) {
 // ── Derived ────────────────────────────────────────────
 function stChecked(pi,si) { return getStepAllItems(p.sabPhases[pi].steps[si]).filter((_,ii)=>TS[`${pi}-${si}-${ii}`]).length; }
 function stTotal(pi,si)   { return getStepAllItems(p.sabPhases[pi].steps[si]).length; }
-function isStepDone(pi,si){ const t=stTotal(pi,si); return t===0?p.sabPhases[pi].steps[si].complete:stChecked(pi,si)===t; }
+function isStepDone(pi,si){ 
+  const step = p.sabPhases[pi]?.steps[si];
+  if (!step) return false;
+  if (step.isFinal) return true; // isFinal steps don't block phase completion
+  const t=stTotal(pi,si); 
+  return t===0 ? step.complete : stChecked(pi,si)===t; 
+}
 function isPhaseDone(pi)  { const ph=p.sabPhases[pi]; if(!ph.steps.length)return ph.complete; return ph.steps.every((_,si)=>isStepDone(pi,si)); }
 
 // ── Find active step across all phases ─────────────────
@@ -248,6 +261,9 @@ const _shownModal = {};
 
 // ── Render ─────────────────────────────────────────────
 function rerender() {
+  // Always re-evaluate badges from current TS before rendering
+  updateBadges(null);
+
   const pct     = buildReadinessPct(p,TS);
   const total   = sabTotalItems(p);
   const checked = sabCheckedItems(p,TS);
@@ -641,7 +657,9 @@ function toggle(key,pi,si) {
     const ph = p.sabPhases[pi];
     setTimeout(()=>showMilestoneModal('Phase '+(pi+1)+' Complete',ph.milestoneDesc,ph.milestone),450);
   }
-  saveState(); rerender();
+  saveState();
+  updateBadges(null);
+  rerender();
 }
 
 // ── Boot ───────────────────────────────────────────────

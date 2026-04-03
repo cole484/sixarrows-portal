@@ -64,8 +64,8 @@ function buildSidebar(p, activeKey, TS) {
 
   // Pre-compute per-phase done state from TS so active logic is correct
   const phaseDone = p.sabPhases.map((ph, pi) =>
-    ph.complete || (ph.steps.length > 0 && ph.steps.every((_,si) =>
-      getStepAllItems(ph.steps[si]).every((_,ii) => TS[`${pi}-${si}-${ii}`])
+    ph.complete || (ph.steps.length > 0 && ph.steps.every((st, si) =>
+      st.isFinal ? true : getStepAllItems(st).every((_,ii) => TS[`${pi}-${si}-${ii}`])
     ))
   );
 

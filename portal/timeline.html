@@ -154,6 +154,7 @@ try { const r = localStorage.getItem('sa_tracker_v3_' + p.id); if (r) TS = JSON.
 function isStepDone(pi, si) {
   const step = p.sabPhases[pi]?.steps[si];
   if (!step) return false;
+  if (step.isFinal) return true; // isFinal steps don't block phase completion
   const items = getStepAllItems(step);
   if (items.length === 0) return !!step.complete;
   return items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
