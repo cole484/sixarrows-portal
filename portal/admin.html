@@ -138,8 +138,8 @@ const ADMIN_PASS = 'sa_admin_2026';
 const SUPABASE_DIRECT_URL = 'https://mtvcahscwpralmlqlnzg.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10dmNhaHNjd3ByYWxtbHFsbnpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTY4ODEsImV4cCI6MjA5MDM5Mjg4MX0.givpTh-YxG16vYZmn0KLBCPG0ivxYbjh-i8Q87eCNnk';
 let adminAuthed  = false;
-let activeProject = Object.keys(PROJECTS)[0];
-let activeView    = 'tracker';
+let activeProject = sessionStorage.getItem('sa_admin_project') || Object.keys(PROJECTS)[0];
+let activeView    = sessionStorage.getItem('sa_admin_view')    || 'tracker';
 
 // ── Storage helpers ──────────────────────────────────────
 function adminKey(projectId, suffix) { return `sa_admin_${projectId}_${suffix}`; }
@@ -163,6 +163,11 @@ async function checkAdminAuth() {
   if (sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS) {
     adminAuthed = true;
     await loadAllClientsFromSupabase();
+    // Validate stored project still exists, else fall back to first
+    if (!PROJECTS[activeProject]) {
+      activeProject = Object.keys(PROJECTS)[0];
+      sessionStorage.setItem('sa_admin_project', activeProject);
+    }
     renderAdmin();
     return;
   }
@@ -328,18 +333,18 @@ function renderAdmin() {
     { key:'selections',icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3.5l2 2 2.5-2.5"/><line x1="7" y1="4.5" x2="13" y2="4.5"/><path d="M1 9l2 2 2.5-2.5"/><line x1="7" y1="10" x2="13" y2="10"/></svg>`, label:'Selections'       },
     { key:'documents', icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1h5.5L11 3.5V13H3V1z"/><polyline points="8.5,1 8.5,4 11,4"/></svg>`, label:'Documents'       },
     { key:'photos',    icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="1"/><circle cx="5" cy="6" r="1.5"/><path d="M1 11l3-3 2.5 2.5L10 7l3 4"/></svg>`, label:'Build Photos'    },
-  ].map(n => `<div class="admin-nav-link ${activeView===n.key?'active':''}" onclick="activeView='${n.key}';renderAdmin()">${n.icon}${n.label}</div>`).join('');
+  ].map(n => `<div class="admin-nav-link ${activeView===n.key?'active':''}" onclick="activeView='${n.key}';sessionStorage.setItem('sa_admin_view','${n.key}');renderAdmin()">${n.icon}${n.label}</div>`).join('');
 
   const projectSelect = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
       <div style="flex:1;min-width:200px">
-        <select class="adm-inp adm-sel" style="font-weight:600" onchange="activeProject=this.value;renderAdmin()">
+        <select class="adm-inp adm-sel" style="font-weight:600" onchange="activeProject=this.value;sessionStorage.setItem('sa_admin_project',this.value);renderAdmin()">
           ${Object.values(PROJECTS).map(proj =>
             `<option value="${proj.id}" ${proj.id===activeProject?'selected':''}>${proj.clientName} — ${proj.projectName}</option>`
           ).join('')}
         </select>
       </div>
-      <button class="adm-btn adm-btn-ghost" onclick="activeView='addclient';renderAdmin()" style="white-space:nowrap">
+      <button class="adm-btn adm-btn-ghost" onclick="activeView='addclient';sessionStorage.setItem('sa_admin_view','addclient');renderAdmin()" style="white-space:nowrap">
         <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
         Add Client
       </button>
@@ -403,7 +408,7 @@ function renderAdmin() {
           <div class="admin-nav-title">Manage</div>
           ${nav}
           <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 0"></div>
-          <div class="admin-nav-link ${activeView==='addclient'?'active':''}" onclick="activeView='addclient';renderAdmin()">
+          <div class="admin-nav-link ${activeView==='addclient'?'active':''}" onclick="activeView='addclient';sessionStorage.setItem('sa_admin_view','addclient');renderAdmin()">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" style="width:13px;height:13px;opacity:.6"><circle cx="7" cy="4" r="2.5"/><path d="M1 12c0-3 2.7-5 6-5s6 2 6 5"/><line x1="10.5" y1="2" x2="10.5" y2="6"/><line x1="8.5" y1="4" x2="12.5" y2="4"/></svg>
             Add New Client
           </div>
