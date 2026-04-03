@@ -241,26 +241,49 @@ async function initDashboard() {
 // ── Load tracker state (Notion first, localStorage fallback) ─────
 let TS = {};
 try { const r = localStorage.getItem('sa_tracker_v3_' + p.id); if (r) TS = JSON.parse(r); } catch(e) {}
-let liveReadiness = buildReadinessPct(p, TS);
+
+// Load cached dynamic data for remodel clients
+let notionDynamic = null;
+if (p.projectType === 'remodel') {
+  try { const r = localStorage.getItem('sa_tracker_v3_dynamic_' + p.id); if (r) notionDynamic = JSON.parse(r); } catch(e) {}
+}
+
+let liveReadiness = p.projectType === 'remodel' && notionDynamic
+  ? notionDynamic.readiness
+  : buildReadinessPct(p, TS);
 
 // Async Notion sync — updates readiness % after initial render
 if (p.notionTrackerPageId) {
-  fetch(`/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}`)
+  const isRemodel = p.projectType === 'remodel';
+  const syncUrl   = isRemodel
+    ? `/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}&dynamic=1`
+    : `/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}`;
+  fetch(syncUrl)
     .then(r => r.ok ? r.json() : null)
     .then(data => {
-      if (!data?.steps) return;
-      p.sabPhases.forEach((ph,pi) => {
-        ph.steps.forEach((st,si) => {
-          const notionStep = data.steps[`${pi}-${si}`];
-          if (notionStep?.complete) {
-            getStepAllItems(st).forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = true; });
-          }
+      if (!data) return;
+      if (isRemodel && data.dynamic && data.phases) {
+        // Remodel: cache dynamic data and update readiness display
+        notionDynamic = data;
+        try { localStorage.setItem('sa_tracker_v3_dynamic_' + p.id, JSON.stringify(data)); } catch(e) {}
+        const newPct = data.readiness;
+        document.querySelectorAll('[data-readiness]').forEach(el => { el.textContent = newPct + '%'; });
+        document.querySelectorAll('[data-readiness-bar]').forEach(el => { el.style.width = newPct + '%'; });
+      } else if (!isRemodel && data.steps) {
+        // New build: update TS and readiness bars
+        p.sabPhases.forEach((ph,pi) => {
+          ph.steps.forEach((st,si) => {
+            const notionStep = data.steps[`${pi}-${si}`];
+            if (notionStep?.complete) {
+              getStepAllItems(st).forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = true; });
+            }
+          });
         });
-      });
-      try { localStorage.setItem('sa_tracker_v3_' + p.id, JSON.stringify(TS)); } catch(e) {}
-      const newPct = buildReadinessPct(p, TS);
-      document.querySelectorAll('[data-readiness]').forEach(el => { el.textContent = newPct + '%'; });
-      document.querySelectorAll('[data-readiness-bar]').forEach(el => { el.style.width = newPct + '%'; });
+        try { localStorage.setItem('sa_tracker_v3_' + p.id, JSON.stringify(TS)); } catch(e) {}
+        const newPct = buildReadinessPct(p, TS);
+        document.querySelectorAll('[data-readiness]').forEach(el => { el.textContent = newPct + '%'; });
+        document.querySelectorAll('[data-readiness-bar]').forEach(el => { el.style.width = newPct + '%'; });
+      }
     })
     .catch(() => {});
 }
@@ -318,24 +341,45 @@ const nextMilestone  = p.timeline.find(t => !t.done);
 // SAB PHASE LAYOUT
 // ────────────────────────────────────────────────────
 function sabLayout() {
-  const hasGB = !!p.groundbreakingDate;
+  const hasGB     = !!p.groundbreakingDate;
+  const isRemodel = p.projectType === 'remodel';
 
-  // ── Find active SAB step ──────────────────────────
+  // ── Find active step ──────────────────────────────
   let activeStep = null, activePhase = null;
-  for (let pi = 0; pi < p.sabPhases.length; pi++) {
-    const ph = p.sabPhases[pi];
-    for (let si = 0; si < ph.steps.length; si++) {
-      // Check if step is complete using tracker state
-      const items = getStepAllItems(ph.steps[si]);
-      const allDone = items.length === 0 ? ph.steps[si].complete
-        : items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
-      if (!allDone && !ph.steps[si].isFinal) {
-        activeStep  = ph.steps[si];
-        activePhase = pi;
-        break;
+  let activeStepTitle = '', activeStepDesc = '', activePhaseNum = 0;
+
+  if (isRemodel && notionDynamic?.phases) {
+    // Remodel: find first incomplete step from dynamic Notion data
+    outer: for (let pi = 0; pi < notionDynamic.phases.length; pi++) {
+      const ph = notionDynamic.phases[pi];
+      for (let si = 0; si < ph.steps.length; si++) {
+        if (!ph.steps[si].complete) {
+          activeStepTitle = ph.steps[si].title;
+          activeStepDesc  = ph.goal || '';
+          activePhaseNum  = pi + 1;
+          activeStep      = { title: activeStepTitle, desc: activeStepDesc, owner: 'both' };
+          activePhase     = pi;
+          break outer;
+        }
       }
     }
-    if (activeStep) break;
+  } else {
+    // New build: find active step from TS
+    for (let pi = 0; pi < p.sabPhases.length; pi++) {
+      const ph = p.sabPhases[pi];
+      for (let si = 0; si < ph.steps.length; si++) {
+        const items = getStepAllItems(ph.steps[si]);
+        const allDone = items.length === 0 ? ph.steps[si].complete
+          : items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
+        if (!allDone && !ph.steps[si].isFinal) {
+          activeStep  = ph.steps[si];
+          activePhase = pi;
+          activePhaseNum = pi + 1;
+          break;
+        }
+      }
+      if (activeStep) break;
+    }
   }
 
   // ── Budget completion (locked categories = finalized) ──
@@ -403,7 +447,7 @@ function sabLayout() {
     <!-- 1. Current SAB step — compact card matching module card size -->
     <div class="card dark" style="margin-bottom:1rem">
       <div class="mc-top">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--green)">You Are Here · Phase ${activePhase !== null ? activePhase + 1 : '—'}, Step ${activeStep ? activeStep.id + 1 : '—'}</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--green)">You Are Here · Phase ${activePhaseNum || '—'}, Step ${activeStep ? (activeStep.id !== undefined ? activeStep.id + 1 : '—') : '—'}</div>
         ${dueLine || ''}
       </div>
       <div style="font-size:15px;font-weight:700;color:var(--cream);line-height:1.2;margin:4px 0 5px">${activeStep?.title || 'All steps complete — Build Ready!'}</div>

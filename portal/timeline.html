@@ -156,13 +156,20 @@ async function initTimeline() {
     p.sabPhases = JSON.parse(JSON.stringify(DEFAULT_SAB_PHASES));
   }
 
-  const isSAB = p.statusType === 'sab';
+  const isSAB     = p.statusType === 'sab';
+  const isRemodel = p.projectType === 'remodel';
 
   // ── Load TS from localStorage ──
   let TS = {};
   try { const r = localStorage.getItem('sa_tracker_v3_' + p.id); if (r) TS = JSON.parse(r); } catch(e) {}
 
-  // ── Phase/step completion derived from TS ──────────────
+  // Load cached dynamic data for remodel clients
+  let notionDynamic = null;
+  if (isRemodel) {
+    try { const r = localStorage.getItem('sa_tracker_v3_dynamic_' + p.id); if (r) notionDynamic = JSON.parse(r); } catch(e) {}
+  }
+
+  // ── Phase/step completion derived from TS (new build only) ─
   function isStepDone(pi, si) {
     const step = p.sabPhases[pi]?.steps[si];
     if (!step) return false;
@@ -191,9 +198,15 @@ async function initTimeline() {
   // ── Notion sync ────────────────────────────────────────
   if (isSAB && p.notionTrackerPageId) {
     try {
-      const res  = await fetch(`/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}`);
+      const syncUrl = isRemodel
+        ? `/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}&dynamic=1`
+        : `/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}`;
+      const res  = await fetch(syncUrl);
       const data = res.ok ? await res.json() : null;
-      if (data?.steps) {
+      if (isRemodel && data?.dynamic && data?.phases) {
+        notionDynamic = data;
+        try { localStorage.setItem('sa_tracker_v3_dynamic_' + p.id, JSON.stringify(data)); } catch(e) {}
+      } else if (!isRemodel && data?.steps) {
         p.sabPhases.forEach((ph, pi) => {
           ph.steps.forEach((st, si) => {
             const notionStep = data.steps[`${pi}-${si}`];
@@ -209,9 +222,31 @@ async function initTimeline() {
 
   // ── Journey nodes ──────────────────────────────────────
   function buildJourneyNodes() {
-    const phaseNodes = p.sabPhases.map((ph, pi) => {
-      const done   = isPhaseDone(pi);
-      const active = isPhaseActive(pi);
+    // For remodel clients, use dynamic Notion data; for new builds use TS-derived state
+    const phases = isRemodel && notionDynamic?.phases
+      ? notionDynamic.phases.map((ph, pi) => ({
+          label:    ph.label,
+          goal:     ph.goal || ph.milestoneDesc || '',
+          done:     ph.complete,
+          active:   !ph.complete && (pi === 0 || notionDynamic.phases[pi-1]?.complete),
+          doneSteps:ph.steps.filter(s => s.complete).length,
+          totalSteps:ph.steps.filter(s => true).length,
+          currentStep: ph.steps.find(s => !s.complete)?.title || '',
+          milestoneDate: null,
+        }))
+      : p.sabPhases.map((ph, pi) => ({
+          label:     ph.label,
+          goal:      ph.goal || ph.milestoneDesc || '',
+          done:      isPhaseDone(pi),
+          active:    isPhaseActive(pi),
+          doneSteps: ph.steps.filter((_, si) => !ph.steps[si].isFinal && isStepDone(pi, si)).length,
+          totalSteps:ph.steps.filter(s => !s.isFinal).length,
+          currentStep: activeStepLabel(pi),
+          milestoneDate: ph.milestoneDate,
+        }));
+
+    const phaseNodes = phases.map((ph, pi) => {
+      const { done, active } = ph;
       const state  = done ? 'done' : active ? 'active' : 'future';
       const cardBg = done   ? 'background:var(--green-pale);border-color:rgba(117,127,105,.25)'
                    : active ? 'border-color:rgba(117,127,105,.4)'
@@ -227,9 +262,9 @@ async function initTimeline() {
         ? `<svg viewBox="0 0 8 8"><path d="M1 4l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`
         : active ? `<div class="journey-dot-inner"></div>` : '';
 
-      const totalSteps  = ph.steps.filter(s => !s.isFinal).length;
-      const doneSteps   = ph.steps.filter((s, si) => !s.isFinal && isStepDone(pi, si)).length;
-      const currentStep = active ? activeStepLabel(pi) : '';
+      const totalSteps  = ph.totalSteps;
+      const doneSteps   = ph.doneSteps;
+      const currentStep = ph.currentStep;
       const progressLine = active
         ? `<div style="font-size:11px;color:var(--charcoal-4);margin-bottom:7px">
              Step ${doneSteps + 1} of ${totalSteps} — <span style="color:var(--charcoal-3);font-weight:500">${currentStep}</span>
@@ -246,7 +281,7 @@ async function initTimeline() {
         <div class="card" style="${cardBg}">
           <div class="journey-card-eyebrow" style="${eyeColor}">Pre-Construction · Phase ${pi+1}</div>
           <div class="journey-card-title" style="${titleColor}">${ph.label}</div>
-          <div class="journey-card-desc">${ph.goal || ph.milestoneDesc || ''}</div>
+          <div class="journey-card-desc">${ph.goal || ''}</div>
           ${progressLine}
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             ${tag}
@@ -256,7 +291,7 @@ async function initTimeline() {
       </div>`;
     }).join('');
 
-    const allSABDone     = p.sabPhases.every((_, pi) => isPhaseDone(pi));
+    const allSABDone     = phases.every(ph => ph.done);
     const isConstruction = p.statusType === 'construction';
     const constructionDot = isConstruction ? 'active' : allSABDone ? 'active' : 'future';
     const constructionBg  = isConstruction ? 'border-color:rgba(117,127,105,.4)' : 'background:var(--cream-pale)';
@@ -264,10 +299,19 @@ async function initTimeline() {
     const constructionTag = isConstruction
       ? `<span class="tag" style="background:var(--green-lt);color:var(--green-deep)">In Progress — ${p.phaseLabel}</span>`
       : allSABDone
-      ? '<span class="tag neutral">Build Ready — Pending Groundbreaking</span>'
+      ? `<span class="tag neutral">${isRemodel ? 'Ready — Pending Demo Day' : 'Build Ready — Pending Groundbreaking'}</span>`
       : '<span class="tag neutral">Unlocks at Build Ready</span>';
 
-    const buildSteps = [
+    const constructionTitle = isRemodel ? 'Demo Day & Remodel' : 'Breaking Ground & Building';
+    const constructionDesc  = isRemodel
+      ? 'With planning complete, the remodel begins — demo, rough-in, finishes, and punch list through to completion.'
+      : 'With planning complete, your home begins to take physical shape — from excavation through framing, systems, finishes, and close-out.';
+
+    const buildSteps = isRemodel ? [
+      'Demo & removal','Rough-in (plumbing, electrical, HVAC)',
+      'Drywall & paint','Cabinets & millwork',
+      'Flooring & tile','Fixtures & finishes','Punch list & walk-through'
+    ] : [
       'Site prep & excavation','Foundation & slab','Framing',
       'Rough MEP (plumbing, electrical, HVAC)','Insulation & drywall',
       'Exterior finishes','Interior finishes & trim','Punch list & close-out'
@@ -277,8 +321,8 @@ async function initTimeline() {
       <div class="journey-dot ${constructionDot}">${constructionDot==='active'?'<div class="journey-dot-inner"></div>':''}</div>
       <div class="card" style="${constructionBg}">
         <div class="journey-card-eyebrow" style="${constructionEye}">Construction</div>
-        <div class="journey-card-title" style="${isConstruction?'color:var(--charcoal)':'color:var(--charcoal-3)'}">Breaking Ground & Building</div>
-        <div class="journey-card-desc">With planning complete, your home begins to take physical shape — from excavation through framing, systems, finishes, and close-out.</div>
+        <div class="journey-card-title" style="${isConstruction?'color:var(--charcoal)':'color:var(--charcoal-3)'}">${constructionTitle}</div>
+        <div class="journey-card-desc">${constructionDesc}</div>
         <div style="border-top:0.5px solid var(--border);padding-top:9px;margin-bottom:10px;display:flex;flex-direction:column;gap:5px">
           ${buildSteps.map(s=>`<div style="display:flex;align-items:center;gap:7px"><div style="width:4px;height:4px;border-radius:50%;background:var(--charcoal-4);flex-shrink:0"></div><span style="font-size:12px;color:var(--charcoal-4)">${s}</span></div>`).join('')}
         </div>
@@ -290,8 +334,8 @@ async function initTimeline() {
       <div class="journey-dot future"></div>
       <div class="card" style="background:var(--cream-pale)">
         <div class="journey-card-eyebrow" style="color:var(--charcoal-4)">Completion</div>
-        <div class="journey-card-title" style="color:var(--charcoal-3)">Keys in Hand</div>
-        <div class="journey-card-desc">The walk-through, the handshake, and the moment you step through the front door. Everything before this day was preparation for this one.</div>
+        <div class="journey-card-title" style="color:var(--charcoal-3)">${isRemodel ? 'Project Complete' : 'Keys in Hand'}</div>
+        <div class="journey-card-desc">${isRemodel ? 'The final walk-through, the punch list closed, and your home transformed. Everything before this was preparation for this moment.' : 'The walk-through, the handshake, and the moment you step through the front door. Everything before this day was preparation for this one.'}</div>
         ${isConstruction && p.timelineTarget ? `<span style="font-size:11px;color:var(--charcoal-4)">Target: ${p.timelineTarget}</span>` : '<span class="tag neutral">The finish line</span>'}
       </div>
     </div>`;

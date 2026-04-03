@@ -254,6 +254,7 @@ async function loadAllClientsFromSupabase() {
         reviewDraft:         client.review_draft || '',
         reviewLeft:          !!client.review_left,
         showReviewCard:      !!client.show_review_card,
+        projectType:         client.project_type || 'new_build',
         budgetCategories:    budgetCats,
         updates:             updates.length ? updates : (existing.updates || []),
         timeline:            timeline.length ? timeline : (existing.timeline || []),
