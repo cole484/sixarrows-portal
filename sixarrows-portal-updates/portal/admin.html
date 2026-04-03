@@ -1052,6 +1052,8 @@ function saveProjectInfo(projectId) {
       cx_name: cxName, cx_phone: cxPhone, cx_email: cxEmail,
       pm_name: pmName, pm_phone: pmPhone, pm_email: pmEmail,
       groundbreaking_date: p.groundbreakingDate || null,
+      show_review_card: !!p.showReviewCard,
+      review_left: !!p.reviewLeft,
     }),
   }).catch(() => {});
   showMsg('pi-msg','success','Saved ✓');
