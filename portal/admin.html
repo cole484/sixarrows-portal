@@ -494,12 +494,29 @@ function saveGbDate(projectId) {
   const val = document.getElementById('gb-date-inp')?.value;
   if (!val) return;
   adminSet(projectId, 'gbDate', val);
-  // Also write to tracker state so the portal picks it up
+  // Update in-memory project so other views see it immediately
   const p  = PROJECTS[projectId];
+  p.groundbreakingDate = val;
+  if (PROJECTS[projectId]) PROJECTS[projectId].groundbreakingDate = val;
+  // Also write to tracker state so the portal countdown picks it up
   const TS = getTrackerState(p);
   TS['groundbreakingDate'] = val;
   setTrackerState(p, TS);
-  showMsg('gb-date-msg', 'success', 'Saved ✓');
+  // Persist to Supabase
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+    method: 'PATCH',
+    headers: sbH,
+    body: JSON.stringify({ groundbreaking_date: val }),
+  }).then(async res => {
+    if (res.ok) {
+      showMsg('gb-date-msg', 'success', 'Saved ✓');
+    } else {
+      const err = await res.text();
+      console.error('saveGbDate PATCH failed:', res.status, err);
+      showMsg('gb-date-msg', 'success', 'Saved locally ✓');
+    }
+  }).catch(() => showMsg('gb-date-msg', 'success', 'Saved locally ✓'));
 }
 
 function toggleStepDone(pi, si, projectId) {
@@ -1000,7 +1017,7 @@ function saveProjectInfo(projectId) {
   p.constructionPct = parseInt(document.getElementById('pi-conPct')?.value)   || 0;
   p.timelineStart      = document.getElementById('pi-tlStart')?.value.trim()  || p.timelineStart;
   p.timelineTarget     = document.getElementById('pi-tlTarget')?.value.trim() || p.timelineTarget;
-  p.groundbreakingDate = document.getElementById('pi-gbDate')?.value           || p.groundbreakingDate || '';
+  p.groundbreakingDate = document.getElementById('pi-gbDate')?.value ?? p.groundbreakingDate ?? '';
   if (PROJECTS[projectId]) PROJECTS[projectId].groundbreakingDate = p.groundbreakingDate;
   const budgetLink = document.getElementById('pi-budgetLink')?.value.trim() || '';
   const notionId   = document.getElementById('pi-notionId')?.value.trim()   || '';
