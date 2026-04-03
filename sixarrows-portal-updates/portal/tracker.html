@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SAB™ Tracker — Six Arrows</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<style>
+/* ── Owner badges ── */
+.owner-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:10px; font-weight:700; letter-spacing:.04em;
+  padding:3px 8px; border-radius:999px; white-space:nowrap;
+}
+.owner-badge.sa     { background:#e8ede6; color:#3d4535; }
+.owner-badge.client { background:#fef3e2; color:#7a4800; border:0.5px solid rgba(122,72,0,.15); }
+.owner-badge.both   { background:#eaede6; color:#3d4535; }
+.owner-badge svg    { width:9px; height:9px; fill:currentColor; }
+
+/* ── You Are Here banner ── */
+.yah-banner {
+  background:var(--charcoal);
+  border-radius:var(--r-xl);
+  padding:1.5rem 1.75rem;
+  margin-bottom:1.125rem;
+  position:relative;
+  overflow:hidden;
+}
+.yah-banner::before {
+  content:'';
+  position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(117,127,105,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(117,127,105,.055) 1px,transparent 1px);
+  background-size:24px 24px;
+  pointer-events:none;
+}
+.yah-inner { position:relative; z-index:1; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.yah-left { flex:1; min-width:180px; }
+.yah-eyebrow { font-size:11px; text-transform:uppercase; letter-spacing:.14em; color:var(--green); font-weight:700; margin-bottom:5px; }
+.yah-step { font-size:20px; font-weight:700; color:var(--cream); line-height:1.2; margin-bottom:6px; }
+.yah-desc { font-size:14px; color:rgba(235,233,222,.6); line-height:1.55; }
+.yah-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
+.yah-who { display:flex; align-items:center; gap:5px; font-size:11px; }
+.yah-who-lbl { color:rgba(235,233,222,.4); }
+.yah-due-block { text-align:right; }
+.yah-due-num { font-size:26px; font-weight:700; color:var(--cream-pale); line-height:1; }
+.yah-due-lbl { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:rgba(235,233,222,.3); }
+.yah-due-date { font-size:11px; color:rgba(235,233,222,.45); margin-top:1px; }
+.yah-set-date {
+  background:rgba(255,255,255,.08); border:0.5px solid rgba(255,255,255,.14);
+  border-radius:var(--r-xs); color:var(--cream); font-family:'Work Sans',sans-serif;
+  font-size:11px; padding:4px 8px; outline:none; cursor:pointer; transition:border-color .14s;
+}
+.yah-set-date:focus { border-color:var(--green); }
+
+/* ── Phase completion record ── */
+.phase-record {
+  background:var(--green-lt);
+  border:0.5px solid rgba(117,127,105,.28);
+  border-radius:var(--r-lg);
+  padding:1rem 1.25rem;
+  margin-bottom:7px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.phase-record-ico {
+  width:40px; height:40px; border-radius:50%;
+  background:var(--green); display:flex;
+  align-items:center; justify-content:center; flex-shrink:0;
+}
+.phase-record-ico svg { width:18px; height:18px; fill:white; }
+.phase-record-body { flex:1; }
+.phase-record-title { font-size:14px; font-weight:700; color:var(--green-deep); line-height:1.2; }
+.phase-record-milestone { font-size:12px; font-weight:600; color:var(--green-dk); margin-top:1px; }
+.phase-record-date { font-size:11px; color:var(--green-dk); opacity:.7; margin-top:1px; }
+
+.step-date-val {
+  font-size:12px; color:var(--charcoal-3); font-weight:500;
+}
+
+/* ── Phase milestone badges ── */
+.badges-wrap {
+  display:flex; flex-wrap:wrap; gap:8px;
+}
+.badge {
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  padding:8px 10px; border-radius:var(--r-md); min-width:60px;
+  transition:all .2s;
+}
+.badge.earned {
+  background:var(--green);
+}
+.badge.locked {
+  background:var(--cream-pale);
+  border:0.5px solid var(--border-2);
+}
+.badge-ico {
+  width:26px; height:26px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+}
+.badge.earned .badge-ico { background:rgba(255,255,255,.25); }
+.badge.locked  .badge-ico { background:var(--cream-2); }
+.badge-ico svg { width:13px; height:13px; }
+.badge.earned .badge-ico svg { stroke:white !important; fill:none; }
+.badge.locked  .badge-ico svg { stroke:var(--charcoal-4) !important; fill:none; }
+.badge-name {
+  font-size:9px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.06em; text-align:center; line-height:1.2;
+  white-space:nowrap;
+}
+.badge.earned .badge-name { color:white; }
+.badge.locked  .badge-name { color:var(--charcoal-4); }
+
+
+.step-desc {
+  font-size:13px; color:var(--charcoal-3); line-height:1.6;
+  padding:10px 12px;
+  background:var(--cream-pale);
+  border-radius:var(--r-md);
+  border:0.5px solid var(--border);
+  margin-bottom:11px;
+}
+.step-desc.client-action {
+  background:#fef8ee;
+  border-color:rgba(122,72,0,.12);
+  color:#5a3800;
+}
+
+/* ── Step note ── */
+.step-note {
+  font-size:12px; color:var(--charcoal-3); line-height:1.5;
+  padding:7px 10px;
+  background:var(--cream-pale);
+  border-radius:var(--r-md);
+  border-left:3px solid var(--green);
+  margin-bottom:11px;
+  font-style:italic;
+}
+
+</style>
+</head>
+<body>
+<script>
+// ── State ─────────────────────────────────────────────
+let p;
+let TS = {};
+const SK = 'sa_tracker_v3_';
+
+async function loadState() {
+  p = AUTH.requireAuth();
+  if (!p) return;
+
+  // 1. Load local state first (instant render)
+  try { const r = localStorage.getItem(SK+p.id); if (r) TS = JSON.parse(r); } catch(e) {}
+  p.sabPhases.forEach((ph,pi) => ph.steps.forEach((st,si) => {
+    getStepAllItems(st).forEach((_,ii) => {
+      const k = `${pi}-${si}-${ii}`;
+      if (!(k in TS) && st.complete) TS[k] = true;
+    });
+  }));
+
+  // Restore last active tab
+  try { const t = localStorage.getItem(SK+'tab_'+p.id); if (t !== null) activeTab = parseInt(t); } catch(e) {}
+
+  // 2. Fetch live Notion data — Notion is authoritative, always overrides localStorage
+  const notionPageId = p.notionTrackerPageId;
+  if (notionPageId) {
+    try {
+      const res = await fetch(`/.netlify/functions/notion-tracker?pageId=${notionPageId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.steps) {
+          // Clear all item states first — Notion is the source of truth
+          p.sabPhases.forEach((ph,pi) => {
+            ph.steps.forEach((st,si) => {
+              getStepAllItems(st).forEach((_,ii) => {
+                TS[`${pi}-${si}-${ii}`] = false;
+              });
+            });
+          });
+          // Now apply what Notion says is complete
+          p.sabPhases.forEach((ph,pi) => {
+            ph.steps.forEach((st,si) => {
+              const notionStep = data.steps[`${pi}-${si}`];
+              if (notionStep && notionStep.complete) {
+                getStepAllItems(st).forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = true; });
+              }
+            });
+          });
+          saveState();
+        }
+        // Update badge earned status based on phase completion
+        updateBadges(data);
+        rerender();
+      }
+    } catch(e) {
+      console.log('Notion sync unavailable, using local state:', e.message);
+    }
+  }
+}
+function saveState() { try { localStorage.setItem(SK+p.id, JSON.stringify(TS)); } catch(e) {} }
+
+function updateBadges(notionData) {
+  if (!p.badges) return;
+  const readiness = notionData?.readiness || 0;
+  const phases    = notionData?.phases    || [];
+  // first_step — any item checked
+  if (readiness > 0) earnBadge('first_step');
+  // halfway — 50%+ readiness
+  if (readiness >= 50) earnBadge('halfway');
+  // phase1 — Plan Ready (phase 0 complete)
+  if (phases[0]?.complete) earnBadge('phase1');
+  // phase2 — Design Locked (phase 1 complete)
+  if (phases[1]?.complete) earnBadge('phase2');
+  // phase3 — Build Ready (phase 2 complete)
+  if (phases[2]?.complete) earnBadge('phase3');
+}
+function earnBadge(id) {
+  const b = (p.badges||[]).find(b => b.id === id);
+  if (b) b.earned = true;
+}
+
+// ── Derived ────────────────────────────────────────────
+function stChecked(pi,si) { return getStepAllItems(p.sabPhases[pi].steps[si]).filter((_,ii)=>TS[`${pi}-${si}-${ii}`]).length; }
+function stTotal(pi,si)   { return getStepAllItems(p.sabPhases[pi].steps[si]).length; }
+function isStepDone(pi,si){ 
+  const step = p.sabPhases[pi]?.steps[si];
+  if (!step) return false;
+  if (step.isFinal) return true; // isFinal steps don't block phase completion
+  const t=stTotal(pi,si); 
+  return t===0 ? step.complete : stChecked(pi,si)===t; 
+}
+function isPhaseDone(pi)  { const ph=p.sabPhases[pi]; if(!ph.steps.length)return ph.complete; return ph.steps.every((_,si)=>isStepDone(pi,si)); }
+
+// ── Find active step across all phases ─────────────────
+function findActiveStep() {
+  for (let pi=0; pi<p.sabPhases.length; pi++) {
+    const ph = p.sabPhases[pi];
+    if (!ph.steps.length) continue;
+    for (let si=0; si<ph.steps.length; si++) {
+      if (!isStepDone(pi,si)) return { pi, si, phase:ph, step:ph.steps[si] };
+    }
+  }
+  return null;
+}
+
+// ── Active tab ─────────────────────────────────────────
+let activeTab = 0; // restored after loadState
+const _shownModal = {};
+
+// ── Render ─────────────────────────────────────────────
+function rerender() {
+  const pct     = buildReadinessPct(p,TS);
+  const total   = sabTotalItems(p);
+  const checked = sabCheckedItems(p,TS);
+
+  // Live sidebar
+  const sbPct  = document.getElementById('sb-pct');
+  const sbFill = document.getElementById('sb-fill');
+  const sbSub  = document.getElementById('sb-sub');
+  if (sbPct)  sbPct.textContent  = pct+'%';
+  if (sbFill) sbFill.style.width = pct+'%';
+  if (sbSub)  sbSub.textContent  = checked+' of '+total+' steps complete';
+
+  // Build readiness
+  document.getElementById('br-val').textContent    = pct+'%';
+  document.getElementById('br-bar').style.width    = pct+'%';
+  document.getElementById('br-sub').textContent    = checked+' of '+total+' steps complete';
+  document.getElementById('br-status').textContent = pct<34?'Getting started':pct<67?'Making progress':pct<100?'Almost build ready':'Build Ready ✦';
+
+  // Phase tabs
+  document.getElementById('phase-tabs').innerHTML = (p.sabPhases||[]).map((ph,pi) => {
+    const done=isPhaseDone(pi), active=pi===activeTab;
+    return `<button class="phase-tab ${active?'active':''} ${done?'done':''}" onclick="switchTab(${pi})">
+      <div class="phase-tab-pip"></div>Phase ${pi+1}: ${ph.short}
+    </button>`;
+  }).join('');
+
+  // Badges
+  document.getElementById('badges-wrap').innerHTML = (p.badges||[]).map(b =>
+    `<div class="badge ${b.earned?'earned':'locked'}">
+      <div class="badge-ico">${badgeSVG(b.icon)}</div>
+      <div class="badge-name">${b.label}</div>
+    </div>`
+  ).join('');
+
+  // You Are Here banner
+  renderYAH();
+
+  // Pace estimate
+  renderPace();
+
+  // Steps
+  renderSteps();
+}
+
+function renderYAH() {
+  const active = findActiveStep();
+  const el = document.getElementById('yah-wrap');
+  if (!active) {
+    el.innerHTML = `<div class="yah-banner">
+      <div class="yah-inner">
+        <div class="yah-left">
+          <div class="yah-eyebrow">You Are Here</div>
+          <div class="yah-step">All phases complete — you're Build Ready</div>
+          <div class="yah-desc">The Six Arrows Blueprint™ process is complete. Construction can begin.</div>
+        </div>
+      </div>
+    </div>`;
+    return;
+  }
+  const {pi, si, phase, step} = active;
+  const dateKey = `date-${pi}-${si}`;
+  const dateVal = TS[dateKey] || '';
+  let daysHtml = '';
+  if (dateVal) {
+    const diff = Math.ceil((new Date(dateVal+'T00:00:00') - new Date()) / 86400000);
+    const color = diff < 0 ? '#e55' : diff <= 3 ? '#c87000' : 'var(--cream-pale)';
+    const label = diff < 0 ? `${Math.abs(diff)} days overdue` : diff === 0 ? 'Due today' : `${diff} days away`;
+    daysHtml = `<div class="yah-due-block">
+      <div class="yah-due-num" style="color:${color}">${Math.abs(diff)}</div>
+      <div class="yah-due-lbl">${diff<0?'days overdue':'days away'}</div>
+      <div class="yah-due-date">${new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+    </div>`;
+  } else {
+    daysHtml = `<div style="text-align:right">
+      <div style="font-size:11px;color:rgba(235,233,222,.25)">Date TBD</div>
+    </div>`;
+  }
+
+  const ownerLabel = { sa:'Six Arrows is handling this', client:'Your decision required', both:'Collaborative — we work on this together' }[step.owner||'both'];
+  const ownerColor = { sa:'rgba(235,233,222,.5)', client:'#f0a040', both:'rgba(235,233,222,.5)' }[step.owner||'both'];
+
+  el.innerHTML = `<div class="yah-banner">
+    <div class="yah-inner">
+      <div class="yah-left">
+        <div class="yah-eyebrow">You Are Here · Phase ${pi+1}, Step ${step.id+1}</div>
+        <div class="yah-step">${step.title}</div>
+        <div class="yah-desc">${step.desc||phase.goal}</div>
+        <div class="yah-who" style="margin-top:8px">
+          <svg style="width:10px;height:10px;fill:${ownerColor}" viewBox="0 0 12 12"><circle cx="6" cy="4" r="2.5"/><path d="M1 10c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/></svg>
+          <span class="yah-who-lbl" style="color:${ownerColor}">${ownerLabel}</span>
+        </div>
+      </div>
+      <div class="yah-right">${daysHtml}</div>
+    </div>
+  </div>`;
+}
+
+function renderPace() {
+  // Pace estimate removed — step dates are set manually by Six Arrows
+  const el = document.getElementById('pace-wrap');
+  if (el) el.innerHTML = '';
+}
+
+function badgeSVG(icon) {
+  const map = {
+    check:     `<svg viewBox="0 0 14 14"><path d="M2.5 7l3 3 6-6" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>`,
+    blueprint: `<svg viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.2"><path d="M2 12h10M4 12V7a3 3 0 016 0v5"/></svg>`,
+    design:    `<svg viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.2"><circle cx="7" cy="7" r="3"/><line x1="7" y1="1" x2="7" y2="3"/><line x1="7" y1="11" x2="7" y2="13"/><line x1="1" y1="7" x2="3" y2="7"/><line x1="11" y1="7" x2="13" y2="7"/></svg>`,
+    half:      `<svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="white" stroke-width="1.2"/><path d="M7 2a5 5 0 010 10" fill="rgba(255,255,255,.3)" stroke="none"/><line x1="7" y1="2" x2="7" y2="12" stroke="white" stroke-width="1.2"/></svg>`,
+    build:     `<svg viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.2"><rect x="2" y="8" width="10" height="5" rx="1"/><path d="M4 8V5.5l3-2.5 3 2.5V8"/></svg>`,
+    star:      `<svg viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.2"><path d="M7 2l1.4 3H12l-2.6 1.9.9 3.1L7 8.2l-3.3 1.8.9-3.1L2 5H5.6z"/></svg>`,
+  };
+  return map[icon]||map.check;
+}
+
+function ownerBadgeHTML(owner) {
+  if (!owner) return '';
+  const cfg = {
+    sa:     { label:'Six Arrows',     svg:`<svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1" fill="none"/><path d="M3 5h4M5 3v4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>` },
+    client: { label:'Your decision',  svg:`<svg viewBox="0 0 10 10"><circle cx="5" cy="3.5" r="2" stroke="currentColor" stroke-width="1" fill="none"/><path d="M1 9c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5" stroke="currentColor" stroke-width="1" fill="none"/></svg>` },
+    both:   { label:'Collaborative',  svg:`<svg viewBox="0 0 10 10"><circle cx="3.5" cy="3.5" r="1.8" stroke="currentColor" stroke-width="1" fill="none"/><circle cx="6.5" cy="3.5" r="1.8" stroke="currentColor" stroke-width="1" fill="none"/><path d="M0.5 9c0-1.8 1.3-3 3-3s3 1.2 3 3" stroke="currentColor" stroke-width="1" fill="none"/></svg>` },
+  };
+  const c = cfg[owner]||cfg.both;
+  return `<span class="owner-badge ${owner}">${c.svg}${c.label}</span>`;
+}
+
+function renderSteps() {
+  const pi  = activeTab;
+  const ph  = p.sabPhases[pi];
+  const prevPhaseDone = pi===0||isPhaseDone(pi-1);
+  const list = document.getElementById('step-list');
+
+  // Show phase record if done
+  if (isPhaseDone(pi) && ph.milestoneDate) {
+    list.innerHTML = `<div class="phase-record">
+      <div class="phase-record-ico"><svg viewBox="0 0 20 20"><path d="M4 10l4 4 8-8" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></div>
+      <div class="phase-record-body">
+        <div class="phase-record-title">${ph.milestone} — Phase ${pi+1} Complete</div>
+        <div class="phase-record-milestone">${ph.milestoneDesc}</div>
+        <div class="phase-record-date">Completed ${ph.milestoneDate}</div>
+      </div>
+    </div>` + ph.steps.map((step,si) => renderStepCard(pi,si,step,true)).join('');
+    return;
+  }
+
+  if (!prevPhaseDone) {
+    list.innerHTML = `<div class="card surface" style="text-align:center;padding:2rem">
+      <div style="font-size:14px;font-weight:600;color:var(--charcoal-3);margin-bottom:5px">Phase ${pi+1} is locked</div>
+      <div style="font-size:13px;color:var(--charcoal-4)">Complete Phase ${pi} to unlock this phase.</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = ph.steps.map((step,si) => renderStepCard(pi,si,step,false)).join('');
+
+  // Phase milestone banner at bottom when freshly done
+  if (isPhaseDone(pi) && !ph.milestoneDate) {
+    const bar = document.createElement('div');
+    bar.className = 'phase-done-bar';
+    bar.innerHTML = `<svg viewBox="0 0 18 18"><path d="M3 9l4 4 8-8" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      <div><div class="pdb-title">Milestone reached — ${ph.milestone}</div><div class="pdb-sub">${ph.milestoneDesc}</div></div>`;
+    document.getElementById('step-list').appendChild(bar);
+  }
+}
+
+function renderStepCard(pi, si, step, phaseComplete) {
+  const done    = isStepDone(pi,si);
+  const prevOk  = si===0||isStepDone(pi,si-1)||phaseComplete;
+  const locked  = !prevOk;
+  const cnt     = stChecked(pi,si);
+  const tot     = stTotal(pi,si);
+  const pct     = tot ? Math.round(cnt/tot*100) : 100;
+  const inProg  = cnt>0&&!done;
+  const isOpen  = !!TS[`open-${pi}-${si}`];
+  const dateKey = `date-${pi}-${si}`;
+  const dateVal = TS[dateKey]||'';
+
+  // Due chip
+  let dueBadge = '';
+  if (dateVal && !done) {
+    const diff = Math.ceil((new Date(dateVal+'T00:00:00') - new Date()) / 86400000);
+    if (diff < 0)       dueBadge = `<span class="due-chip late">${Math.abs(diff)}d overdue</span>`;
+    else if (diff <= 4) dueBadge = `<span class="due-chip soon">Due in ${diff}d</span>`;
+    else                dueBadge = `<span class="due-chip ok">Due ${new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>`;
+  }
+
+  const numCls = locked?'locked':done?'complete':inProg?'progress':step.isFinal?'final':'pending';
+  const numContent = done
+    ? `<svg viewBox="0 0 12 12"><path d="M2 6l2.8 3 5.2-5.5" stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`
+    : step.isFinal ? '★' : (step.id+1);
+
+  // Step 14 — isFinal: show share button regardless of done state
+  if (step.isFinal) {
+    const isReviewDone = !!p.reviewLeft;
+    return `<div class="step-card final-step">
+      <div class="final-step-inner">
+        <img class="final-step-logo" src="${LOGO_CIRCLE}" alt="Six Arrows">
+        <div class="final-step-title">${isReviewDone ? 'Thank you for sharing.' : "You've done it. You're Build Ready."}</div>
+        <p class="final-step-body">${isReviewDone
+          ? 'Your review has been shared. Your Six Arrows team is grateful — it means a lot to us and will help the next family find the right builder.'
+          : "You've completed one of the most thorough pre-construction processes in the industry. Your story helps other families understand why planning properly makes all the difference."
+        }</p>
+        ${isReviewDone
+          ? `<div style="display:flex;align-items:center;gap:8px;justify-content:center;font-size:13px;color:var(--green-dk);font-weight:600">
+               <svg style="width:16px;height:16px" viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 7l3 3 6-6"/></svg>
+               Review shared
+             </div>`
+          : `<a href="share.html" class="final-step-cta" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+               <svg style="width:13px;height:13px;fill:white" viewBox="0 0 14 14"><path d="M7 2l1.4 3H12l-2.6 1.9.9 3.1L7 8.2l-3.3 1.8.9-3.1L2 5H5.6z"/></svg>
+               Share Your SAB™ Experience
+             </a>`
+        }
+      </div>
+    </div>`;
+  }
+
+  // Body content
+  let bodyContent;
+  if (locked) {
+    bodyContent = `<div style="padding:13px 18px;font-size:13px;color:var(--charcoal-4);font-style:italic">Complete Step ${si} to unlock this step.</div>`;
+  } else {
+    // Step description
+    const isClientOwned = step.owner === 'client';
+    const descHtml = step.desc
+      ? `<div class="step-desc ${isClientOwned?'client-action':''}">${isClientOwned?'<strong style="display:block;margin-bottom:3px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#7a4800">Your decision required</strong>':''}${step.desc}</div>`
+      : '';
+
+    // Note
+    const noteHtml = step.note
+      ? `<div class="step-note">${step.note}</div>`
+      : '';
+
+    // Date row
+    const completedHtml = done && step.completedDate
+      ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--green-lt);border-radius:var(--r-md);margin-bottom:11px">
+           <svg style="width:13px;height:13px;fill:var(--green-dk)" viewBox="0 0 14 14"><path d="M2.5 7l3 3 6-6" stroke="var(--green-dk)" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+           <span style="font-size:12px;font-weight:600;color:var(--green-deep)">Completed ${step.completedDate}</span>
+         </div>`
+      : (dateVal
+           ? `<div class="step-date-row">
+                <span class="step-date-lbl">Target completion:</span>
+                <span class="step-date-val">${new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>
+              </div>`
+           : '');
+
+    // ── Wave selection launch card (Steps 5, 6, 7 in Phase 2) ──
+    const waveConfig = {
+      5: { wave:0, label:'Wave 1', name:'Structure',   cats:['Fireplace','Appliances','Exterior Finishes'] },
+      6: { wave:1, label:'Wave 2', name:'The Shell',    cats:['Specialty Trim','Flooring','Tile'] },
+      7: { wave:2, label:'Wave 3', name:'The Jewelry',  cats:['Plumbing','Lighting','Countertops','Hardware','Paint & Stain','Doors'] },
+    };
+
+    const isWaveStep = waveConfig[step.id] !== undefined;
+
+    let mainContent;
+    if (isWaveStep) {
+      const wc = waveConfig[step.id];
+      const ck = p.selectionsClientKey || p.id;
+      const params = new URLSearchParams({
+        clientKey:   ck,
+        clientName:  p.clientName,
+        projectName: p.projectName,
+        wave: wc.wave
+      });
+      const url = `selections-app.html?${params.toString()}`;
+
+      // Read live completion from localStorage
+      let savedData = {};
+      try { savedData = JSON.parse(localStorage.getItem(`sab8_${ck}_sav`) || '{}'); } catch(e) {}
+      let answersData = {};
+      try { answersData = JSON.parse(localStorage.getItem(`sab8_${ck}_ans`) || '{}'); } catch(e) {}
+      const catMap = {
+        5: ['fireplace','appliances','exterior_finishes'],
+        6: ['specialty_trim','flooring','tile'],
+        7: ['plumbing','lighting','countertops','hardware','paint','doors'],
+      };
+      const waveCats = catMap[step.id];
+      const waveDone = waveCats.filter(id => {
+        if (id==='fireplace' && answersData['fireplace_fp_want']==='No — no fireplace') return true;
+        return !!savedData[id];
+      }).length;
+      const wavePct  = Math.round(waveDone / waveCats.length * 100);
+
+      mainContent = `
+        <div style="background:var(--cream-pale);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem;margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin-bottom:3px">${wc.label} — ${wc.name}</div>
+              <div style="font-size:13px;color:var(--charcoal-3);line-height:1.5">${wc.cats.join(' · ')}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:24px;font-weight:700;color:var(--charcoal);line-height:1">${wavePct}%</div>
+              <div style="font-size:11px;color:var(--charcoal-4)">${waveDone} of ${waveCats.length} complete</div>
+            </div>
+          </div>
+          <div style="height:6px;background:var(--cream-3);border-radius:999px;overflow:hidden;margin-bottom:14px">
+            <div style="height:100%;width:${wavePct}%;background:var(--green);border-radius:999px;transition:width .4s"></div>
+          </div>
+          <a href="${url}" style="display:inline-flex;align-items:center;gap:7px;background:var(--charcoal);color:var(--cream);border-radius:var(--r-full);padding:10px 20px;font-family:'Work Sans',sans-serif;font-size:13px;font-weight:600;text-decoration:none;transition:opacity .15s" onmouseover="this.style.opacity='.82'" onmouseout="this.style.opacity='1'">
+            ${wavePct === 100 ? 'Review Selections' : waveDone > 0 ? 'Continue Selections' : 'Start Selections'} →
+          </a>
+        </div>`;
+    } else {
+      // Checklist
+      let checklistHtml;
+      if (step.subSections) {
+        let flatIdx = 0;
+        checklistHtml = step.subSections.map(ss => {
+          const rows = ss.items.map((item) => {
+            const ii = flatIdx++;
+            const k  = `${pi}-${si}-${ii}`;
+            const chk = !!TS[k];
+            return `<li class="chk-row ${chk?'done':''}" id="cr-${k}">
+              <input type="checkbox" id="cb-${k}" ${chk?'checked':''} disabled>
+              <label class="chk-text" for="cb-${k}">${item}</label>
+            </li>`;
+          }).join('');
+          return `<div class="subsec-lbl">${ss.label}</div><ul class="checklist">${rows}</ul>`;
+        }).join('');
+      } else {
+        checklistHtml = `<ul class="checklist">${(step.items||[]).map((item,ii) => {
+          const k   = `${pi}-${si}-${ii}`;
+          const chk = !!TS[k];
+          return `<li class="chk-row ${chk?'done':''}" id="cr-${k}">
+            <input type="checkbox" id="cb-${k}" ${chk?'checked':''} disabled>
+            <label class="chk-text" for="cb-${k}">${item}</label>
+          </li>`;
+        }).join('')}</ul>`;
+      }
+      mainContent = checklistHtml;
+    }
+
+    bodyContent = `<div class="step-body-inner">
+      ${descHtml}${noteHtml}${completedHtml}
+      ${mainContent}
+      ${done&&!step.completedDate&&!isWaveStep?`<div class="step-done-bar">
+        <svg viewBox="0 0 14 14"><path d="M2.5 7l3 3 6-6" stroke="var(--green-dk)" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+        <span>Step complete</span>
+      </div>`:''}
+    </div>`;
+  }
+
+  return `<div class="step-card ${done?'complete':''} ${locked?'locked':''}">
+    <div class="step-hd" onclick="toggleStep(${pi},${si})">
+      <div class="step-num ${numCls}">${numContent}</div>
+      <div class="step-meta">
+        <div class="step-name">Step ${step.id+1}: ${step.title}</div>
+        <div class="step-inforow">
+          <span class="step-cnt">${step.isFinal ? (p.reviewLeft ? 'Review shared ✓' : 'Tap to share') : `${cnt} of ${tot} complete`}</span>
+          ${ownerBadgeHTML(step.owner)}
+          ${dueBadge}
+        </div>
+      </div>
+      <div class="step-right">
+        ${done?`<span class="tag ok" style="font-size:9px">Done</span>`:''}
+        <div class="step-barwrap"><div class="step-barfill" style="width:${pct}%"></div></div>
+        <svg class="step-chev ${isOpen?'open':''}" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2.5l4 3.5-4 3.5"/></svg>
+      </div>
+    </div>
+    <div class="step-body ${isOpen?'open':''}" id="sb-${pi}-${si}">
+      ${bodyContent}
+    </div>
+  </div>`;
+}
+
+// ── Controls ───────────────────────────────────────────
+function toggleStep(pi,si) {
+  const k = `open-${pi}-${si}`;
+  TS[k] = !TS[k];
+  saveState();
+  const body    = document.getElementById(`sb-${pi}-${si}`);
+  const chevron = body?.previousElementSibling?.querySelector('.step-chev');
+  if (body)    body.classList.toggle('open',!!TS[k]);
+  if (chevron) chevron.classList.toggle('open',!!TS[k]);
+}
+function switchTab(pi) { activeTab = pi; try { localStorage.setItem(SK+'tab_'+p.id, pi); } catch(e) {} rerender(); }
+function setDate(key,val) { TS[key]=val; saveState(); rerender(); }
+
+function toggle(key,pi,si) {
+  const cb = document.getElementById('cb-'+key);
+  const wasPhase = isPhaseDone(pi);
+  TS[key] = cb.checked;
+  const cr = document.getElementById('cr-'+key);
+  if (cr) cr.classList.toggle('done',cb.checked);
+  if (cb.checked && isStepDone(pi,si)) {
+    showToast('Step complete — '+p.sabPhases[pi].steps[si].title);
+  }
+  const nowPhase = isPhaseDone(pi);
+  if (nowPhase && !wasPhase && !_shownModal[pi]) {
+    _shownModal[pi] = true;
+    const ph = p.sabPhases[pi];
+    setTimeout(()=>showMilestoneModal('Phase '+(pi+1)+' Complete',ph.milestoneDesc,ph.milestone),450);
+  }
+  saveState(); rerender();
+}
+
+// ── Boot ───────────────────────────────────────────────
+loadState();
+if (!Object.keys(TS).some(k=>k.startsWith('open-'))) TS['open-0-0']=true;
+
+mountLayout('tracker','SAB™ Tracker',`
+  <div class="page-eyebrow">Six Arrows Blueprint™</div>
+  <div class="page-title">Pre-Construction Tracker</div>
+  <p class="page-sub">Your complete roadmap from concept to groundbreaking — every phase, step, and decision in one place.</p>
+
+  <div id="yah-wrap"></div>
+  <div id="pace-wrap"></div>
+
+  <div class="grid g3" style="margin-bottom:1.125rem">
+    <div class="card dark">
+      <div class="kpi">
+        <div class="kpi-lbl">Build Readiness</div>
+        <div class="kpi-val" id="br-val">—</div>
+        <div class="kpi-sub" id="br-sub">—</div>
+      </div>
+      <div style="margin-top:11px;margin-bottom:7px">
+        <div class="track" style="background:rgba(255,255,255,.1)"><div class="bar" id="br-bar" style="width:0%"></div></div>
+      </div>
+      <span class="tag ok" style="font-size:9px" id="br-status">Getting started</span>
+    </div>
+    <div class="card" style="grid-column:span 2">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin-bottom:10px">Phase Milestones</div>
+      <div class="badges-wrap" id="badges-wrap"></div>
+    </div>
+  </div>
+
+  <div class="phase-tabs" id="phase-tabs"></div>
+  <div id="step-list"></div>
+`,TS);
+
+rerender();
+</script>
+</body>
+</html>

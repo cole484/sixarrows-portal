@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Timeline — Six Arrows</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="data.js"></script><script src="app.js"></script>
+<style>
+
+/* ── Date hero card ── */
+.date-card {
+  background:var(--charcoal);
+  border-radius:var(--r-2xl);
+  padding:1.375rem 1.75rem;
+  margin-bottom:1rem;
+  position:relative; overflow:hidden;
+}
+.date-card::before {
+  content:''; position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(117,127,105,.06) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(117,127,105,.06) 1px,transparent 1px);
+  background-size:28px 28px; pointer-events:none;
+}
+.date-card-inner { position:relative; z-index:1; }
+.date-card-eyebrow {
+  font-size:9px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.16em; color:var(--green); margin-bottom:10px;
+}
+.date-row {
+  display:flex; gap:2rem; flex-wrap:wrap;
+}
+.date-item {}
+.date-lbl {
+  font-size:10px; text-transform:uppercase; letter-spacing:.1em;
+  color:rgba(235,233,222,.35); font-weight:600; margin-bottom:3px;
+}
+.date-val {
+  font-size:22px; font-weight:700; color:var(--cream);
+  letter-spacing:-.02em; line-height:1;
+}
+
+/* ── Notion link card ── */
+.notion-link {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--white); border:0.5px solid var(--border);
+  border-radius:var(--r-xl); padding:.875rem 1.125rem;
+  text-decoration:none; margin-bottom:1rem;
+  transition:border-color .18s, box-shadow .18s;
+}
+.notion-link:hover { border-color:var(--border-2); box-shadow:var(--sh-sm); }
+.notion-link-left { display:flex; align-items:center; gap:10px; }
+.notion-link-ico {
+  width:32px; height:32px; background:var(--charcoal);
+  border-radius:var(--r-md); display:flex; align-items:center;
+  justify-content:center; flex-shrink:0;
+}
+.notion-link-ico svg { width:14px; height:14px; }
+.notion-link-label {
+  font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.1em; color:var(--charcoal-4); margin-bottom:1px;
+}
+.notion-link-name { font-size:13px; font-weight:600; color:var(--charcoal); }
+.notion-link-arrow { width:12px; height:12px; opacity:.35; }
+
+/* ── Milestone timeline ── */
+.milestone-list { display:flex; flex-direction:column; }
+.milestone-item {
+  display:flex; gap:14px;
+  padding:12px 0; border-bottom:0.5px solid var(--border);
+}
+.milestone-item:last-child { border-bottom:none; }
+.milestone-pip-col {
+  display:flex; flex-direction:column; align-items:center;
+  flex-shrink:0; width:20px;
+}
+.milestone-pip {
+  width:20px; height:20px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; border:1.5px solid var(--border-3);
+  background:var(--white);
+}
+.milestone-pip.done {
+  background:var(--green); border-color:var(--green);
+}
+.milestone-pip.active {
+  background:var(--white); border-color:var(--green); border-width:2px;
+}
+.milestone-pip.done svg { width:9px; height:9px; }
+.milestone-pip-dot {
+  width:6px; height:6px; border-radius:50%; background:var(--green);
+}
+.milestone-pip-line {
+  width:1px; flex:1; background:var(--border-2); margin-top:3px;
+}
+.milestone-body { flex:1; padding-top:1px; }
+.milestone-date {
+  font-size:10px; font-weight:600; color:var(--charcoal-4);
+  text-transform:uppercase; letter-spacing:.08em; margin-bottom:2px;
+}
+.milestone-title {
+  font-size:14px; font-weight:600; color:var(--charcoal); margin-bottom:2px;
+}
+.milestone-item.done .milestone-title { color:var(--charcoal-3); }
+.milestone-note { font-size:12px; color:var(--charcoal-4); line-height:1.4; }
+.milestone-tag { margin-top:5px; }
+
+/* ── Journey timeline ── */
+.journey-wrap {
+  padding-left:26px; position:relative;
+}
+.journey-line {
+  position:absolute; left:8px; top:12px; bottom:12px;
+  width:1px; background:var(--border-2);
+}
+.journey-node { position:relative; margin-bottom:1.25rem; }
+.journey-dot {
+  position:absolute; left:-26px; top:11px;
+  width:18px; height:18px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--border-3); z-index:1;
+}
+.journey-dot.done  { background:var(--green); border-color:var(--green); }
+.journey-dot.active { background:var(--white); border-color:var(--green); border-width:2px; }
+.journey-dot.future { background:var(--cream-3); border-color:var(--cream-3); }
+.journey-dot svg { width:8px; height:8px; }
+.journey-dot-inner {
+  width:5px; height:5px; border-radius:50%; background:var(--green);
+}
+.journey-card-eyebrow {
+  font-size:9px; text-transform:uppercase; letter-spacing:.12em;
+  font-weight:700; margin-bottom:2px;
+}
+.journey-card-title {
+  font-size:14px; font-weight:700; margin-bottom:4px;
+}
+.journey-card-desc {
+  font-size:12px; color:var(--charcoal-4); margin-bottom:9px; line-height:1.5;
+}
+</style>
+</head>
+<body>
+<script>
+const p = AUTH.requireAuth();
+if (!p) throw new Error('Not authed');
+
+const isSAB = p.statusType === 'sab';
+
+// ── Load TS from localStorage (same source as dashboard & tracker) ──
+let TS = {};
+try { const r = localStorage.getItem('sa_tracker_v3_' + p.id); if (r) TS = JSON.parse(r); } catch(e) {}
+
+// ── Phase/step completion derived from TS ──────────────
+function isStepDone(pi, si) {
+  const step = p.sabPhases[pi]?.steps[si];
+  if (!step) return false;
+  const items = getStepAllItems(step);
+  if (items.length === 0) return !!step.complete;
+  return items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
+}
+function isPhaseDone(pi) {
+  const ph = p.sabPhases[pi];
+  if (!ph) return false;
+  return ph.steps.every((_, si) => isStepDone(pi, si));
+}
+function isPhaseActive(pi) {
+  if (isPhaseDone(pi)) return false;
+  return pi === 0 || isPhaseDone(pi - 1);
+}
+function activeStepLabel(pi) {
+  const ph = p.sabPhases[pi];
+  for (let si = 0; si < ph.steps.length; si++) {
+    if (!isStepDone(pi, si)) return ph.steps[si].title;
+  }
+  return '';
+}
+
+// ── Async Notion sync — updates TS then re-renders ─────
+async function renderPage() {
+  // Fetch Notion BEFORE rendering so phases show correctly on first visit
+  // even if localStorage TS is empty
+  if (isSAB && p.notionTrackerPageId) {
+    try {
+      const res  = await fetch(`/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}`);
+      const data = res.ok ? await res.json() : null;
+      if (data?.steps) {
+        p.sabPhases.forEach((ph, pi) => {
+          ph.steps.forEach((st, si) => {
+            const notionStep = data.steps[`${pi}-${si}`];
+            if (notionStep?.complete) {
+              getStepAllItems(st).forEach((_, ii) => { TS[`${pi}-${si}-${ii}`] = true; });
+            }
+          });
+        });
+        try { localStorage.setItem('sa_tracker_v3_' + p.id, JSON.stringify(TS)); } catch(e) {}
+      }
+    } catch(e) {}
+  }
+  mountLayout('timeline', 'Timeline', isSAB ? sabLayout() : constructionLayout());
+}
+
+// ── Journey nodes ──────────────────────────────────────
+function buildJourneyNodes() {
+  const phaseNodes = p.sabPhases.map((ph, pi) => {
+    const done   = isPhaseDone(pi);
+    const active = isPhaseActive(pi);
+    const state  = done ? 'done' : active ? 'active' : 'future';
+    const cardBg = done   ? 'background:var(--green-pale);border-color:rgba(117,127,105,.25)'
+                 : active ? 'border-color:rgba(117,127,105,.4)'
+                 :          'background:var(--cream-pale)';
+    const eyeColor   = done || active ? 'color:var(--green-dk)' : 'color:var(--charcoal-4)';
+    const titleColor = state === 'future' ? 'color:var(--charcoal-3)' : 'color:var(--charcoal)';
+    const tag = done
+      ? '<span class="tag ok">Complete</span>'
+      : active
+      ? '<span class="tag" style="background:var(--green-lt);color:var(--green-deep)">In Progress</span>'
+      : '<span class="tag neutral">Upcoming</span>';
+    const dotContent = done
+      ? `<svg viewBox="0 0 8 8"><path d="M1 4l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`
+      : active ? `<div class="journey-dot-inner"></div>` : '';
+
+    const totalSteps  = ph.steps.length;
+    const doneSteps   = ph.steps.filter((_, si) => isStepDone(pi, si)).length;
+    const currentStep = active ? activeStepLabel(pi) : '';
+    const progressLine = active
+      ? `<div style="font-size:11px;color:var(--charcoal-4);margin-bottom:7px">
+           Step ${doneSteps + 1} of ${totalSteps} — <span style="color:var(--charcoal-3);font-weight:500">${currentStep}</span>
+         </div>
+         <div style="height:4px;background:var(--cream-2);border-radius:999px;margin-bottom:10px">
+           <div style="height:100%;width:${Math.round(doneSteps/totalSteps*100)}%;background:var(--green);border-radius:999px"></div>
+         </div>`
+      : done
+      ? `<div style="font-size:11px;color:var(--green-dk);margin-bottom:8px;font-weight:500">✓ All ${totalSteps} steps complete</div>`
+      : '';
+
+    return `<div class="journey-node">
+      <div class="journey-dot ${state}">${dotContent}</div>
+      <div class="card" style="${cardBg}">
+        <div class="journey-card-eyebrow" style="${eyeColor}">Pre-Construction · Phase ${pi+1}</div>
+        <div class="journey-card-title" style="${titleColor}">${ph.label}</div>
+        <div class="journey-card-desc">${ph.goal || ph.milestoneDesc}</div>
+        ${progressLine}
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          ${tag}
+          ${ph.milestoneDate ? `<span style="font-size:11px;color:var(--charcoal-4)">${done?'Completed':'Target'}: ${ph.milestoneDate}</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const allSABDone     = p.sabPhases.every((_, pi) => isPhaseDone(pi));
+  const isConstruction = p.statusType === 'construction';
+  const constructionDot = isConstruction ? 'active' : allSABDone ? 'active' : 'future';
+  const constructionBg  = isConstruction ? 'border-color:rgba(117,127,105,.4)' : 'background:var(--cream-pale)';
+  const constructionEye = isConstruction || allSABDone ? 'color:var(--green-dk)' : 'color:var(--charcoal-4)';
+  const constructionTag = isConstruction
+    ? `<span class="tag" style="background:var(--green-lt);color:var(--green-deep)">In Progress — ${p.phaseLabel}</span>`
+    : allSABDone
+    ? '<span class="tag neutral">Build Ready — Pending Groundbreaking</span>'
+    : '<span class="tag neutral">Unlocks at Build Ready</span>';
+
+  const buildSteps = [
+    'Site prep & excavation','Foundation & slab','Framing',
+    'Rough MEP (plumbing, electrical, HVAC)','Insulation & drywall',
+    'Exterior finishes','Interior finishes & trim','Punch list & close-out'
+  ];
+
+  const constructionNode = `<div class="journey-node">
+    <div class="journey-dot ${constructionDot}">${constructionDot==='active'?'<div class="journey-dot-inner"></div>':''}</div>
+    <div class="card" style="${constructionBg}">
+      <div class="journey-card-eyebrow" style="${constructionEye}">Construction</div>
+      <div class="journey-card-title" style="${isConstruction?'color:var(--charcoal)':'color:var(--charcoal-3)'}">Breaking Ground & Building</div>
+      <div class="journey-card-desc">With planning complete, your home begins to take physical shape — from excavation through framing, systems, finishes, and close-out.</div>
+      <div style="border-top:0.5px solid var(--border);padding-top:9px;margin-bottom:10px;display:flex;flex-direction:column;gap:5px">
+        ${buildSteps.map(s=>`<div style="display:flex;align-items:center;gap:7px"><div style="width:4px;height:4px;border-radius:50%;background:var(--charcoal-4);flex-shrink:0"></div><span style="font-size:12px;color:var(--charcoal-4)">${s}</span></div>`).join('')}
+      </div>
+      ${constructionTag}
+    </div>
+  </div>`;
+
+  const completionNode = `<div class="journey-node">
+    <div class="journey-dot future"></div>
+    <div class="card" style="background:var(--cream-pale)">
+      <div class="journey-card-eyebrow" style="color:var(--charcoal-4)">Completion</div>
+      <div class="journey-card-title" style="color:var(--charcoal-3)">Keys in Hand</div>
+      <div class="journey-card-desc">The walk-through, the handshake, and the moment you step through the front door. Everything before this day was preparation for this one.</div>
+      ${isConstruction && p.timelineTarget ? `<span style="font-size:11px;color:var(--charcoal-4)">Target: ${p.timelineTarget}</span>` : '<span class="tag neutral">The finish line</span>'}
+    </div>
+  </div>`;
+
+  return `<div class="journey-wrap">
+    <div class="journey-line"></div>
+    ${phaseNodes}
+    ${constructionNode}
+    ${completionNode}
+  </div>`;
+}
+
+// ── SAB layout ─────────────────────────────────────────
+function sabLayout() {
+  return `
+    <div class="page-eyebrow">Schedule</div>
+    <div class="page-title">Project Timeline</div>
+    <p class="page-sub">From first site visit to the day you walk through your front door.</p>
+
+    <div class="date-card" style="margin-bottom:1.25rem">
+      <div class="date-card-inner">
+        <div class="date-card-eyebrow">Pre-Construction Schedule</div>
+        <div class="date-row">
+          <div class="date-item">
+            <div class="date-lbl">Projected Groundbreaking</div>
+            <div class="date-val">${p.groundbreakingDate
+              ? new Date(p.groundbreakingDate + 'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
+              : 'To be confirmed'}</div>
+          </div>
+        </div>
+        ${!p.groundbreakingDate ? `<div style="font-size:11px;color:rgba(235,233,222,.35);margin-top:8px">Your Six Arrows team will confirm this date as you approach Build Ready.</div>` : ''}
+      </div>
+    </div>
+
+    <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:1rem;letter-spacing:-.01em">Your Full Build Journey</div>
+    ${buildJourneyNodes()}
+  `;
+}
+
+// ── Construction layout ────────────────────────────────
+function constructionLayout() {
+  const milestones = p.timeline || [];
+  const doneCount  = milestones.filter(t => t.done).length;
+
+  return `
+    <div class="page-eyebrow">Schedule</div>
+    <div class="page-title">Project Timeline</div>
+    <p class="page-sub">Your build schedule from groundbreaking to the day you get your keys.</p>
+
+    <div class="date-card" style="margin-bottom:1rem">
+      <div class="date-card-inner">
+        <div class="date-card-eyebrow">Build Schedule</div>
+        <div class="date-row">
+          <div class="date-item">
+            <div class="date-lbl">Construction Start</div>
+            <div class="date-val">${p.timelineStart}</div>
+          </div>
+          <div class="date-item">
+            <div class="date-lbl">Target Completion</div>
+            <div class="date-val">${p.timelineTarget}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <a class="notion-link" href="${p.links?.timeline||'#'}" target="_blank">
+      <div class="notion-link-left">
+        <div class="notion-link-ico">
+          <svg viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.3"><rect x="1" y="1" width="12" height="12" rx="1.5"/><line x1="1" y1="5" x2="13" y2="5"/><line x1="5" y1="5" x2="5" y2="13"/></svg>
+        </div>
+        <div>
+          <div class="notion-link-label">Live schedule</div>
+          <div class="notion-link-name">Full build timeline & trade schedule</div>
+        </div>
+      </div>
+      <svg class="notion-link-arrow" viewBox="0 0 12 12" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M2 10L10 2M4 2h6v6"/></svg>
+    </a>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh">
+        <div class="sh-title">Build Milestones</div>
+        <span class="tag ok" style="font-size:9px">${doneCount} of ${milestones.length} complete</span>
+      </div>
+      ${milestones.length === 0
+        ? `<div style="font-size:13px;color:var(--charcoal-4);padding:8px 0">Milestones will appear here as your build progresses.</div>`
+        : `<div class="milestone-list">
+            ${milestones.map((t, i) => {
+              const isLast = i === milestones.length - 1;
+              const isNext = !t.done && milestones.slice(0,i).every(m=>m.done);
+              return `<div class="milestone-item ${t.done?'done':''}">
+                <div class="milestone-pip-col">
+                  <div class="milestone-pip ${t.done?'done':isNext?'active':''}">
+                    ${t.done
+                      ? `<svg viewBox="0 0 9 9"><path d="M1.5 4.5l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`
+                      : isNext ? `<div class="milestone-pip-dot"></div>` : ''}
+                  </div>
+                  ${!isLast ? `<div class="milestone-pip-line"></div>` : ''}
+                </div>
+                <div class="milestone-body">
+                  <div class="milestone-date">${t.date}</div>
+                  <div class="milestone-title">${t.title}</div>
+                  <div class="milestone-note">${t.note}</div>
+                  ${isNext ? `<div class="milestone-tag"><span class="tag" style="font-size:9px;background:var(--green-lt);color:var(--green-deep)">Up Next</span></div>` : ''}
+                  ${t.done ? `<div class="milestone-tag"><span class="tag ok" style="font-size:9px">Complete</span></div>` : ''}
+                </div>
+              </div>`;
+            }).join('')}
+          </div>`
+      }
+    </div>
+
+    <div style="font-size:13px;font-weight:700;color:var(--charcoal);margin-bottom:1rem;letter-spacing:-.01em">Your Full Build Journey</div>
+    ${buildJourneyNodes()}
+  `;
+}
+
+renderPage();
+</script></body></html>
