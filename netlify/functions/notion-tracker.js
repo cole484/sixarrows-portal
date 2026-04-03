@@ -149,14 +149,14 @@ function parseDynamicStructure(allItems) {
       const match = item.text.match(/Step\s+(\d+)\s*:\s*(.+)/i);
       if (match) {
         currentStep = {
-          index:       currentPhase.steps.length,  // position within phase (0-based)
-          globalIndex: globalStepIndex++,           // position across all phases (0-based)
-          notionNum:   parseInt(match[1]),          // step number as written in Notion
+          index:       currentPhase.steps.length,
+          globalIndex: globalStepIndex++,
+          notionNum:   parseInt(match[1]),
           globalIdx: allItems.indexOf(item),
           title:     match[2].trim(),
           items:     [],
           complete:  false,
-          isFinal:   false,
+          isFinal:   match[2].toLowerCase().includes('share your sab') || match[2].toLowerCase().includes('share your experience'),
         };
         currentPhase.steps.push(currentStep);
       }
@@ -185,6 +185,11 @@ function parseDynamicStructure(allItems) {
   for (const ph of phases) {
     let phaseAllDone = ph.steps.length > 0;
     for (const st of ph.steps) {
+      if (st.isFinal) {
+        // isFinal steps (Share Your Experience) don't block phase completion
+        st.complete = true;
+        continue;
+      }
       // Only count top-level items (depth 0 or 1) for completion
       // Sub-items (depth 2+) are notes, not required checkboxes
       const topItems = st.items.filter(it => it.depth <= 1);

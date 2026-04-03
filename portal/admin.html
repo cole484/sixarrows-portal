@@ -434,26 +434,41 @@ function renderAdmin() {
   attachHandlers(p);
 }
 
+// Cache for dynamic Notion data (remodel clients)
+const notionDynamicCache = {};
+
+async function loadNotionDynamicForClient(projectId) {
+  const p = PROJECTS[projectId];
+  if (!p?.notionTrackerPageId) return null;
+  try {
+    const res  = await fetch(`/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}&dynamic=1`);
+    const data = res.ok ? await res.json() : null;
+    if (data?.dynamic && data?.phases) {
+      notionDynamicCache[projectId] = data;
+      return data;
+    }
+  } catch(e) { console.error('Notion dynamic fetch failed:', e); }
+  return null;
+}
+
 // ════════════════════════════════════════════════════════
 //  TRACKER VIEW — mark steps complete, set target dates
 // ════════════════════════════════════════════════════════
 function renderTrackerView(p) {
   const TS = getTrackerState(p);
+  const isRemodel = p.projectType === 'remodel';
 
-  function isStepDone(pi, si) {
-    const st = p.sabPhases[pi].steps[si];
-    const items = getStepAllItems(st);
-    if (items.length === 0) return !!st.complete;
-    return items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
-  }
-
-  // Groundbreaking date from admin storage (overrides data.js default)
+  // Groundbreaking date card
   const gbDate = adminGet(p.id, 'gbDate') || p.groundbreakingDate || '';
+  const dateLabel = isRemodel ? 'Demo Start Date' : 'Groundbreaking Date';
+  const dateSub   = isRemodel
+    ? 'Sets the countdown on the client\'s Command Center.'
+    : 'Sets the countdown on the client\'s Command Center and Timeline.';
 
   let html = `
     <div class="card" style="margin-bottom:1rem">
-      <div class="sh"><div class="sh-title">Groundbreaking Date</div></div>
-      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Sets the countdown on the client's Command Center and Timeline.</p>
+      <div class="sh"><div class="sh-title">${dateLabel}</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">${dateSub}</p>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <input class="adm-inp" type="date" id="gb-date-inp" value="${gbDate}" style="width:auto">
         <button class="adm-btn adm-btn-green" onclick="saveGbDate('${p.id}')">Save Date</button>
@@ -461,9 +476,81 @@ function renderTrackerView(p) {
       </div>
     </div>`;
 
+  if (isRemodel) {
+    // ── REMODEL: render from cached Notion dynamic data ──
+    const dynData = notionDynamicCache[p.id];
+
+    if (!dynData) {
+      html += `
+        <div class="card" style="text-align:center;padding:2rem">
+          <div style="font-size:13px;color:var(--charcoal-3);margin-bottom:12px">
+            Steps are read live from Notion for remodel clients.
+          </div>
+          <button class="adm-btn adm-btn-green" onclick="loadAndRenderDynTracker('${p.id}')">
+            Load Steps from Notion
+          </button>
+          <span id="dyn-load-msg" class="adm-msg success" style="margin-left:10px"></span>
+        </div>`;
+      return html;
+    }
+
+    // Render phases and steps from Notion dynamic data
+    dynData.phases.forEach((ph, pi) => {
+      html += `<div class="phase-section-hd">Phase ${pi+1} — ${ph.label}</div>`;
+      ph.steps.forEach((step, si) => {
+        const topItems  = step.items.filter(it => it.depth <= 1);
+        const checked   = topItems.filter(it => it.checked).length;
+        const total     = topItems.length;
+        const done      = step.complete;
+        const stepNum   = step.notionNum || (step.globalIndex + 1);
+
+        html += `<div class="step-manage-row">
+          <div class="step-check ${done?'done':''}">
+            ${done?`<svg viewBox="0 0 9 9"><path d="M1.5 4.5l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`:''}
+          </div>
+          <div class="step-manage-meta">
+            <div class="step-manage-name">Step ${stepNum}: ${step.title}</div>
+            <div class="step-manage-date">${total>0?`${checked}/${total} items`:'No checklist'} · Six Arrows${done?' · Complete':''}</div>
+          </div>
+          <div class="step-manage-right">
+            <span class="tag ${done?'ok':'neutral'}" style="font-size:10px">${done?'Done':'In Progress'}</span>
+          </div>
+        </div>`;
+      });
+
+      if (ph.milestone) {
+        html += `<div style="font-size:11px;color:var(--green-dk);font-weight:600;padding:8px 12px;background:var(--green-pale);border-radius:var(--r-md);margin-bottom:12px">
+          🏅 Milestone: ${ph.milestone}${ph.complete?' — Complete':' — Pending'}
+        </div>`;
+      }
+    });
+
+    // Readiness summary
+    html += `
+      <div class="card" style="margin-top:1rem">
+        <div class="sh"><div class="sh-title">Build Readiness</div></div>
+        <div style="font-size:28px;font-weight:700;color:var(--charcoal);margin-bottom:4px">${dynData.readiness}%</div>
+        <div style="font-size:12px;color:var(--charcoal-4);margin-bottom:10px">${dynData.checkedItems} of ${dynData.totalItems} items complete</div>
+        <div class="track"><div class="bar" style="width:${dynData.readiness}%"></div></div>
+        <button class="adm-btn adm-btn-ghost" style="margin-top:12px;font-size:11px" onclick="loadAndRenderDynTracker('${p.id}')">↻ Refresh from Notion</button>
+      </div>`;
+
+    return html;
+  }
+
+  // ── NEW BUILD: render from p.sabPhases + TS ──
+  function isStepDone(pi, si) {
+    const st = p.sabPhases[pi].steps[si];
+    if (st.isFinal) return true;
+    const items = getStepAllItems(st);
+    if (items.length === 0) return !!st.complete;
+    return items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
+  }
+
   p.sabPhases.forEach((ph, pi) => {
     html += `<div class="phase-section-hd">Phase ${pi+1} — ${ph.label}</div>`;
     ph.steps.forEach((step, si) => {
+      if (step.isFinal) return; // skip review step in admin tracker
       const done      = isStepDone(pi, si);
       const dateKey   = `date-${pi}-${si}`;
       const dateVal   = TS[dateKey] || '';
@@ -489,6 +576,17 @@ function renderTrackerView(p) {
   });
 
   return html;
+}
+
+async function loadAndRenderDynTracker(projectId) {
+  const msgEl = document.getElementById('dyn-load-msg');
+  if (msgEl) msgEl.textContent = 'Loading from Notion…';
+  const data = await loadNotionDynamicForClient(projectId);
+  if (data) {
+    renderAdmin(); // re-render with cached data
+  } else {
+    if (msgEl) { msgEl.textContent = 'Failed — check Notion connection'; msgEl.style.color = 'var(--danger)'; }
+  }
 }
 
 function saveGbDate(projectId) {
@@ -1005,7 +1103,18 @@ function renderProjectView(p) {
         </label>
         <span id="pi-review-msg" class="adm-msg success" style="margin-left:0"></span>
       </div>
-    </div>`;
+    </div>
+
+    <div class="card" style="margin-top:12px;border-color:rgba(184,50,50,.2);background:#fffafa">
+      <div class="sh"><div class="sh-title" style="color:var(--danger)">Danger Zone</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);line-height:1.55;margin-bottom:12px">
+        Permanently removes this client and all their data — budget categories, updates, milestones, documents, and selections. This cannot be undone.
+      </p>
+      <button class="adm-btn" style="background:var(--danger);color:white;border:none" onclick="confirmDeleteClient('${p.id}','${p.clientName}')">
+        Remove ${p.clientName}
+      </button>
+      <span id="pi-delete-msg" class="adm-msg" style="margin-left:10px"></span>
+    </div>\`;
 }
 
 function saveProjectInfo(projectId) {
@@ -1138,6 +1247,56 @@ function saveShowReviewCard(projectId, checked) {
     console.error('saveShowReviewCard error:', err);
     showMsg('pi-review-msg','error','Network error — check console');
   });
+}
+
+function confirmDeleteClient(projectId, clientName) {
+  // Two-step confirmation: first click shows a confirm prompt
+  const confirmed = window.confirm(
+    `Remove ${clientName}?\n\nThis will permanently delete this client and ALL their data:\n• Budget categories\n• Updates & milestones\n• Documents & photos\n• Selections\n\nThis CANNOT be undone.`
+  );
+  if (!confirmed) return;
+  deleteClient(projectId, clientName);
+}
+
+async function deleteClient(projectId, clientName) {
+  const msgEl = document.getElementById('pi-delete-msg');
+  if (msgEl) { msgEl.textContent = 'Deleting…'; msgEl.style.color = 'var(--danger)'; }
+
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json' };
+
+  try {
+    // Delete all related records first (cascade should handle it, but be explicit)
+    const tables = ['selections','updates','budget_categories','change_orders','milestones','documents','decisions'];
+    await Promise.all(tables.map(table =>
+      fetch(`${SUPABASE_DIRECT_URL}/rest/v1/${table}?client_id=eq.${projectId}`, { method:'DELETE', headers:sbH })
+    ));
+
+    // Delete the client record
+    const res = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+      method: 'DELETE', headers: sbH,
+    });
+
+    if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+
+    // Remove from in-memory PROJECTS
+    delete PROJECTS[projectId];
+
+    // Switch to first remaining client
+    const remaining = Object.keys(PROJECTS);
+    if (remaining.length > 0) {
+      activeProject = remaining[0];
+      sessionStorage.setItem('sa_admin_project', activeProject);
+    }
+    activeView = 'tracker';
+    sessionStorage.setItem('sa_admin_view', 'tracker');
+
+    renderAdmin();
+    setTimeout(() => showMsg('pi-msg','success',`${clientName} removed ✓`), 100);
+
+  } catch(e) {
+    console.error('deleteClient error:', e);
+    if (msgEl) { msgEl.textContent = `Error: ${e.message}`; msgEl.style.color = 'var(--danger)'; }
+  }
 }
 
 // ════════════════════════════════════════════════════════
