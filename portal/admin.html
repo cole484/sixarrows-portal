@@ -451,9 +451,9 @@ async function loadNotionDynamicForClient(projectId) {
   return null;
 }
 
-// ════════════════════════════════════════════════════════
-//  TRACKER VIEW — mark steps complete, set target dates
-// ════════════════════════════════════════════════════════
+// ============================================================
+//  TRACKER VIEW
+// ============================================================
 function renderTrackerView(p) {
   const TS = getTrackerState(p);
   const isRemodel = p.projectType === 'remodel';
@@ -462,8 +462,8 @@ function renderTrackerView(p) {
   const gbDate = adminGet(p.id, 'gbDate') || p.groundbreakingDate || '';
   const dateLabel = isRemodel ? 'Demo Start Date' : 'Groundbreaking Date';
   const dateSub   = isRemodel
-    ? 'Sets the countdown on the client\'s Command Center.'
-    : 'Sets the countdown on the client\'s Command Center and Timeline.';
+    ? "Sets the countdown on the client's Command Center."
+    : "Sets the countdown on the client's Command Center and Timeline.";
 
   let html = `
     <div class="card" style="margin-bottom:1rem">
@@ -520,7 +520,7 @@ function renderTrackerView(p) {
 
       if (ph.milestone) {
         html += `<div style="font-size:11px;color:var(--green-dk);font-weight:600;padding:8px 12px;background:var(--green-pale);border-radius:var(--r-md);margin-bottom:12px">
-          🏅 Milestone: ${ph.milestone}${ph.complete?' — Complete':' — Pending'}
+          ★ Milestone: ${ph.milestone}${ph.complete?' — Complete':' — Pending'}
         </div>`;
       }
     });
@@ -1114,7 +1114,7 @@ function renderProjectView(p) {
         Remove ${p.clientName}
       </button>
       <span id="pi-delete-msg" class="adm-msg" style="margin-left:10px"></span>
-    </div>\`;
+    </div>`;
 }
 
 function saveProjectInfo(projectId) {
