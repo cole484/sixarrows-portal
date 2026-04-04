@@ -988,8 +988,8 @@ async function deleteBudgetCategory(projectId, catIndex) {
 }
 
 async function syncCategoriesFromSheet(projectId) {
-  const p      = PROJECTS[projectId];
-  const msgEl  = document.getElementById('bcat-sync-msg');
+  const p        = PROJECTS[projectId];
+  const msgEl    = document.getElementById('bcat-sync-msg');
   const sheetUrl = p.links?.budget;
 
   if (!sheetUrl || sheetUrl === '#') {
@@ -1000,21 +1000,43 @@ async function syncCategoriesFromSheet(projectId) {
   if (msgEl) { msgEl.textContent = 'Importing…'; msgEl.className = 'adm-msg success'; }
 
   try {
-    const res  = await fetch(`/.netlify/functions/sheet-budget-sync?clientId=${projectId}&sheetUrl=${encodeURIComponent(sheetUrl)}&syncCategories=1`);
-    const data = res.ok ? await res.json() : null;
+    const res = await fetch(`/.netlify/functions/sheet-budget-sync?clientId=${projectId}&sheetUrl=${encodeURIComponent(sheetUrl)}&syncCategories=1`);
 
-    if (!data || data.synced === 0) {
-      if (msgEl) { msgEl.textContent = data?.message || 'No categories found — check column Z'; msgEl.className = 'adm-msg error'; }
+    // Log raw response for debugging
+    const rawText = await res.text();
+    console.log('syncCategoriesFromSheet response:', res.status, rawText);
+
+    let data;
+    try { data = JSON.parse(rawText); } catch(e) {
+      alert(`Sync failed — unexpected response:\n${rawText.slice(0, 300)}`);
+      if (msgEl) { msgEl.textContent = 'Error — see console'; msgEl.className = 'adm-msg error'; }
       return;
     }
 
+    if (!res.ok || !data || data.error) {
+      const msg = data?.error || `HTTP ${res.status}`;
+      alert(`Sync failed: ${msg}`);
+      if (msgEl) { msgEl.textContent = `Error: ${msg}`; msgEl.className = 'adm-msg error'; }
+      return;
+    }
+
+    if (data.synced === 0) {
+      const msg = data.message || 'No rows tagged "Main Category" found in column Z';
+      alert(`Sync result: ${msg}\n\nCategories found: ${JSON.stringify(data.categories)}`);
+      if (msgEl) { msgEl.textContent = msg; msgEl.className = 'adm-msg error'; }
+      return;
+    }
+
+    // Success — show message then reload
+    alert(`Success! ${data.synced} categories imported from sheet:\n${data.categories.map(c => `• ${c.name} (${c.status})`).join('\n')}`);
     if (msgEl) { msgEl.textContent = `${data.synced} categories imported ✓`; msgEl.className = 'adm-msg success'; }
 
-    // Reload all clients to pick up new categories, then re-render
     await loadAllClientsFromSupabase();
-    setTimeout(() => renderAdmin(), 500);
+    setTimeout(() => renderAdmin(), 800);
 
   } catch(e) {
+    console.error('syncCategoriesFromSheet error:', e);
+    alert(`Sync error: ${e.message}`);
     if (msgEl) { msgEl.textContent = `Error: ${e.message}`; msgEl.className = 'adm-msg error'; }
   }
 }
