@@ -163,39 +163,50 @@ async function loadState() {
     });
   }));
 
+  // Update badges from local TS immediately (before Notion sync)
+  updateBadges(null);
+
   // Restore last active tab
   try { const t = localStorage.getItem(SK+'tab_'+p.id); if (t !== null) activeTab = parseInt(t); } catch(e) {}
 
   // 2. Fetch live Notion data — Notion is authoritative, always overrides localStorage
   const notionPageId = p.notionTrackerPageId;
+  const isRemodel    = p.projectType === 'remodel';
   if (notionPageId) {
     try {
-      const res = await fetch(`/.netlify/functions/notion-tracker?pageId=${notionPageId}`);
+      const url = isRemodel
+        ? `/.netlify/functions/notion-tracker?pageId=${notionPageId}&dynamic=1`
+        : `/.netlify/functions/notion-tracker?pageId=${notionPageId}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (data.steps) {
-          // Clear all item states first — Notion is the source of truth
+
+        if (isRemodel && data.dynamic && data.phases) {
+          // ── REMODEL MODE: store Notion structure directly ──
+          notionDynamicData = data;
+          try { localStorage.setItem(SK+'dynamic_'+p.id, JSON.stringify(data)); } catch(e) {}
+          updateBadgesFromDynamic(data);
+          rerender();
+
+        } else if (!isRemodel && data.steps) {
+          // ── NEW BUILD MODE: apply Notion completion to TS ──
           p.sabPhases.forEach((ph,pi) => {
             ph.steps.forEach((st,si) => {
-              getStepAllItems(st).forEach((_,ii) => {
-                TS[`${pi}-${si}-${ii}`] = false;
-              });
+              getStepAllItems(st).forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = false; });
             });
           });
-          // Now apply what Notion says is complete
           p.sabPhases.forEach((ph,pi) => {
             ph.steps.forEach((st,si) => {
               const notionStep = data.steps[`${pi}-${si}`];
-              if (notionStep && notionStep.complete) {
+              if (notionStep?.complete) {
                 getStepAllItems(st).forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = true; });
               }
             });
           });
           saveState();
+          updateBadges(data);
+          rerender();
         }
-        // Update badge earned status based on phase completion
-        updateBadges(data);
-        rerender();
       }
     } catch(e) {
       console.log('Notion sync unavailable, using local state:', e.message);
@@ -204,20 +215,54 @@ async function loadState() {
 }
 function saveState() { try { localStorage.setItem(SK+p.id, JSON.stringify(TS)); } catch(e) {} }
 
+// Dynamic Notion data for remodel clients (populated after Notion sync)
+let notionDynamicData = null;
+
+// Restore cached dynamic data from localStorage immediately (before Notion sync)
+function loadCachedDynamicData() {
+  try {
+    const r = localStorage.getItem(SK+'dynamic_'+p.id);
+    if (r) notionDynamicData = JSON.parse(r);
+  } catch(e) {}
+}
+
+function updateBadgesFromDynamic(data) {
+  if (!p.badges || !data?.phases) return;
+  const readiness = data.readiness || 0;
+  if (readiness > 0)  earnBadge('first_step');
+  if (readiness >= 50) earnBadge('halfway');
+  data.phases.forEach((ph, pi) => {
+    if (ph.complete) {
+      if (pi === 0) earnBadge('phase1');
+      if (pi === 1) earnBadge('phase2');
+      if (pi === 2) earnBadge('phase3');
+      if (pi === 3) earnBadge('phase3'); // remodels have 4 phases; phase3 = build ready
+    }
+  });
+}
+
 function updateBadges(notionData) {
   if (!p.badges) return;
-  const readiness = notionData?.readiness || 0;
-  const phases    = notionData?.phases    || [];
+  if (p.projectType === 'remodel') {
+    if (notionDynamicData) updateBadgesFromDynamic(notionDynamicData);
+    return;
+  }
+  // Derive from local TS first (always available), supplement with Notion readiness
+  const readiness = notionData?.readiness ?? buildReadinessPct(p, TS);
+  // phase done = all non-isFinal steps checked in TS
+  const ph0Done = p.sabPhases[0]?.steps.every((_,si) => isStepDone(0,si));
+  const ph1Done = p.sabPhases[1]?.steps.every((_,si) => isStepDone(1,si));
+  const ph2Done = p.sabPhases[2]?.steps.every((_,si) => isStepDone(2,si));
   // first_step — any item checked
   if (readiness > 0) earnBadge('first_step');
   // halfway — 50%+ readiness
   if (readiness >= 50) earnBadge('halfway');
   // phase1 — Plan Ready (phase 0 complete)
-  if (phases[0]?.complete) earnBadge('phase1');
+  if (ph0Done) earnBadge('phase1');
   // phase2 — Design Locked (phase 1 complete)
-  if (phases[1]?.complete) earnBadge('phase2');
+  if (ph1Done) earnBadge('phase2');
   // phase3 — Build Ready (phase 2 complete)
-  if (phases[2]?.complete) earnBadge('phase3');
+  if (ph2Done) earnBadge('phase3');
 }
 function earnBadge(id) {
   const b = (p.badges||[]).find(b => b.id === id);
@@ -254,9 +299,16 @@ const _shownModal = {};
 
 // ── Render ─────────────────────────────────────────────
 function rerender() {
-  const pct     = buildReadinessPct(p,TS);
-  const total   = sabTotalItems(p);
-  const checked = sabCheckedItems(p,TS);
+  // Always re-evaluate badges from current TS before rendering
+  updateBadges(null);
+
+  const isRemodel = p.projectType === 'remodel';
+  const dynData   = notionDynamicData;
+
+  // ── Readiness % ──
+  const pct     = isRemodel && dynData ? dynData.readiness : buildReadinessPct(p, TS);
+  const total   = isRemodel && dynData ? dynData.totalItems : sabTotalItems(p);
+  const checked = isRemodel && dynData ? dynData.checkedItems : sabCheckedItems(p, TS);
 
   // Live sidebar
   const sbPct  = document.getElementById('sb-pct');
@@ -272,13 +324,22 @@ function rerender() {
   document.getElementById('br-sub').textContent    = checked+' of '+total+' steps complete';
   document.getElementById('br-status').textContent = pct<34?'Getting started':pct<67?'Making progress':pct<100?'Almost build ready':'Build Ready ✦';
 
-  // Phase tabs
-  document.getElementById('phase-tabs').innerHTML = (p.sabPhases||[]).map((ph,pi) => {
-    const done=isPhaseDone(pi), active=pi===activeTab;
-    return `<button class="phase-tab ${active?'active':''} ${done?'done':''}" onclick="switchTab(${pi})">
-      <div class="phase-tab-pip"></div>Phase ${pi+1}: ${ph.short}
-    </button>`;
-  }).join('');
+  // ── Phase tabs ──
+  if (isRemodel && dynData?.phases) {
+    document.getElementById('phase-tabs').innerHTML = dynData.phases.map((ph, pi) => {
+      const active = pi === activeTab;
+      return `<button class="phase-tab ${active?'active':''} ${ph.complete?'done':''}" onclick="activeTab=${pi};rerender()">
+        <div class="phase-tab-pip"></div>Phase ${pi+1}: ${ph.label.split(' ')[0]}
+      </button>`;
+    }).join('');
+  } else {
+    document.getElementById('phase-tabs').innerHTML = (p.sabPhases||[]).map((ph,pi) => {
+      const done=isPhaseDone(pi), active=pi===activeTab;
+      return `<button class="phase-tab ${active?'active':''} ${done?'done':''}" onclick="switchTab(${pi})">
+        <div class="phase-tab-pip"></div>Phase ${pi+1}: ${ph.short}
+      </button>`;
+    }).join('');
+  }
 
   // Badges
   document.getElementById('badges-wrap').innerHTML = (p.badges||[]).map(b =>
@@ -295,12 +356,53 @@ function rerender() {
   renderPace();
 
   // Steps
-  renderSteps();
+  if (isRemodel && dynData?.phases) {
+    renderDynamicSteps(dynData);
+  } else {
+    renderSteps();
+  }
 }
 
 function renderYAH() {
-  const active = findActiveStep();
   const el = document.getElementById('yah-wrap');
+  const isRemodel = p.projectType === 'remodel';
+
+  if (isRemodel && notionDynamicData?.phases) {
+    // ── Remodel mode: find first incomplete step across all phases ──
+    let activePhase = null, activeStep = null, activePi = 0, activeSi = 0;
+    outer: for (let pi = 0; pi < notionDynamicData.phases.length; pi++) {
+      const ph = notionDynamicData.phases[pi];
+      for (let si = 0; si < ph.steps.length; si++) {
+        if (!ph.steps[si].complete) {
+          activePhase = ph; activeStep = ph.steps[si]; activePi = pi; activeSi = si;
+          break outer;
+        }
+      }
+    }
+    if (!activeStep) {
+      el.innerHTML = `<div class="yah-banner"><div class="yah-inner"><div class="yah-left">
+        <div class="yah-eyebrow">You Are Here</div>
+        <div class="yah-step">All phases complete — Demo Day Ready</div>
+        <div class="yah-desc">The Six Arrows Blueprint™ process is complete. Construction can begin.</div>
+      </div></div></div>`;
+      return;
+    }
+    const topDone  = activeStep.items.filter(it => it.depth <= 1 && it.checked).length;
+    const topTotal = activeStep.items.filter(it => it.depth <= 1).length;
+    el.innerHTML = `<div class="yah-banner"><div class="yah-inner"><div class="yah-left">
+      <div class="yah-eyebrow">You Are Here · Phase ${activePi+1}, Step ${activeStep.notionNum || (activeStep.globalIndex + 1)}</div>
+      <div class="yah-step">${activeStep.title}</div>
+      <div class="yah-desc">${activePhase.goal || ''}</div>
+      <div class="yah-who" style="margin-top:8px">
+        <svg style="width:10px;height:10px;fill:rgba(235,233,222,.5)" viewBox="0 0 12 12"><circle cx="6" cy="4" r="2.5"/><path d="M1 10c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/></svg>
+        <span class="yah-who-lbl" style="color:rgba(235,233,222,.5)">${topDone} of ${topTotal} items complete</span>
+      </div>
+    </div></div></div>`;
+    return;
+  }
+
+  // ── New build mode ──
+  const active = findActiveStep();
   if (!active) {
     el.innerHTML = `<div class="yah-banner">
       <div class="yah-inner">
@@ -320,21 +422,16 @@ function renderYAH() {
   if (dateVal) {
     const diff = Math.ceil((new Date(dateVal+'T00:00:00') - new Date()) / 86400000);
     const color = diff < 0 ? '#e55' : diff <= 3 ? '#c87000' : 'var(--cream-pale)';
-    const label = diff < 0 ? `${Math.abs(diff)} days overdue` : diff === 0 ? 'Due today' : `${diff} days away`;
     daysHtml = `<div class="yah-due-block">
       <div class="yah-due-num" style="color:${color}">${Math.abs(diff)}</div>
       <div class="yah-due-lbl">${diff<0?'days overdue':'days away'}</div>
       <div class="yah-due-date">${new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
     </div>`;
   } else {
-    daysHtml = `<div style="text-align:right">
-      <div style="font-size:11px;color:rgba(235,233,222,.25)">Date TBD</div>
-    </div>`;
+    daysHtml = `<div style="text-align:right"><div style="font-size:11px;color:rgba(235,233,222,.25)">Date TBD</div></div>`;
   }
-
   const ownerLabel = { sa:'Six Arrows is handling this', client:'Your decision required', both:'Collaborative — we work on this together' }[step.owner||'both'];
   const ownerColor = { sa:'rgba(235,233,222,.5)', client:'#f0a040', both:'rgba(235,233,222,.5)' }[step.owner||'both'];
-
   el.innerHTML = `<div class="yah-banner">
     <div class="yah-inner">
       <div class="yah-left">
@@ -418,6 +515,151 @@ function renderSteps() {
     document.getElementById('step-list').appendChild(bar);
   }
 }
+
+// ── Dynamic step renderer for remodel clients ──────────
+function renderDynamicSteps(dynData) {
+  const list = document.getElementById('step-list');
+  list.innerHTML = '';
+
+  const phase = dynData.phases[activeTab];
+  if (!phase) return;
+
+  // Phase goal banner
+  if (phase.goal) {
+    const goalEl = document.createElement('div');
+    goalEl.style.cssText = 'font-size:12px;color:var(--charcoal-4);font-style:italic;padding:8px 0 12px;line-height:1.5';
+    goalEl.textContent = phase.goal;
+    list.appendChild(goalEl);
+  }
+
+  // Render each step
+  phase.steps.forEach((step, si) => {
+    // isFinal steps get the review card treatment
+    if (step.isFinal) {
+      const isReviewDone = !!p.reviewLeft;
+      const card = document.createElement('div');
+      card.className = 'step-card final-step';
+      card.innerHTML = `
+        <div class="final-step-inner">
+          <img class="final-step-logo" src="${LOGO_CIRCLE}" alt="Six Arrows">
+          <div class="final-step-title">${isReviewDone ? 'Thank you for sharing.' : "You've done it. Project Ready."}</div>
+          <p class="final-step-body">${isReviewDone
+            ? 'Your review has been shared. Your Six Arrows team is grateful.'
+            : "You've completed the Six Arrows Blueprint™ process. Your story helps other families find the right path."
+          }</p>
+          ${isReviewDone
+            ? `<div style="display:flex;align-items:center;gap:8px;justify-content:center;font-size:13px;color:var(--green-dk);font-weight:600">
+                 <svg style="width:16px;height:16px" viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 7l3 3 6-6"/></svg>
+                 Review shared
+               </div>`
+            : `<a href="share.html" class="final-step-cta" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+                 <svg style="width:13px;height:13px;fill:white" viewBox="0 0 14 14"><path d="M7 2l1.4 3H12l-2.6 1.9.9 3.1L7 8.2l-3.3 1.8.9-3.1L2 5H5.6z"/></svg>
+                 Share Your SAB™ Experience
+               </a>`
+          }
+        </div>`;
+      list.appendChild(card);
+      return;
+    }
+
+    const topItems = step.items.filter(it => it.depth <= 1);
+    const doneItems = topItems.filter(it => it.checked).length;
+    const total    = topItems.length;
+    const pct      = total ? Math.round(doneItems / total * 100) : 100;
+    const done     = step.complete;
+    const isOpen   = !!TS[`open-dyn-${activeTab}-${si}`];
+
+    const card = document.createElement('div');
+    card.className = `step-card ${done ? 'complete' : ''}`;
+    card.innerHTML = `
+      <div class="step-hd" onclick="toggleDynStep(${activeTab},${si})">
+        <div class="step-num ${done ? 'complete' : doneItems > 0 ? 'progress' : 'pending'}">
+          ${done
+            ? `<svg viewBox="0 0 12 12"><path d="M2 6l2.8 3 5.2-5.5" stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`
+            : (step.notionNum || step.globalIndex + 1)}
+        </div>
+        <div class="step-meta">
+          <div class="step-name">Step ${step.notionNum || (step.globalIndex + 1)}: ${step.title}</div>
+          <div class="step-inforow">
+            <span class="step-cnt">${done ? 'Complete' : `${doneItems} of ${total} complete`}</span>
+            <span class="owner-badge both">
+              <svg viewBox="0 0 10 10" style="width:9px;height:9px"><path d="M5 1a2 2 0 110 4 2 2 0 010-4zM1 9c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>
+              Six Arrows
+            </span>
+          </div>
+        </div>
+        <div class="step-right">
+          ${done ? `<span class="tag ok" style="font-size:9px">Done</span>` : ''}
+          <div class="step-barwrap"><div class="step-barfill" style="width:${pct}%"></div></div>
+          <svg class="step-chev ${isOpen ? 'open' : ''}" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2.5l4 3.5-4 3.5"/></svg>
+        </div>
+      </div>
+      <div class="step-body ${isOpen ? 'open' : ''}" id="dyn-sb-${activeTab}-${si}">
+        <div class="step-body-inner">
+          <ul class="checklist">
+            ${renderDynItems(step.items, 0)}
+          </ul>
+          ${done ? `<div class="step-done-bar">
+            <svg viewBox="0 0 14 14"><path d="M2.5 7l3 3 6-6" stroke="var(--green-dk)" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span>Step complete</span>
+          </div>` : ''}
+        </div>
+      </div>`;
+    list.appendChild(card);
+  });
+
+  // Phase milestone bar
+  if (phase.complete && phase.milestone) {
+    const bar = document.createElement('div');
+    bar.className = 'phase-done-bar';
+    bar.innerHTML = `<svg viewBox="0 0 18 18"><path d="M3 9l4 4 8-8" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      <div><div class="pdb-title">Milestone — ${phase.milestone}</div><div class="pdb-sub">${phase.milestoneDesc}</div></div>`;
+    list.appendChild(bar);
+  }
+}
+
+function renderDynItems(items, parentDepth) {
+  // Render items at the current depth level, recursing for sub-items
+  // We flatten items by depth — depth 0 are top-level, depth 1 are sub-items shown indented
+  let html = '';
+  let i = 0;
+  while (i < items.length) {
+    const it = items[i];
+    if (it.depth > parentDepth) { i++; continue; } // handled by parent
+    if (it.depth < parentDepth) break; // back up
+
+    const cls = it.checked ? 'done' : '';
+    const indent = it.depth > 0 ? 'margin-left:18px;' : '';
+    // Show sub-items (depth 1) as indented but still visible
+    html += `<li class="chk-row ${cls}" style="${indent}">
+      <input type="checkbox" ${it.checked ? 'checked' : ''} disabled>
+      <label class="chk-text">${it.text}</label>
+    </li>`;
+
+    // Check if next items are children (depth+1) — show them indented
+    let j = i + 1;
+    while (j < items.length && items[j].depth > it.depth) {
+      const sub = items[j];
+      const subCls = sub.checked ? 'done' : '';
+      html += `<li class="chk-row ${subCls}" style="margin-left:${18 * (sub.depth)}px;opacity:.75">
+        <input type="checkbox" ${sub.checked ? 'checked' : ''} disabled>
+        <label class="chk-text" style="font-size:11px;color:var(--charcoal-4)">${sub.text}</label>
+      </li>`;
+      j++;
+    }
+    i = j;
+  }
+  return html;
+}
+
+window.toggleDynStep = function(pi, si) {
+  const k = `open-dyn-${pi}-${si}`;
+  TS[k] = !TS[k];
+  const body    = document.getElementById(`dyn-sb-${pi}-${si}`);
+  const chevron = body?.previousElementSibling?.querySelector('.step-chev');
+  if (body)    body.classList.toggle('open', !!TS[k]);
+  if (chevron) chevron.classList.toggle('open', !!TS[k]);
+};
 
 function renderStepCard(pi, si, step, phaseComplete) {
   const done    = isStepDone(pi,si);
@@ -647,10 +889,13 @@ function toggle(key,pi,si) {
     const ph = p.sabPhases[pi];
     setTimeout(()=>showMilestoneModal('Phase '+(pi+1)+' Complete',ph.milestoneDesc,ph.milestone),450);
   }
-  saveState(); rerender();
+  saveState();
+  updateBadges(null);
+  rerender();
 }
 
 // ── Boot ───────────────────────────────────────────────
+loadCachedDynamicData();
 loadState();
 if (!Object.keys(TS).some(k=>k.startsWith('open-'))) TS['open-0-0']=true;
 
@@ -684,7 +929,18 @@ mountLayout('tracker','SAB™ Tracker',`
   <div id="step-list"></div>
 `,TS);
 
-rerender();
+// For remodel clients with no cached dynamic data yet, show a loading state
+// until the async Notion fetch in loadState() completes and calls rerender()
+if (p.projectType === 'remodel' && !notionDynamicData) {
+  document.getElementById('step-list').innerHTML = `
+    <div style="padding:2rem;text-align:center">
+      <div style="font-size:13px;color:var(--charcoal-4);margin-bottom:8px">Loading your project tracker…</div>
+      <div style="font-size:11px;color:var(--charcoal-4);opacity:.6">Syncing with Notion</div>
+    </div>`;
+  document.getElementById('phase-tabs').innerHTML = '';
+} else {
+  rerender();
+}
 </script>
 </body>
 </html>

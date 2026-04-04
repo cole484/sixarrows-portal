@@ -138,8 +138,8 @@ const ADMIN_PASS = 'sa_admin_2026';
 const SUPABASE_DIRECT_URL = 'https://mtvcahscwpralmlqlnzg.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10dmNhaHNjd3ByYWxtbHFsbnpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTY4ODEsImV4cCI6MjA5MDM5Mjg4MX0.givpTh-YxG16vYZmn0KLBCPG0ivxYbjh-i8Q87eCNnk';
 let adminAuthed  = false;
-let activeProject = Object.keys(PROJECTS)[0];
-let activeView    = 'tracker';
+let activeProject = sessionStorage.getItem('sa_admin_project') || Object.keys(PROJECTS)[0];
+let activeView    = sessionStorage.getItem('sa_admin_view')    || 'tracker';
 
 // ── Storage helpers ──────────────────────────────────────
 function adminKey(projectId, suffix) { return `sa_admin_${projectId}_${suffix}`; }
@@ -163,6 +163,11 @@ async function checkAdminAuth() {
   if (sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS) {
     adminAuthed = true;
     await loadAllClientsFromSupabase();
+    // Validate stored project still exists, else fall back to first
+    if (!PROJECTS[activeProject]) {
+      activeProject = Object.keys(PROJECTS)[0];
+      sessionStorage.setItem('sa_admin_project', activeProject);
+    }
     renderAdmin();
     return;
   }
@@ -249,6 +254,7 @@ async function loadAllClientsFromSupabase() {
         reviewDraft:         client.review_draft || '',
         reviewLeft:          !!client.review_left,
         showReviewCard:      !!client.show_review_card,
+        projectType:         client.project_type || 'new_build',
         budgetCategories:    budgetCats,
         updates:             updates.length ? updates : (existing.updates || []),
         timeline:            timeline.length ? timeline : (existing.timeline || []),
@@ -263,6 +269,28 @@ async function loadAllClientsFromSupabase() {
       };
     }
     console.log(`Admin: loaded ${clients.length} clients from Supabase`);
+
+    // Auto-import categories for remodel clients that have a sheet URL but no categories
+    const remodelNeedingSync = clients.filter(c =>
+      c.project_type === 'remodel' &&
+      c.budget_link && c.budget_link !== '#' &&
+      !(PROJECTS[c.id]?.budgetCategories?.length)
+    );
+    for (const c of remodelNeedingSync) {
+      // Fire and forget — don't block the admin from loading
+      fetch(`/.netlify/functions/sheet-budget-sync?clientId=${c.id}&sheetUrl=${encodeURIComponent(c.budget_link)}&syncCategories=1`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.synced > 0) {
+            console.log(`Auto-imported ${data.synced} categories for ${c.id}`);
+            // Reload to pick up the new cats (only if admin is viewing this client's budget)
+            if (activeProject === c.id && activeView === 'budget') {
+              loadAllClientsFromSupabase().then(() => renderAdmin());
+            }
+          }
+        })
+        .catch(e => console.log(`Auto-sync failed for ${c.id}:`, e.message));
+    }
   } catch(e) {
     console.warn('Supabase load failed, using local data:', e.message);
   }
@@ -328,18 +356,18 @@ function renderAdmin() {
     { key:'selections',icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3.5l2 2 2.5-2.5"/><line x1="7" y1="4.5" x2="13" y2="4.5"/><path d="M1 9l2 2 2.5-2.5"/><line x1="7" y1="10" x2="13" y2="10"/></svg>`, label:'Selections'       },
     { key:'documents', icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1h5.5L11 3.5V13H3V1z"/><polyline points="8.5,1 8.5,4 11,4"/></svg>`, label:'Documents'       },
     { key:'photos',    icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="1"/><circle cx="5" cy="6" r="1.5"/><path d="M1 11l3-3 2.5 2.5L10 7l3 4"/></svg>`, label:'Build Photos'    },
-  ].map(n => `<div class="admin-nav-link ${activeView===n.key?'active':''}" onclick="activeView='${n.key}';renderAdmin()">${n.icon}${n.label}</div>`).join('');
+  ].map(n => `<div class="admin-nav-link ${activeView===n.key?'active':''}" onclick="activeView='${n.key}';sessionStorage.setItem('sa_admin_view','${n.key}');renderAdmin()">${n.icon}${n.label}</div>`).join('');
 
   const projectSelect = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
       <div style="flex:1;min-width:200px">
-        <select class="adm-inp adm-sel" style="font-weight:600" onchange="activeProject=this.value;renderAdmin()">
+        <select class="adm-inp adm-sel" style="font-weight:600" onchange="activeProject=this.value;sessionStorage.setItem('sa_admin_project',this.value);renderAdmin()">
           ${Object.values(PROJECTS).map(proj =>
             `<option value="${proj.id}" ${proj.id===activeProject?'selected':''}>${proj.clientName} — ${proj.projectName}</option>`
           ).join('')}
         </select>
       </div>
-      <button class="adm-btn adm-btn-ghost" onclick="activeView='addclient';renderAdmin()" style="white-space:nowrap">
+      <button class="adm-btn adm-btn-ghost" onclick="activeView='addclient';sessionStorage.setItem('sa_admin_view','addclient');renderAdmin()" style="white-space:nowrap">
         <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
         Add Client
       </button>
@@ -403,7 +431,7 @@ function renderAdmin() {
           <div class="admin-nav-title">Manage</div>
           ${nav}
           <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 0"></div>
-          <div class="admin-nav-link ${activeView==='addclient'?'active':''}" onclick="activeView='addclient';renderAdmin()">
+          <div class="admin-nav-link ${activeView==='addclient'?'active':''}" onclick="activeView='addclient';sessionStorage.setItem('sa_admin_view','addclient');renderAdmin()">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" style="width:13px;height:13px;opacity:.6"><circle cx="7" cy="4" r="2.5"/><path d="M1 12c0-3 2.7-5 6-5s6 2 6 5"/><line x1="10.5" y1="2" x2="10.5" y2="6"/><line x1="8.5" y1="4" x2="12.5" y2="4"/></svg>
             Add New Client
           </div>
@@ -415,6 +443,7 @@ function renderAdmin() {
       <div class="admin-main">
         <div class="admin-topbar">
           <span class="admin-topbar-title">${activeView === 'addclient' ? 'Add New Client' : `${p.clientName} — ${activeView.charAt(0).toUpperCase()+activeView.slice(1)}`}</span>
+          ${activeView !== 'addclient' ? `<span class="tag ${p.projectType === 'remodel' ? '' : 'ok'}" style="font-size:10px;margin-left:6px">${p.projectType === 'remodel' ? 'Remodel' : 'New Build'}</span>` : ''}
           <span style="font-size:11px;color:var(--charcoal-4)">Admin only</span>
         </div>
         <div class="admin-content">
@@ -428,26 +457,41 @@ function renderAdmin() {
   attachHandlers(p);
 }
 
-// ════════════════════════════════════════════════════════
-//  TRACKER VIEW — mark steps complete, set target dates
-// ════════════════════════════════════════════════════════
+// Cache for dynamic Notion data (remodel clients)
+const notionDynamicCache = {};
+
+async function loadNotionDynamicForClient(projectId) {
+  const p = PROJECTS[projectId];
+  if (!p?.notionTrackerPageId) return null;
+  try {
+    const res  = await fetch(`/.netlify/functions/notion-tracker?pageId=${p.notionTrackerPageId}&dynamic=1`);
+    const data = res.ok ? await res.json() : null;
+    if (data?.dynamic && data?.phases) {
+      notionDynamicCache[projectId] = data;
+      return data;
+    }
+  } catch(e) { console.error('Notion dynamic fetch failed:', e); }
+  return null;
+}
+
+// ============================================================
+//  TRACKER VIEW
+// ============================================================
 function renderTrackerView(p) {
   const TS = getTrackerState(p);
+  const isRemodel = p.projectType === 'remodel';
 
-  function isStepDone(pi, si) {
-    const st = p.sabPhases[pi].steps[si];
-    const items = getStepAllItems(st);
-    if (items.length === 0) return !!st.complete;
-    return items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
-  }
-
-  // Groundbreaking date from admin storage (overrides data.js default)
+  // Groundbreaking date card
   const gbDate = adminGet(p.id, 'gbDate') || p.groundbreakingDate || '';
+  const dateLabel = isRemodel ? 'Demo Start Date' : 'Groundbreaking Date';
+  const dateSub   = isRemodel
+    ? "Sets the countdown on the client's Command Center."
+    : "Sets the countdown on the client's Command Center and Timeline.";
 
   let html = `
     <div class="card" style="margin-bottom:1rem">
-      <div class="sh"><div class="sh-title">Groundbreaking Date</div></div>
-      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Sets the countdown on the client's Command Center and Timeline.</p>
+      <div class="sh"><div class="sh-title">${dateLabel}</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">${dateSub}</p>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <input class="adm-inp" type="date" id="gb-date-inp" value="${gbDate}" style="width:auto">
         <button class="adm-btn adm-btn-green" onclick="saveGbDate('${p.id}')">Save Date</button>
@@ -455,9 +499,81 @@ function renderTrackerView(p) {
       </div>
     </div>`;
 
+  if (isRemodel) {
+    // ── REMODEL: render from cached Notion dynamic data ──
+    const dynData = notionDynamicCache[p.id];
+
+    if (!dynData) {
+      html += `
+        <div class="card" style="text-align:center;padding:2rem">
+          <div style="font-size:13px;color:var(--charcoal-3);margin-bottom:12px">
+            Steps are read live from Notion for remodel clients.
+          </div>
+          <button class="adm-btn adm-btn-green" onclick="loadAndRenderDynTracker('${p.id}')">
+            Load Steps from Notion
+          </button>
+          <span id="dyn-load-msg" class="adm-msg success" style="margin-left:10px"></span>
+        </div>`;
+      return html;
+    }
+
+    // Render phases and steps from Notion dynamic data
+    dynData.phases.forEach((ph, pi) => {
+      html += `<div class="phase-section-hd">Phase ${pi+1} — ${ph.label}</div>`;
+      ph.steps.forEach((step, si) => {
+        const topItems  = step.items.filter(it => it.depth <= 1);
+        const checked   = topItems.filter(it => it.checked).length;
+        const total     = topItems.length;
+        const done      = step.complete;
+        const stepNum   = step.notionNum || (step.globalIndex + 1);
+
+        html += `<div class="step-manage-row">
+          <div class="step-check ${done?'done':''}">
+            ${done?`<svg viewBox="0 0 9 9"><path d="M1.5 4.5l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`:''}
+          </div>
+          <div class="step-manage-meta">
+            <div class="step-manage-name">Step ${stepNum}: ${step.title}</div>
+            <div class="step-manage-date">${total>0?`${checked}/${total} items`:'No checklist'} · Six Arrows${done?' · Complete':''}</div>
+          </div>
+          <div class="step-manage-right">
+            <span class="tag ${done?'ok':'neutral'}" style="font-size:10px">${done?'Done':'In Progress'}</span>
+          </div>
+        </div>`;
+      });
+
+      if (ph.milestone) {
+        html += `<div style="font-size:11px;color:var(--green-dk);font-weight:600;padding:8px 12px;background:var(--green-pale);border-radius:var(--r-md);margin-bottom:12px">
+          ★ Milestone: ${ph.milestone}${ph.complete?' — Complete':' — Pending'}
+        </div>`;
+      }
+    });
+
+    // Readiness summary
+    html += `
+      <div class="card" style="margin-top:1rem">
+        <div class="sh"><div class="sh-title">Build Readiness</div></div>
+        <div style="font-size:28px;font-weight:700;color:var(--charcoal);margin-bottom:4px">${dynData.readiness}%</div>
+        <div style="font-size:12px;color:var(--charcoal-4);margin-bottom:10px">${dynData.checkedItems} of ${dynData.totalItems} items complete</div>
+        <div class="track"><div class="bar" style="width:${dynData.readiness}%"></div></div>
+        <button class="adm-btn adm-btn-ghost" style="margin-top:12px;font-size:11px" onclick="loadAndRenderDynTracker('${p.id}')">↻ Refresh from Notion</button>
+      </div>`;
+
+    return html;
+  }
+
+  // ── NEW BUILD: render from p.sabPhases + TS ──
+  function isStepDone(pi, si) {
+    const st = p.sabPhases[pi].steps[si];
+    if (st.isFinal) return true;
+    const items = getStepAllItems(st);
+    if (items.length === 0) return !!st.complete;
+    return items.every((_, ii) => TS[`${pi}-${si}-${ii}`]);
+  }
+
   p.sabPhases.forEach((ph, pi) => {
     html += `<div class="phase-section-hd">Phase ${pi+1} — ${ph.label}</div>`;
     ph.steps.forEach((step, si) => {
+      if (step.isFinal) return; // skip review step in admin tracker
       const done      = isStepDone(pi, si);
       const dateKey   = `date-${pi}-${si}`;
       const dateVal   = TS[dateKey] || '';
@@ -485,16 +601,44 @@ function renderTrackerView(p) {
   return html;
 }
 
+async function loadAndRenderDynTracker(projectId) {
+  const msgEl = document.getElementById('dyn-load-msg');
+  if (msgEl) msgEl.textContent = 'Loading from Notion…';
+  const data = await loadNotionDynamicForClient(projectId);
+  if (data) {
+    renderAdmin(); // re-render with cached data
+  } else {
+    if (msgEl) { msgEl.textContent = 'Failed — check Notion connection'; msgEl.style.color = 'var(--danger)'; }
+  }
+}
+
 function saveGbDate(projectId) {
   const val = document.getElementById('gb-date-inp')?.value;
   if (!val) return;
   adminSet(projectId, 'gbDate', val);
-  // Also write to tracker state so the portal picks it up
+  // Update in-memory project so other views see it immediately
   const p  = PROJECTS[projectId];
+  p.groundbreakingDate = val;
+  if (PROJECTS[projectId]) PROJECTS[projectId].groundbreakingDate = val;
+  // Also write to tracker state so the portal countdown picks it up
   const TS = getTrackerState(p);
   TS['groundbreakingDate'] = val;
   setTrackerState(p, TS);
-  showMsg('gb-date-msg', 'success', 'Saved ✓');
+  // Persist to Supabase
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+    method: 'PATCH',
+    headers: sbH,
+    body: JSON.stringify({ groundbreaking_date: val }),
+  }).then(async res => {
+    if (res.ok) {
+      showMsg('gb-date-msg', 'success', 'Saved ✓');
+    } else {
+      const err = await res.text();
+      console.error('saveGbDate PATCH failed:', res.status, err);
+      showMsg('gb-date-msg', 'success', 'Saved locally ✓');
+    }
+  }).catch(() => showMsg('gb-date-msg', 'success', 'Saved locally ✓'));
 }
 
 function toggleStepDone(pi, si, projectId) {
@@ -737,6 +881,19 @@ function renderBudgetView(p) {
         <span style="font-size:11px;color:var(--charcoal-4)">Mark as client sees on their budget page</span>
       </div>
       <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Update each category as you work through pricing. Clients see Pending / In Progress / Confirmed — no dollar amounts.</p>
+
+      ${p.projectType === 'remodel' && p.links?.budget && p.links.budget !== '#' ? `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:var(--charcoal);margin-bottom:2px">Import from Google Sheet</div>
+          <div style="font-size:11px;color:var(--charcoal-4)">Reads rows tagged "Main Category" in column Z — replaces existing categories.</div>
+        </div>
+        <button class="adm-btn adm-btn-green" onclick="syncCategoriesFromSheet('${p.id}')">Sync Categories from Sheet</button>
+        <span id="bcat-sync-msg" class="adm-msg success" style="margin:0;min-width:120px"></span>
+      </div>` : p.projectType === 'remodel' ? `
+      <div style="padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px;font-size:12px;color:var(--charcoal-4)">
+        Set a Budget Google Sheet URL in Project Info to enable one-click category import.
+      </div>` : ''}
       ${(p.budgetCategories||[]).map((cat, ci) => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
           <div style="flex:1;font-size:13px;font-weight:500;color:var(--charcoal)">${cat.name}</div>
@@ -745,8 +902,25 @@ function renderBudgetView(p) {
             <option value="active"   ${(cat.status||'pending')==='active'  ?'selected':''}>In progress</option>
             <option value="complete" ${(cat.status||'pending')==='complete'?'selected':''}>Confirmed</option>
           </select>
+          ${p.projectType === 'remodel' ? `<button class="adm-btn adm-btn-danger" style="padding:4px 9px;font-size:11px" onclick="deleteBudgetCategory('${p.id}',${ci})">×</button>` : ''}
         </div>`).join('')}
       <span id="bcat-status-msg" class="adm-msg success" style="margin-top:8px;display:block"></span>
+
+      ${p.projectType === 'remodel' ? `
+      <div style="border-top:0.5px solid var(--border);padding-top:14px;margin-top:6px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:8px">Add Category</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div class="adm-field" style="flex:1;min-width:180px;margin-bottom:0">
+            <input class="adm-inp" id="bcat-new-name" type="text" placeholder="e.g. Mechanical Systems">
+          </div>
+          <div class="adm-field" style="width:130px;margin-bottom:0">
+            <input class="adm-inp" id="bcat-new-total" type="number" placeholder="Amount ($)" min="0">
+          </div>
+          <button class="adm-btn adm-btn-green" onclick="addBudgetCategory('${p.id}')">Add</button>
+          <span id="bcat-add-msg" class="adm-msg success" style="margin:0"></span>
+        </div>
+        <p style="font-size:11px;color:var(--charcoal-4);margin-top:8px">Categories match your budget sheet. Amount is for your reference only — clients don't see dollar amounts in the SAB phase.</p>
+      </div>` : ''}
     </div>` : ''}
 
     <div class="card">
@@ -787,6 +961,106 @@ function deleteChangeOrder(projectId, idx) {
   cos.splice(idx, 1);
   adminSet(projectId, 'changeOrders', cos);
   renderAdmin();
+}
+
+async function addBudgetCategory(projectId) {
+  const name  = document.getElementById('bcat-new-name')?.value.trim();
+  const total = parseFloat(document.getElementById('bcat-new-total')?.value) || 0;
+  if (!name) { showMsg('bcat-add-msg','error','Category name required'); return; }
+
+  const p = PROJECTS[projectId];
+  const nextOrder = (p.budgetCategories?.length || 0) + 1;
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+
+  try {
+    const res = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories`, {
+      method: 'POST', headers: sbH,
+      body: JSON.stringify({ client_id: projectId, name, total, spent: 0, status: 'pending', sort_order: nextOrder, sub_categories: [] }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    showMsg('bcat-add-msg','success','Added ✓');
+    // Reload clients to refresh budget categories
+    await loadAllClientsFromSupabase();
+    setTimeout(() => renderAdmin(), 400);
+  } catch(e) {
+    showMsg('bcat-add-msg','error',`Error: ${e.message}`);
+  }
+}
+
+async function deleteBudgetCategory(projectId, catIndex) {
+  const p   = PROJECTS[projectId];
+  const cat = p.budgetCategories?.[catIndex];
+  if (!cat) return;
+  if (!confirm(`Remove "${cat.name}" from the budget?`)) return;
+
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json' };
+
+  // Get the actual Supabase row ID by matching name and client_id
+  try {
+    const getRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories?client_id=eq.${projectId}&name=eq.${encodeURIComponent(cat.name)}&select=id`, { headers: sbH });
+    const rows = await getRes.json();
+    if (!rows?.length) { alert('Category not found in database'); return; }
+
+    await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories?id=eq.${rows[0].id}`, { method: 'DELETE', headers: sbH });
+    await loadAllClientsFromSupabase();
+    renderAdmin();
+  } catch(e) {
+    alert(`Error: ${e.message}`);
+  }
+}
+
+async function syncCategoriesFromSheet(projectId) {
+  const p        = PROJECTS[projectId];
+  const msgEl    = document.getElementById('bcat-sync-msg');
+  const sheetUrl = p.links?.budget;
+
+  if (!sheetUrl || sheetUrl === '#') {
+    if (msgEl) { msgEl.textContent = 'No sheet URL set in Project Info'; msgEl.className = 'adm-msg error'; }
+    return;
+  }
+
+  if (msgEl) { msgEl.textContent = 'Importing…'; msgEl.className = 'adm-msg success'; }
+
+  try {
+    const res = await fetch(`/.netlify/functions/sheet-budget-sync?clientId=${projectId}&sheetUrl=${encodeURIComponent(sheetUrl)}&syncCategories=1`);
+
+    // Log raw response for debugging
+    const rawText = await res.text();
+    console.log('syncCategoriesFromSheet response:', res.status, rawText);
+
+    let data;
+    try { data = JSON.parse(rawText); } catch(e) {
+      alert(`Sync failed — unexpected response:\n${rawText.slice(0, 300)}`);
+      if (msgEl) { msgEl.textContent = 'Error — see console'; msgEl.className = 'adm-msg error'; }
+      return;
+    }
+
+    if (!res.ok || !data || data.error) {
+      const msg = data?.error || `HTTP ${res.status}`;
+      alert(`Sync failed: ${msg}`);
+      if (msgEl) { msgEl.textContent = `Error: ${msg}`; msgEl.className = 'adm-msg error'; }
+      return;
+    }
+
+    if (data.synced === 0) {
+      const msg = data.message || 'No rows tagged "Main Category" found in column Z';
+      alert(`Sync result: ${msg}\n\nCategories found: ${JSON.stringify(data.categories)}`);
+      if (msgEl) { msgEl.textContent = msg; msgEl.className = 'adm-msg error'; }
+      return;
+    }
+
+    // Success — show message then reload
+    alert(`Success! ${data.synced} categories imported from sheet:\n${data.categories.map(c => `• ${c.name} (${c.status})`).join('\n')}`);
+    if (msgEl) { msgEl.textContent = `${data.synced} categories imported ✓`; msgEl.className = 'adm-msg success'; }
+
+    await loadAllClientsFromSupabase();
+    setTimeout(() => renderAdmin(), 800);
+
+  } catch(e) {
+    console.error('syncCategoriesFromSheet error:', e);
+    alert(`Sync error: ${e.message}`);
+    if (msgEl) { msgEl.textContent = `Error: ${e.message}`; msgEl.className = 'adm-msg error'; }
+  }
 }
 
 async function updateBudgetCatStatus(projectId, catIndex, newStatus) {
@@ -982,6 +1256,17 @@ function renderProjectView(p) {
         </label>
         <span id="pi-review-msg" class="adm-msg success" style="margin-left:0"></span>
       </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;border-color:rgba(184,50,50,.2);background:#fffafa">
+      <div class="sh"><div class="sh-title" style="color:var(--danger)">Danger Zone</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);line-height:1.55;margin-bottom:12px">
+        Permanently removes this client and all their data — budget categories, updates, milestones, documents, and selections. This cannot be undone.
+      </p>
+      <button class="adm-btn" style="background:var(--danger);color:white;border:none" onclick="confirmDeleteClient('${p.id}','${p.clientName}')">
+        Remove ${p.clientName}
+      </button>
+      <span id="pi-delete-msg" class="adm-msg" style="margin-left:10px"></span>
     </div>`;
 }
 
@@ -995,7 +1280,7 @@ function saveProjectInfo(projectId) {
   p.constructionPct = parseInt(document.getElementById('pi-conPct')?.value)   || 0;
   p.timelineStart      = document.getElementById('pi-tlStart')?.value.trim()  || p.timelineStart;
   p.timelineTarget     = document.getElementById('pi-tlTarget')?.value.trim() || p.timelineTarget;
-  p.groundbreakingDate = document.getElementById('pi-gbDate')?.value           || p.groundbreakingDate || '';
+  p.groundbreakingDate = document.getElementById('pi-gbDate')?.value ?? p.groundbreakingDate ?? '';
   if (PROJECTS[projectId]) PROJECTS[projectId].groundbreakingDate = p.groundbreakingDate;
   const budgetLink = document.getElementById('pi-budgetLink')?.value.trim() || '';
   const notionId   = document.getElementById('pi-notionId')?.value.trim()   || '';
@@ -1115,6 +1400,56 @@ function saveShowReviewCard(projectId, checked) {
     console.error('saveShowReviewCard error:', err);
     showMsg('pi-review-msg','error','Network error — check console');
   });
+}
+
+function confirmDeleteClient(projectId, clientName) {
+  // Two-step confirmation: first click shows a confirm prompt
+  const confirmed = window.confirm(
+    `Remove ${clientName}?\n\nThis will permanently delete this client and ALL their data:\n• Budget categories\n• Updates & milestones\n• Documents & photos\n• Selections\n\nThis CANNOT be undone.`
+  );
+  if (!confirmed) return;
+  deleteClient(projectId, clientName);
+}
+
+async function deleteClient(projectId, clientName) {
+  const msgEl = document.getElementById('pi-delete-msg');
+  if (msgEl) { msgEl.textContent = 'Deleting…'; msgEl.style.color = 'var(--danger)'; }
+
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json' };
+
+  try {
+    // Delete all related records first (cascade should handle it, but be explicit)
+    const tables = ['selections','updates','budget_categories','change_orders','milestones','documents','decisions'];
+    await Promise.all(tables.map(table =>
+      fetch(`${SUPABASE_DIRECT_URL}/rest/v1/${table}?client_id=eq.${projectId}`, { method:'DELETE', headers:sbH })
+    ));
+
+    // Delete the client record
+    const res = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+      method: 'DELETE', headers: sbH,
+    });
+
+    if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+
+    // Remove from in-memory PROJECTS
+    delete PROJECTS[projectId];
+
+    // Switch to first remaining client
+    const remaining = Object.keys(PROJECTS);
+    if (remaining.length > 0) {
+      activeProject = remaining[0];
+      sessionStorage.setItem('sa_admin_project', activeProject);
+    }
+    activeView = 'tracker';
+    sessionStorage.setItem('sa_admin_view', 'tracker');
+
+    renderAdmin();
+    setTimeout(() => showMsg('pi-msg','success',`${clientName} removed ✓`), 100);
+
+  } catch(e) {
+    console.error('deleteClient error:', e);
+    if (msgEl) { msgEl.textContent = `Error: ${e.message}`; msgEl.style.color = 'var(--danger)'; }
+  }
 }
 
 // ════════════════════════════════════════════════════════
@@ -1381,6 +1716,12 @@ function renderAddClientView() {
             <option value="construction">Active Construction</option>
           </select>
         </div>
+        <div class="adm-field"><label>Project Type</label>
+          <select class="adm-inp adm-sel" id="nc-projectType">
+            <option value="new_build">New Build</option>
+            <option value="remodel">Remodel / Addition</option>
+          </select>
+        </div>
       </div>
 
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Portal Login</div>
@@ -1429,6 +1770,7 @@ function generateClientEntry() {
   const projectName   = document.getElementById('nc-projectName')?.value.trim();
   const location      = document.getElementById('nc-location')?.value.trim() || 'Bowling Green, KY';
   const phase         = document.getElementById('nc-phase')?.value;
+  const projectType   = document.getElementById('nc-projectType')?.value || 'new_build';
   const email         = document.getElementById('nc-email')?.value.trim();
   const password      = document.getElementById('nc-password')?.value.trim();
   const notionTracker = document.getElementById('nc-notionTracker')?.value.trim();
@@ -1454,6 +1796,7 @@ function generateClientEntry() {
     location: '${location}',
     status: '${phase === 'sab' ? 'In SAB™ Process' : 'Active Construction'}',
     statusType: '${phase}',
+    projectType: '${projectType}',
     constructionPct: 0,
     sabProgress: 0,
     phaseLabel: '${phase === 'sab' ? 'Phase 1 — Design & Architecture' : 'Active Build'}',
@@ -1484,7 +1827,9 @@ function generateClientEntry() {
     updates: [],
     timeline: [],
     documents: [],
-    budgetCategories: [
+    budgetCategories: ${projectType === 'remodel' ? `[
+      // Set categories via Admin > Budget > Add Category to match your budget sheet
+    ]` : `[
       { name:'Design & Planning',           total:0, spent:0, status:'pending', subCategories:[
         { name:'Surveying & Permits', total:0, spent:0 },
         { name:'Interior Design',     total:0, spent:0 },
@@ -1525,7 +1870,7 @@ function generateClientEntry() {
         { name:'Site Clean Up & Builders Risk', total:0, spent:0 },
         { name:'Six Arrows Management Fee', total:0, spent:0 },
       ]},
-    ],
+    ]`},
     sabPhases: JSON.parse(JSON.stringify(PROJECTS[Object.keys(PROJECTS)[0]].sabPhases)),
   },`;
 
