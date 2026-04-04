@@ -116,16 +116,38 @@ async function initBudget() {
   if (!p) return;
 
   // Always refresh from Supabase before rendering budget
-  // This ensures admin status changes show immediately on refresh
   try {
     const fresh = await AUTH.refreshSession(p.id);
     if (fresh) p = fresh;
   } catch(e) {}
 
-  const isSAB = p.statusType === 'sab';
+  const isSAB     = p.statusType === 'sab';
+  const isRemodel = p.projectType === 'remodel';
+  const hasSheet  = p.links?.budget && p.links.budget !== '#';
+  const hasCats   = (p.budgetCategories || []).length > 0;
 
-  // ── Sync from Google Sheet if budget link is set (SAB phase) ──
-  if (isSAB && p.links?.budget && p.links.budget !== '#') {
+  // ── Auto-import categories for remodel clients on first load ──────────────
+  // If remodel + sheet URL set + no categories yet → auto-sync silently
+  if (isSAB && isRemodel && hasSheet && !hasCats) {
+    try {
+      const importRes = await fetch(
+        `/.netlify/functions/sheet-budget-sync?clientId=${p.id}&sheetUrl=${encodeURIComponent(p.links.budget)}&syncCategories=1`
+      );
+      if (importRes.ok) {
+        const importData = await importRes.json();
+        if (importData.synced > 0) {
+          // Refresh session to pick up the new categories
+          const fresh = await AUTH.refreshSession(p.id);
+          if (fresh) p = fresh;
+        }
+      }
+    } catch(e) {
+      console.log('Auto category import unavailable:', e.message);
+    }
+  }
+
+  // ── Sync statuses from Google Sheet on every load ─────────────────────────
+  if (isSAB && hasSheet) {
     try {
       const syncRes = await fetch(
         `/.netlify/functions/sheet-budget-sync?clientId=${p.id}&sheetUrl=${encodeURIComponent(p.links.budget)}`
@@ -133,7 +155,6 @@ async function initBudget() {
       if (syncRes.ok) {
         const syncData = await syncRes.json();
         if (syncData.synced > 0) {
-          // Refresh session to pick up updated statuses
           const fresh = await AUTH.refreshSession(p.id);
           if (fresh) p = fresh;
         }

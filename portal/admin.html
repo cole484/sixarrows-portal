@@ -269,6 +269,28 @@ async function loadAllClientsFromSupabase() {
       };
     }
     console.log(`Admin: loaded ${clients.length} clients from Supabase`);
+
+    // Auto-import categories for remodel clients that have a sheet URL but no categories
+    const remodelNeedingSync = clients.filter(c =>
+      c.project_type === 'remodel' &&
+      c.budget_link && c.budget_link !== '#' &&
+      !(PROJECTS[c.id]?.budgetCategories?.length)
+    );
+    for (const c of remodelNeedingSync) {
+      // Fire and forget — don't block the admin from loading
+      fetch(`/.netlify/functions/sheet-budget-sync?clientId=${c.id}&sheetUrl=${encodeURIComponent(c.budget_link)}&syncCategories=1`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.synced > 0) {
+            console.log(`Auto-imported ${data.synced} categories for ${c.id}`);
+            // Reload to pick up the new cats (only if admin is viewing this client's budget)
+            if (activeProject === c.id && activeView === 'budget') {
+              loadAllClientsFromSupabase().then(() => renderAdmin());
+            }
+          }
+        })
+        .catch(e => console.log(`Auto-sync failed for ${c.id}:`, e.message));
+    }
   } catch(e) {
     console.warn('Supabase load failed, using local data:', e.message);
   }
