@@ -1,72 +1,66 @@
 // netlify/functions/sheet-budget-sync.js
-// Reads a client's Google Sheet budget, extracts main category statuses,
-// updates Supabase budget_categories table, returns updated statuses
 //
-// The sheet structure:
-//   Column A = Category / line item name
-//   Column B = Contractor / Vendor (empty on main category rows)
-//   Column C = Status
+// Two modes:
 //
-// Main categories are identified by: Col A has text AND Col B is empty
-// Status mapping: "Not Started" → pending | "In Progress" → active | "Confirmed" → complete
+// MODE 1 — Status sync (existing behaviour, called on page load)
+//   GET ?clientId=xxx&sheetUrl=xxx
+//   Reads sheet, fuzzy-matches existing Supabase categories, updates statuses
 //
-// Requires sheet to be set to "Anyone with link can view"
+// MODE 2 — Category import (new, called from admin "Sync Categories" button)
+//   GET ?clientId=xxx&sheetUrl=xxx&syncCategories=1
+//   Reads column Z for "Main Category" rows, deletes existing cats, inserts fresh from sheet
+//   Returns the created categories
+//
+// Sheet structure:
+//   Col A  = Category / line item name
+//   Col B  = Contractor
+//   Col C  = Status
+//   Col D  = Cost / subtotal
+//   Col Z  = Tag ("Main Category" | "Sub Main Category" | blank)
+//
+// Requires sheet to be shared: "Anyone with link can view"
 
 import { respond, corsHeaders } from './lib/supabase-client.js';
 
 const SB_URL = () => process.env.SUPABASE_URL;
 const SB_KEY = () => process.env.SUPABASE_ANON_KEY;
 
-// The 8 main budget categories — used for fuzzy matching
-const MAIN_CATEGORIES = [
-  'Design & Planning',
-  'Construction Costs',
-  'Mechanical Systems',
-  'Interior Finishes',
-  'Exterior Work',
-  'Utilities & Hookups',
-  'Miscellaneous',
-  'Other Costs',
-  'Other Costs & Management Fee',
-];
-
-// Status value mapping from sheet → Supabase
+// Status mapping: sheet value → Supabase enum
 const STATUS_MAP = {
-  'not started':  'pending',
-  'in progress':  'active',
-  'confirmed':    'complete',
-  // Handle variations
-  'need estimate': 'pending',
-  'pending':       'pending',
-  'complete':      'complete',
-  'completed':     'complete',
+  'not started':      'pending',
+  'need estimate':    'pending',
+  'pending':          'pending',
+  'need to confirm':  'active',
+  'in progress':      'active',
+  'active':           'active',
+  'confirmed':        'complete',
+  'complete':         'complete',
+  'completed':        'complete',
 };
 
 function normalizeStatus(raw) {
-  if (!raw) return null;
-  return STATUS_MAP[raw.toLowerCase().trim()] || null;
+  if (!raw || typeof raw !== 'string') return 'pending';
+  return STATUS_MAP[raw.toLowerCase().trim()] || 'pending';
 }
 
-// Extract Google Sheet ID from URL
 function extractSheetId(url) {
   const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
 }
 
-// Parse CSV text into array of rows
+// Parse CSV — handles quoted fields with embedded commas/newlines
 function parseCSV(text) {
   const rows = [];
   const lines = text.split('\n');
   for (const line of lines) {
-    // Simple CSV parse — handles quoted fields
+    if (!line.trim()) { rows.push([]); continue; }
     const cells = [];
-    let inQuotes = false;
-    let cell = '';
+    let inQuotes = false, cell = '';
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-      if (ch === '"' && !inQuotes) { inQuotes = true; continue; }
-      if (ch === '"' && inQuotes) { inQuotes = false; continue; }
-      if (ch === ',' && !inQuotes) { cells.push(cell.trim()); cell = ''; continue; }
+      if (ch === '"' && !inQuotes)  { inQuotes = true;  continue; }
+      if (ch === '"' && inQuotes)   { inQuotes = false; continue; }
+      if (ch === ',' && !inQuotes)  { cells.push(cell.trim()); cell = ''; continue; }
       cell += ch;
     }
     cells.push(cell.trim());
@@ -75,164 +69,187 @@ function parseCSV(text) {
   return rows;
 }
 
-// Find main category statuses from parsed CSV rows
+// ── MODE 1: extract status map from existing rows (fuzzy match) ─────────────
 function extractCategoryStatuses(rows) {
   const statuses = {};
-
   for (const row of rows) {
-    const colA = (row[0] || '').trim();
-    const colB = (row[1] || '').trim();
-    const colC = (row[2] || '').trim();
-
-    // Skip empty rows and header
-    if (!colA) continue;
-    if (colA.toLowerCase() === 'category') continue;
-
-    // Main category rows have NO contractor in column B
-    if (colB !== '') continue;
-
-    // Check if col A exactly or fuzzy-matches any main category
-    // Try exact match first, then fuzzy
-    let matched = MAIN_CATEGORIES.find(cat => cat.toLowerCase() === colA.toLowerCase());
-    if (!matched) {
-      matched = MAIN_CATEGORIES.find(cat => {
-        const catLower = cat.toLowerCase();
-        const aLower   = colA.toLowerCase();
-        const catFirst = catLower.split(' ')[0];
-        const aFirst   = aLower.split(' ')[0];
-        // Both first words must match (prevents "Other Costs" matching "Other Costs & Management Fee" ambiguously)
-        return catFirst === aFirst && (catLower.includes(aFirst) && aLower.includes(catFirst));
-      });
-    }
-
-    if (matched) {
-      // Use the status if present, default to "pending" if col C is empty (e.g. Miscellaneous header)
-      const normalized = colC ? normalizeStatus(colC) : 'pending';
-      if (normalized) {
-        statuses[matched] = {
-          sheetName:   colA,
-          sheetStatus: colC || 'Not Started',
-          status:      normalized,
-        };
-      }
-    }
+    const name       = row[0]?.trim();
+    const contractor = row[1]?.trim();
+    const statusRaw  = row[2]?.trim();
+    if (!name || contractor) continue; // skip blank or line-item rows
+    const status = normalizeStatus(statusRaw);
+    if (status) statuses[name] = { status };
   }
-
   return statuses;
 }
 
+// ── MODE 2: extract Main Category rows from column Z ────────────────────────
+function extractMainCategories(rows) {
+  // Column Z = index 25
+  const TAG_COL    = 25;
+  const NAME_COL   = 0;
+  const STATUS_COL = 2;
+  const COST_COL   = 3;
+
+  const cats = [];
+  for (const row of rows) {
+    const tag = row[TAG_COL]?.trim();
+    if (!tag || tag.toLowerCase() !== 'main category') continue;
+
+    const name      = row[NAME_COL]?.trim();
+    const statusRaw = row[STATUS_COL]?.trim();
+    const costRaw   = parseFloat(row[COST_COL]);
+
+    if (!name) continue;
+
+    cats.push({
+      name,
+      total:  isNaN(costRaw) ? 0 : costRaw,
+      status: normalizeStatus(statusRaw),
+    });
+  }
+  return cats;
+}
+
+// ── Supabase helpers ─────────────────────────────────────────────────────────
+function sbHeaders() {
+  return {
+    'apikey':        SB_KEY(),
+    'Authorization': `Bearer ${SB_KEY()}`,
+    'Content-Type':  'application/json',
+  };
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────────
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders(), body: '' };
   }
 
-  if (event.httpMethod !== 'GET' && event.httpMethod !== 'POST') {
-    return respond(405, { error: 'Method not allowed' });
-  }
-
-  const clientId  = event.queryStringParameters?.clientId;
-  const sheetUrl  = event.queryStringParameters?.sheetUrl;
+  const clientId      = event.queryStringParameters?.clientId;
+  const sheetUrl      = event.queryStringParameters?.sheetUrl;
+  const syncCats      = event.queryStringParameters?.syncCategories === '1';
 
   if (!clientId) return respond(400, { error: 'clientId required' });
   if (!sheetUrl) return respond(400, { error: 'sheetUrl required' });
 
-  // Extract sheet ID and build CSV export URL
   const sheetId = extractSheetId(sheetUrl);
   if (!sheetId) return respond(400, { error: 'Invalid Google Sheet URL' });
 
+  // Fetch sheet as CSV
   const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
-
+  let rows;
   try {
-    // Fetch the sheet as CSV
-    const sheetRes = await fetch(csvUrl, {
-      headers: { 'Accept': 'text/csv' },
-      redirect: 'follow',
+    const res = await fetch(csvUrl, { headers: { 'Accept': 'text/csv' }, redirect: 'follow' });
+    if (!res.ok) return respond(502, {
+      error: 'Could not read Google Sheet. Ensure it is shared as "Anyone with link can view".',
+      status: res.status,
     });
+    rows = parseCSV(await res.text());
+  } catch(err) {
+    return respond(500, { error: `Sheet fetch failed: ${err.message}` });
+  }
 
-    if (!sheetRes.ok) {
-      return respond(502, {
-        error: 'Could not read Google Sheet. Make sure it is set to "Anyone with link can view".',
-        status: sheetRes.status,
-      });
-    }
-
-    const csvText = await sheetRes.text();
-    const rows = parseCSV(csvText);
-    const categoryStatuses = extractCategoryStatuses(rows);
-
-    if (Object.keys(categoryStatuses).length === 0) {
+  // ── MODE 2: import categories from column Z ─────────────────────────────
+  if (syncCats) {
+    const cats = extractMainCategories(rows);
+    if (cats.length === 0) {
       return respond(200, {
         synced: 0,
-        message: 'No main category statuses found in sheet. Check column A/B/C structure.',
-        categories: {},
+        message: 'No rows tagged "Main Category" found in column Z. Check the sheet.',
+        categories: [],
       });
     }
 
-    // Update Supabase budget_categories for this client
-    const sbHeaders = {
-      'apikey': SB_KEY(),
-      'Authorization': `Bearer ${SB_KEY()}`,
-      'Content-Type': 'application/json',
-    };
+    const hdrs = sbHeaders();
 
-    // Fetch existing categories to get their IDs
-    const catsRes = await fetch(
-      `${SB_URL()}/rest/v1/budget_categories?client_id=eq.${clientId}&select=id,name,status&order=sort_order.asc`,
-      { headers: sbHeaders }
-    );
-
-    if (!catsRes.ok) {
-      return respond(502, { error: 'Could not fetch budget categories from database' });
-    }
-
-    const dbCats = await catsRes.json();
-    const updates = [];
-
-    for (const dbCat of dbCats) {
-      // Find matching sheet status — exact match first, then first-word match
-      const dbLower = dbCat.name.toLowerCase();
-      let match = Object.entries(categoryStatuses).find(([catName]) =>
-        catName.toLowerCase() === dbLower
-      );
-      if (!match) {
-        match = Object.entries(categoryStatuses).find(([catName]) => {
-          const catLower = catName.toLowerCase();
-          const catFirst = catLower.split(' ')[0];
-          const dbFirst  = dbLower.split(' ')[0];
-          return catFirst === dbFirst;
-        });
-      }
-
-      if (match) {
-        const [, { status }] = match;
-        if (status !== dbCat.status) {
-          // Update this category's status
-          const patchRes = await fetch(
-            `${SB_URL()}/rest/v1/budget_categories?id=eq.${dbCat.id}`,
-            {
-              method: 'PATCH',
-              headers: { ...sbHeaders, 'Prefer': 'return=minimal' },
-              body: JSON.stringify({ status }),
-            }
-          );
-          if (patchRes.ok) {
-            updates.push({ name: dbCat.name, from: dbCat.status, to: status });
-          }
-        }
-      }
-    }
-
-    return respond(200, {
-      synced: updates.length,
-      message: updates.length > 0
-        ? `Updated ${updates.length} category status${updates.length > 1 ? 'es' : ''}`
-        : 'All categories already up to date',
-      updates,
-      categories: categoryStatuses,
+    // Delete existing categories for this client
+    await fetch(`${SB_URL()}/rest/v1/budget_categories?client_id=eq.${clientId}`, {
+      method: 'DELETE', headers: hdrs,
     });
 
-  } catch (err) {
-    console.error('sheet-budget-sync error:', err);
-    return respond(500, { error: err.message });
+    // Insert fresh categories
+    const insertRows = cats.map((cat, i) => ({
+      client_id:      clientId,
+      name:           cat.name,
+      total:          cat.total,
+      spent:          0,
+      status:         cat.status,
+      sort_order:     i + 1,
+      sub_categories: [],
+    }));
+
+    const insertRes = await fetch(`${SB_URL()}/rest/v1/budget_categories`, {
+      method:  'POST',
+      headers: { ...hdrs, 'Prefer': 'return=representation' },
+      body:    JSON.stringify(insertRows),
+    });
+
+    if (!insertRes.ok) {
+      const err = await insertRes.text();
+      return respond(502, { error: `Insert failed: ${err}` });
+    }
+
+    const inserted = await insertRes.json();
+    return respond(200, {
+      synced:     inserted.length,
+      message:    `Imported ${inserted.length} categories from sheet`,
+      categories: inserted.map(c => ({ name: c.name, total: c.total, status: c.status })),
+    });
   }
+
+  // ── MODE 1: status sync against existing Supabase categories ────────────
+  const categoryStatuses = extractCategoryStatuses(rows);
+
+  if (Object.keys(categoryStatuses).length === 0) {
+    return respond(200, {
+      synced: 0,
+      message: 'No main category statuses found in sheet.',
+      categories: {},
+    });
+  }
+
+  const hdrs    = sbHeaders();
+  const catsRes = await fetch(
+    `${SB_URL()}/rest/v1/budget_categories?client_id=eq.${clientId}&select=id,name,status&order=sort_order.asc`,
+    { headers: hdrs }
+  );
+
+  if (!catsRes.ok) return respond(502, { error: 'Could not fetch budget categories' });
+
+  const dbCats  = await catsRes.json();
+  const updates = [];
+
+  for (const dbCat of dbCats) {
+    const dbLower = dbCat.name.toLowerCase();
+
+    // Try exact match first, then first-word match
+    let match = Object.entries(categoryStatuses).find(([n]) => n.toLowerCase() === dbLower);
+    if (!match) {
+      match = Object.entries(categoryStatuses).find(([n]) =>
+        n.toLowerCase().split(' ')[0] === dbLower.split(' ')[0]
+      );
+    }
+
+    if (match) {
+      const [, { status }] = match;
+      if (status !== dbCat.status) {
+        const patchRes = await fetch(`${SB_URL()}/rest/v1/budget_categories?id=eq.${dbCat.id}`, {
+          method:  'PATCH',
+          headers: { ...hdrs, 'Prefer': 'return=minimal' },
+          body:    JSON.stringify({ status }),
+        });
+        if (patchRes.ok) updates.push({ name: dbCat.name, from: dbCat.status, to: status });
+      }
+    }
+  }
+
+  return respond(200, {
+    synced:  updates.length,
+    message: updates.length > 0
+      ? `Updated ${updates.length} category status${updates.length > 1 ? 'es' : ''}`
+      : 'All categories already up to date',
+    updates,
+    categories: categoryStatuses,
+  });
 };

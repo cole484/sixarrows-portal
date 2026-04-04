@@ -421,6 +421,7 @@ function renderAdmin() {
       <div class="admin-main">
         <div class="admin-topbar">
           <span class="admin-topbar-title">${activeView === 'addclient' ? 'Add New Client' : `${p.clientName} — ${activeView.charAt(0).toUpperCase()+activeView.slice(1)}`}</span>
+          ${activeView !== 'addclient' ? `<span class="tag ${p.projectType === 'remodel' ? '' : 'ok'}" style="font-size:10px;margin-left:6px">${p.projectType === 'remodel' ? 'Remodel' : 'New Build'}</span>` : ''}
           <span style="font-size:11px;color:var(--charcoal-4)">Admin only</span>
         </div>
         <div class="admin-content">
@@ -858,6 +859,19 @@ function renderBudgetView(p) {
         <span style="font-size:11px;color:var(--charcoal-4)">Mark as client sees on their budget page</span>
       </div>
       <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Update each category as you work through pricing. Clients see Pending / In Progress / Confirmed — no dollar amounts.</p>
+
+      ${p.projectType === 'remodel' && p.links?.budget && p.links.budget !== '#' ? `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:var(--charcoal);margin-bottom:2px">Import from Google Sheet</div>
+          <div style="font-size:11px;color:var(--charcoal-4)">Reads rows tagged "Main Category" in column Z — replaces existing categories.</div>
+        </div>
+        <button class="adm-btn adm-btn-green" onclick="syncCategoriesFromSheet('${p.id}')">Sync Categories from Sheet</button>
+        <span id="bcat-sync-msg" class="adm-msg success" style="margin:0;min-width:120px"></span>
+      </div>` : p.projectType === 'remodel' ? `
+      <div style="padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px;font-size:12px;color:var(--charcoal-4)">
+        Set a Budget Google Sheet URL in Project Info to enable one-click category import.
+      </div>` : ''}
       ${(p.budgetCategories||[]).map((cat, ci) => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
           <div style="flex:1;font-size:13px;font-weight:500;color:var(--charcoal)">${cat.name}</div>
@@ -866,8 +880,25 @@ function renderBudgetView(p) {
             <option value="active"   ${(cat.status||'pending')==='active'  ?'selected':''}>In progress</option>
             <option value="complete" ${(cat.status||'pending')==='complete'?'selected':''}>Confirmed</option>
           </select>
+          ${p.projectType === 'remodel' ? `<button class="adm-btn adm-btn-danger" style="padding:4px 9px;font-size:11px" onclick="deleteBudgetCategory('${p.id}',${ci})">×</button>` : ''}
         </div>`).join('')}
       <span id="bcat-status-msg" class="adm-msg success" style="margin-top:8px;display:block"></span>
+
+      ${p.projectType === 'remodel' ? `
+      <div style="border-top:0.5px solid var(--border);padding-top:14px;margin-top:6px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:8px">Add Category</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div class="adm-field" style="flex:1;min-width:180px;margin-bottom:0">
+            <input class="adm-inp" id="bcat-new-name" type="text" placeholder="e.g. Mechanical Systems">
+          </div>
+          <div class="adm-field" style="width:130px;margin-bottom:0">
+            <input class="adm-inp" id="bcat-new-total" type="number" placeholder="Amount ($)" min="0">
+          </div>
+          <button class="adm-btn adm-btn-green" onclick="addBudgetCategory('${p.id}')">Add</button>
+          <span id="bcat-add-msg" class="adm-msg success" style="margin:0"></span>
+        </div>
+        <p style="font-size:11px;color:var(--charcoal-4);margin-top:8px">Categories match your budget sheet. Amount is for your reference only — clients don't see dollar amounts in the SAB phase.</p>
+      </div>` : ''}
     </div>` : ''}
 
     <div class="card">
@@ -908,6 +939,84 @@ function deleteChangeOrder(projectId, idx) {
   cos.splice(idx, 1);
   adminSet(projectId, 'changeOrders', cos);
   renderAdmin();
+}
+
+async function addBudgetCategory(projectId) {
+  const name  = document.getElementById('bcat-new-name')?.value.trim();
+  const total = parseFloat(document.getElementById('bcat-new-total')?.value) || 0;
+  if (!name) { showMsg('bcat-add-msg','error','Category name required'); return; }
+
+  const p = PROJECTS[projectId];
+  const nextOrder = (p.budgetCategories?.length || 0) + 1;
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+
+  try {
+    const res = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories`, {
+      method: 'POST', headers: sbH,
+      body: JSON.stringify({ client_id: projectId, name, total, spent: 0, status: 'pending', sort_order: nextOrder, sub_categories: [] }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    showMsg('bcat-add-msg','success','Added ✓');
+    // Reload clients to refresh budget categories
+    await loadAllClientsFromSupabase();
+    setTimeout(() => renderAdmin(), 400);
+  } catch(e) {
+    showMsg('bcat-add-msg','error',`Error: ${e.message}`);
+  }
+}
+
+async function deleteBudgetCategory(projectId, catIndex) {
+  const p   = PROJECTS[projectId];
+  const cat = p.budgetCategories?.[catIndex];
+  if (!cat) return;
+  if (!confirm(`Remove "${cat.name}" from the budget?`)) return;
+
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json' };
+
+  // Get the actual Supabase row ID by matching name and client_id
+  try {
+    const getRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories?client_id=eq.${projectId}&name=eq.${encodeURIComponent(cat.name)}&select=id`, { headers: sbH });
+    const rows = await getRes.json();
+    if (!rows?.length) { alert('Category not found in database'); return; }
+
+    await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/budget_categories?id=eq.${rows[0].id}`, { method: 'DELETE', headers: sbH });
+    await loadAllClientsFromSupabase();
+    renderAdmin();
+  } catch(e) {
+    alert(`Error: ${e.message}`);
+  }
+}
+
+async function syncCategoriesFromSheet(projectId) {
+  const p      = PROJECTS[projectId];
+  const msgEl  = document.getElementById('bcat-sync-msg');
+  const sheetUrl = p.links?.budget;
+
+  if (!sheetUrl || sheetUrl === '#') {
+    if (msgEl) { msgEl.textContent = 'No sheet URL set in Project Info'; msgEl.className = 'adm-msg error'; }
+    return;
+  }
+
+  if (msgEl) { msgEl.textContent = 'Importing…'; msgEl.className = 'adm-msg success'; }
+
+  try {
+    const res  = await fetch(`/.netlify/functions/sheet-budget-sync?clientId=${projectId}&sheetUrl=${encodeURIComponent(sheetUrl)}&syncCategories=1`);
+    const data = res.ok ? await res.json() : null;
+
+    if (!data || data.synced === 0) {
+      if (msgEl) { msgEl.textContent = data?.message || 'No categories found — check column Z'; msgEl.className = 'adm-msg error'; }
+      return;
+    }
+
+    if (msgEl) { msgEl.textContent = `${data.synced} categories imported ✓`; msgEl.className = 'adm-msg success'; }
+
+    // Reload all clients to pick up new categories, then re-render
+    await loadAllClientsFromSupabase();
+    setTimeout(() => renderAdmin(), 500);
+
+  } catch(e) {
+    if (msgEl) { msgEl.textContent = `Error: ${e.message}`; msgEl.className = 'adm-msg error'; }
+  }
 }
 
 async function updateBudgetCatStatus(projectId, catIndex, newStatus) {
@@ -1563,6 +1672,12 @@ function renderAddClientView() {
             <option value="construction">Active Construction</option>
           </select>
         </div>
+        <div class="adm-field"><label>Project Type</label>
+          <select class="adm-inp adm-sel" id="nc-projectType">
+            <option value="new_build">New Build</option>
+            <option value="remodel">Remodel / Addition</option>
+          </select>
+        </div>
       </div>
 
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Portal Login</div>
@@ -1611,6 +1726,7 @@ function generateClientEntry() {
   const projectName   = document.getElementById('nc-projectName')?.value.trim();
   const location      = document.getElementById('nc-location')?.value.trim() || 'Bowling Green, KY';
   const phase         = document.getElementById('nc-phase')?.value;
+  const projectType   = document.getElementById('nc-projectType')?.value || 'new_build';
   const email         = document.getElementById('nc-email')?.value.trim();
   const password      = document.getElementById('nc-password')?.value.trim();
   const notionTracker = document.getElementById('nc-notionTracker')?.value.trim();
@@ -1636,6 +1752,7 @@ function generateClientEntry() {
     location: '${location}',
     status: '${phase === 'sab' ? 'In SAB™ Process' : 'Active Construction'}',
     statusType: '${phase}',
+    projectType: '${projectType}',
     constructionPct: 0,
     sabProgress: 0,
     phaseLabel: '${phase === 'sab' ? 'Phase 1 — Design & Architecture' : 'Active Build'}',
@@ -1666,7 +1783,9 @@ function generateClientEntry() {
     updates: [],
     timeline: [],
     documents: [],
-    budgetCategories: [
+    budgetCategories: ${projectType === 'remodel' ? `[
+      // Set categories via Admin > Budget > Add Category to match your budget sheet
+    ]` : `[
       { name:'Design & Planning',           total:0, spent:0, status:'pending', subCategories:[
         { name:'Surveying & Permits', total:0, spent:0 },
         { name:'Interior Design',     total:0, spent:0 },
@@ -1707,7 +1826,7 @@ function generateClientEntry() {
         { name:'Site Clean Up & Builders Risk', total:0, spent:0 },
         { name:'Six Arrows Management Fee', total:0, spent:0 },
       ]},
-    ],
+    ]`},
     sabPhases: JSON.parse(JSON.stringify(PROJECTS[Object.keys(PROJECTS)[0]].sabPhases)),
   },`;
 
