@@ -57,15 +57,29 @@ export const handler = async (event) => {
           const valData = valRes.ok ? await valRes.json() : null;
           const rows    = valData?.values || [];
 
-          // Find tagged rows
-          const tagged = rows.filter(r => r[25] && r[25].toString().trim())
-            .map(r => ({ tag: r[25], name: r[0], budget: parseCurrency(r[1]), actual: parseCurrency(r[3]) }));
+          // Find tagged rows — search header row for "Budget Portal Category"
+          const headerRow = rows[0] || [];
+          let tagCol = -1;
+          for (let i = 0; i < headerRow.length; i++) {
+            const h = (headerRow[i] || '').toString().toLowerCase();
+            if (h.includes('budget portal') || h.includes('portal category')) {
+              tagCol = i;
+              break;
+            }
+          }
+          if (tagCol === -1) tagCol = headerRow.length - 1; // fallback to last col
+
+          const tagged = rows
+            .filter(r => r[tagCol] && r[tagCol].toString().trim() && r[tagCol].toString().trim().toLowerCase() !== 'budget portal category')
+            .map(r => ({ tag: r[tagCol], name: r[0], budget: parseCurrency(r[1]), actual: parseCurrency(r[3]) }));
 
           result.billingTest = {
             tab: billingTab.title,
             totalRows: rows.length,
+            tagColFound: tagCol,
+            tagColHeader: headerRow[tagCol] || 'not found',
             taggedRows: tagged.length,
-            tagged: tagged.slice(0, 15), // first 15 tagged rows
+            tagged: tagged.slice(0, 15),
           };
         }
       } catch(e) {

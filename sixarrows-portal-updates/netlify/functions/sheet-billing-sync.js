@@ -82,31 +82,55 @@ async function fetchTabValues(sheetId, tabTitle, apiKey) {
 // Parse the billing sheet rows into structured data
 function parseBillingData(rows) {
   const result = {
-    mainCategories: [],  // { name, budget, actual, overage, pct, subCategories[] }
+    mainCategories: [],
     totalBudget:    0,
     totalActual:    0,
     totalOverage:   0,
     forecastTotal:  0,
-    lastUpdated:    null,
   };
+
+  if (!rows.length) return result;
+
+  // ── Find tag column dynamically from header row ──────────────────────────
+  // Look for "Budget Portal Category" in row 0 — don't hardcode column index
+  const headerRow = rows[0];
+  let tagCol = -1;
+  for (let i = 0; i < headerRow.length; i++) {
+    const h = (headerRow[i] || '').toString().toLowerCase().trim();
+    if (h.includes('budget portal') || h.includes('portal category')) {
+      tagCol = i;
+      break;
+    }
+  }
+
+  // Fallback: if header not found, try last column
+  if (tagCol === -1) tagCol = headerRow.length - 1;
+
+  // ── Column indices (standard layout) ─────────────────────────────────────
+  const NAME_COL   = 0;
+  const BUDGET_COL = 1;
+  const ACTUAL_COL = 3;
+  const OVER_COL   = 5;
+  const DATE_COL   = 6;
+  const FUNDED_COL = 7;
+  const NOTES_COL  = 9;
 
   let currentMain = null;
 
   for (const row of rows) {
-    const tag  = (row[25] || '').toString().trim();
-    const name = (row[0]  || '').toString().trim();
+    const tag  = (row[tagCol] || '').toString().trim();
+    const name = (row[NAME_COL] || '').toString().trim();
 
-    if (!name || !tag || tag === 'Budget Portal Category') continue;
+    if (!name || !tag || tag.toLowerCase() === 'budget portal category') continue;
 
-    const budget  = parseCurrency(row[1]);
-    const actual  = parseCurrency(row[3]);
-    const overage = parseCurrency(row[5]);
-    const drawDate = formatDate(row[6]);
-    const fundedBy = (row[7] || '').toString().trim();
-    const notes    = (row[9] || '').toString().trim();
+    const budget   = parseCurrency(row[BUDGET_COL]);
+    const actual   = parseCurrency(row[ACTUAL_COL]);
+    const overage  = parseCurrency(row[OVER_COL]);
+    const drawDate = formatDate(row[DATE_COL]);
+    const fundedBy = (row[FUNDED_COL] || '').toString().trim();
+    const notes    = (row[NOTES_COL]  || '').toString().trim();
 
     if (tag === 'Main Category') {
-      // Check if this is the Total row
       if (name.toLowerCase().includes('total')) {
         result.totalBudget  = budget;
         result.totalActual  = actual;
@@ -114,40 +138,25 @@ function parseBillingData(rows) {
         currentMain = null;
         continue;
       }
-      // Regular main category
-      currentMain = {
-        name,
-        budget,
-        actual,
-        overage,
+      currentMain = { name, budget, actual, overage,
         pct: budget > 0 ? Math.round(actual / budget * 100) : 0,
-        subCategories: [],
-      };
+        subCategories: [] };
       result.mainCategories.push(currentMain);
 
     } else if (tag === 'Sub Main Category' && currentMain) {
-      currentMain.subCategories.push({
-        name,
-        budget,
-        actual,
-        overage,
-        drawDate,
-        fundedBy,
-        notes,
-      });
+      currentMain.subCategories.push({ name, budget, actual, overage, drawDate, fundedBy, notes });
 
-    } else if (tag === 'Forecasted Total') {
-      result.forecastTotal = budget; // forecast is in the budget col
+    } else if (tag.toLowerCase().includes('forecast')) {
+      result.forecastTotal = budget;
     }
   }
 
-  // Recalculate totals from main categories if sheet totals are 0
+  // Recalculate totals from categories if sheet totals are 0
   if (result.totalBudget === 0 && result.mainCategories.length > 0) {
     result.totalBudget  = result.mainCategories.reduce((s, c) => s + c.budget, 0);
     result.totalActual  = result.mainCategories.reduce((s, c) => s + c.actual, 0);
     result.totalOverage = result.mainCategories.reduce((s, c) => s + c.overage, 0);
   }
-
   if (result.forecastTotal === 0) result.forecastTotal = result.totalBudget;
 
   return result;
