@@ -1,13 +1,9 @@
 // netlify/functions/sheet-budget-sync.js
+// Google Sheets API v4 budget sync
+// Requires: GOOGLE_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY in Netlify env vars
 //
-// Uses Google Sheets API v4 to read budget sheets.
-// Requires GOOGLE_API_KEY environment variable in Netlify.
-//
-// MODE 1 — Status sync (called on budget page load)
-//   GET ?clientId=xxx&sheetUrl=xxx
-//
-// MODE 2 — Category import
-//   GET ?clientId=xxx&sheetUrl=xxx&syncCategories=1
+// MODE 1: GET ?clientId=x&sheetUrl=x         → sync statuses
+// MODE 2: GET ?clientId=x&sheetUrl=x&syncCategories=1  → import categories from col Z
 
 import { respond, corsHeaders } from './lib/supabase-client.js';
 
@@ -33,210 +29,208 @@ function normalizeStatus(raw) {
 }
 
 function extractSheetId(url) {
-  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : null;
+  const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
 }
 
 function extractGid(url) {
-  const match = url.match(/[#&?]gid=(\d+)/);
-  return match ? match[1] : null;
+  const m = url.match(/[#&?]gid=(\d+)/);
+  return m ? m[1] : null;
 }
 
 function sbHeaders() {
   return {
-    'apikey':        SB_KEY(),
+    'apikey': SB_KEY(),
     'Authorization': `Bearer ${SB_KEY()}`,
-    'Content-Type':  'application/json',
+    'Content-Type': 'application/json',
   };
 }
 
-// ── Get sheet tab name from gid via spreadsheet metadata ────────────────────
-async function getSheetTabName(sheetId, gid, apiKey) {
+// Get all sheet tab names and find the right one by gid
+async function getAllTabs(sheetId, apiKey) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?key=${apiKey}&fields=sheets.properties`;
   const res = await fetch(url);
-  if (!res.ok) return null;
-  const data = await res.json();
-  const sheets = data.sheets || [];
-  if (gid) {
-    const match = sheets.find(s => String(s.properties.sheetId) === String(gid));
-    if (match) return match.properties.title;
+  if (!res.ok) {
+    const txt = await res.text();
+    let msg = `Sheets metadata error ${res.status}`;
+    try { msg = JSON.parse(txt).error?.message || msg; } catch(e) {}
+    throw new Error(msg);
   }
-  // Fall back to first sheet
-  return sheets[0]?.properties?.title || null;
+  const data = await res.json();
+  return (data.sheets || []).map(s => ({
+    id:    String(s.properties.sheetId),
+    title: s.properties.title,
+    index: s.properties.index,
+  }));
 }
 
-// ── Fetch sheet data via Google Sheets API v4 ────────────────────────────────
-async function fetchSheetValues(sheetId, tabName, apiKey) {
-  const range = tabName ? `${tabName}!A:Z` : 'A:Z';
+// Fetch values from a specific tab by name
+async function fetchTabValues(sheetId, tabTitle, apiKey) {
+  const range = `'${tabTitle}'!A:Z`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`;
   const res = await fetch(url);
-
   if (!res.ok) {
-    const errText = await res.text();
-    let errMsg = `Google Sheets API error ${res.status}`;
-    try { errMsg = JSON.parse(errText).error?.message || errMsg; } catch(e) {}
-    if (res.status === 403) throw new Error('Sheet access denied. Ensure the sheet is shared as "Anyone with the link can view" and Google Sheets API is enabled.');
-    if (res.status === 404) throw new Error('Sheet or tab not found. Check the URL is correct.');
-    throw new Error(errMsg);
+    const txt = await res.text();
+    let msg = `Sheets values error ${res.status}`;
+    try { msg = JSON.parse(txt).error?.message || msg; } catch(e) {}
+    throw new Error(msg);
   }
-
   const data = await res.json();
   return data.values || [];
 }
 
-// ── Extract Main Category rows (col Z = "Main Category") ────────────────────
 function extractMainCategories(rows) {
-  const cats = [];
-  for (const row of rows) {
-    const tag = (row[25] || '').toString().trim();
-    if (tag.toLowerCase() !== 'main category') continue;
-    const name      = (row[0] || '').toString().trim();
-    const statusRaw = (row[2] || '').toString().trim();
-    const costRaw   = (row[3] || '').toString().replace(/[$,\s]/g, '');
-    const cost      = parseFloat(costRaw);
-    if (!name) continue;
-    cats.push({ name, total: isNaN(cost) ? 0 : cost, status: normalizeStatus(statusRaw) });
-  }
-  return cats;
+  return rows
+    .filter(row => (row[25] || '').toString().trim().toLowerCase() === 'main category')
+    .map(row => ({
+      name:   (row[0] || '').toString().trim(),
+      total:  parseFloat((row[3] || '').toString().replace(/[$,\s]/g, '')) || 0,
+      status: normalizeStatus((row[2] || '').toString().trim()),
+    }))
+    .filter(c => c.name);
 }
 
-// ── Extract status map from tagged rows ─────────────────────────────────────
 function extractCategoryStatuses(rows) {
-  const statuses = {};
+  const out = {};
   for (const row of rows) {
-    const name    = (row[0] || '').toString().trim();
-    const tag     = (row[25] || '').toString().trim();
-    const status  = normalizeStatus((row[2] || '').toString().trim());
+    const name = (row[0] || '').toString().trim();
+    const tag  = (row[25] || '').toString().trim().toLowerCase();
     if (!name) continue;
-    // Use tagged Main Category rows if present, else fall back to rows with no contractor
-    const isMain = tag.toLowerCase() === 'main category' || (!(row[1] || '').toString().trim() && name);
-    if (isMain) statuses[name] = { status };
+    if (tag === 'main category') {
+      out[name] = { status: normalizeStatus((row[2] || '').toString().trim()) };
+    }
   }
-  return statuses;
+  return out;
 }
 
-// ── Main handler ─────────────────────────────────────────────────────────────
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders(), body: '' };
   }
 
-  const clientId = event.queryStringParameters?.clientId;
-  const sheetUrl = event.queryStringParameters?.sheetUrl;
-  const syncCats = event.queryStringParameters?.syncCategories === '1';
+  const { clientId, sheetUrl, syncCategories } = event.queryStringParameters || {};
 
   if (!clientId) return respond(400, { error: 'clientId required' });
   if (!sheetUrl) return respond(400, { error: 'sheetUrl required' });
 
   const sheetId = extractSheetId(sheetUrl);
-  if (!sheetId) return respond(400, { error: 'Invalid Google Sheet URL' });
+  if (!sheetId) return respond(400, { error: 'Could not parse sheet ID from URL' });
 
   const apiKey = GS_KEY();
-  if (!apiKey) return respond(500, { error: 'GOOGLE_API_KEY not configured in Netlify environment variables' });
+  if (!apiKey) return respond(500, {
+    error: 'GOOGLE_API_KEY not set. Add it in Netlify → Site configuration → Environment variables, then redeploy.',
+  });
 
-  // Detect the correct tab name from the gid in the URL
-  const gid = extractGid(sheetUrl);
-  let tabName = null;
+  // Step 1: get all tabs and find the right one
+  let tabs, targetTab;
   try {
-    tabName = await getSheetTabName(sheetId, gid, apiKey);
-  } catch(e) {
-    console.log('Could not fetch tab name, will try without:', e.message);
+    tabs = await getAllTabs(sheetId, apiKey);
+  } catch(err) {
+    return respond(502, { error: `Could not read spreadsheet metadata: ${err.message}` });
   }
 
-  // Fetch sheet values
+  if (tabs.length === 0) {
+    return respond(502, { error: 'Spreadsheet has no tabs' });
+  }
+
+  // Match by gid if present, otherwise use first tab
+  const gid = extractGid(sheetUrl);
+  if (gid) {
+    targetTab = tabs.find(t => t.id === gid) || tabs[0];
+  } else {
+    targetTab = tabs[0];
+  }
+
+  // Step 2: fetch values from that tab
   let rows;
   try {
-    rows = await fetchSheetValues(sheetId, tabName, apiKey);
+    rows = await fetchTabValues(sheetId, targetTab.title, apiKey);
   } catch(err) {
-    return respond(502, { error: err.message });
+    return respond(502, { error: `Could not read tab "${targetTab.title}": ${err.message}` });
   }
 
-  if (!rows || rows.length === 0) {
-    return respond(200, { synced: 0, message: 'Sheet appears empty', categories: [] });
+  if (!rows.length) {
+    return respond(200, { synced: 0, message: `Tab "${targetTab.title}" appears empty`, categories: [] });
   }
 
   const hdrs = sbHeaders();
 
-  // ── MODE 2: import categories from column Z ─────────────────────────────
-  if (syncCats) {
+  // MODE 2: import categories
+  if (syncCategories === '1') {
     const cats = extractMainCategories(rows);
-    if (cats.length === 0) {
+
+    if (!cats.length) {
       return respond(200, {
         synced: 0,
-        message: 'No rows tagged "Main Category" found in column Z.',
-        categories: [],
-        debug: { tabName, rowCount: rows.length, firstRow: rows[0] },
+        message: `No "Main Category" tags found in column Z of tab "${targetTab.title}". Check the dropdown values.`,
+        debug: { tabTitle: targetTab.title, totalRows: rows.length, sampleRow: rows[1] || [] },
       });
     }
 
-    // Delete existing and insert fresh
+    // Delete existing categories
     await fetch(`${SB_URL()}/rest/v1/budget_categories?client_id=eq.${clientId}`, {
       method: 'DELETE', headers: hdrs,
     });
 
-    const insertRows = cats.map((cat, i) => ({
-      client_id: clientId, name: cat.name, total: cat.total,
-      spent: 0, status: cat.status, sort_order: i + 1, sub_categories: [],
-    }));
-
+    // Insert fresh from sheet
     const insertRes = await fetch(`${SB_URL()}/rest/v1/budget_categories`, {
       method: 'POST',
       headers: { ...hdrs, 'Prefer': 'return=representation' },
-      body: JSON.stringify(insertRows),
+      body: JSON.stringify(cats.map((c, i) => ({
+        client_id: clientId, name: c.name, total: c.total,
+        spent: 0, status: c.status, sort_order: i + 1, sub_categories: [],
+      }))),
     });
 
     if (!insertRes.ok) {
-      const err = await insertRes.text();
-      return respond(502, { error: `Database insert failed: ${err}` });
+      return respond(502, { error: `Database insert failed: ${await insertRes.text()}` });
     }
 
     const inserted = await insertRes.json();
     return respond(200, {
       synced: inserted.length,
-      message: `Imported ${inserted.length} categories from sheet`,
+      message: `Imported ${inserted.length} categories from "${targetTab.title}"`,
       categories: inserted.map(c => ({ name: c.name, total: c.total, status: c.status })),
     });
   }
 
-  // ── MODE 1: status sync against existing Supabase categories ────────────
-  const categoryStatuses = extractCategoryStatuses(rows);
-  if (Object.keys(categoryStatuses).length === 0) {
-    return respond(200, { synced: 0, message: 'No category rows found', categories: {} });
+  // MODE 1: status sync
+  const sheetStatuses = extractCategoryStatuses(rows);
+
+  if (!Object.keys(sheetStatuses).length) {
+    return respond(200, { synced: 0, message: 'No tagged category rows found', categories: {} });
   }
 
   const catsRes = await fetch(
     `${SB_URL()}/rest/v1/budget_categories?client_id=eq.${clientId}&select=id,name,status&order=sort_order.asc`,
     { headers: hdrs }
   );
-  if (!catsRes.ok) return respond(502, { error: 'Could not fetch budget categories' });
+  if (!catsRes.ok) return respond(502, { error: 'Could not fetch budget categories from database' });
 
-  const dbCats = await catsRes.json();
+  const dbCats  = await catsRes.json();
   const updates = [];
 
   for (const dbCat of dbCats) {
-    const dbLower = dbCat.name.toLowerCase();
-    let match = Object.entries(categoryStatuses).find(([n]) => n.toLowerCase() === dbLower);
-    if (!match) {
-      match = Object.entries(categoryStatuses).find(([n]) =>
-        n.toLowerCase().split(' ')[0] === dbLower.split(' ')[0]
-      );
-    }
-    if (match) {
-      const [, { status }] = match;
+    const key = Object.keys(sheetStatuses).find(k =>
+      k.toLowerCase() === dbCat.name.toLowerCase() ||
+      k.toLowerCase().split(' ')[0] === dbCat.name.toLowerCase().split(' ')[0]
+    );
+    if (key) {
+      const { status } = sheetStatuses[key];
       if (status !== dbCat.status) {
-        const patchRes = await fetch(`${SB_URL()}/rest/v1/budget_categories?id=eq.${dbCat.id}`, {
+        const pr = await fetch(`${SB_URL()}/rest/v1/budget_categories?id=eq.${dbCat.id}`, {
           method: 'PATCH',
           headers: { ...hdrs, 'Prefer': 'return=minimal' },
           body: JSON.stringify({ status }),
         });
-        if (patchRes.ok) updates.push({ name: dbCat.name, from: dbCat.status, to: status });
+        if (pr.ok) updates.push({ name: dbCat.name, from: dbCat.status, to: status });
       }
     }
   }
 
   return respond(200, {
-    synced: updates.length,
-    message: updates.length > 0 ? `Updated ${updates.length} category statuses` : 'All categories up to date',
+    synced:  updates.length,
+    message: updates.length > 0 ? `Updated ${updates.length} category statuses` : 'All statuses up to date',
     updates,
   });
 };

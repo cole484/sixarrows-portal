@@ -265,23 +265,43 @@ async function initBudget() {
   };
 
 } else {
-  // ── CONSTRUCTION MODE — full transparency ────────────
+  // ── CONSTRUCTION MODE — reads live from Google Sheet Billing tab ──────────
 
-  const totalBudget      = p.budgetTotal || 0;
-  const totalSpent       = cats.reduce((a, c) => a + (c.spent || 0), 0);
   const changeOrderItems = p.changeOrderItems || [];
   const changeOrders     = changeOrderItems.reduce((a, co) => a + (co.amount || 0), 0);
-  const forecasted       = totalBudget + changeOrders;
-  const remaining        = forecasted - totalSpent;
-  const spentPct         = forecasted ? Math.round(totalSpent / forecasted * 100) : 0;
-  const healthCls        = spentPct > 95 ? 'over' : spentPct > 80 ? 'warn' : 'good';
+  const billingSheetUrl  = p.links?.budget && p.links.budget !== '#' ? p.links.budget : null;
+
+  // ── Fetch live billing data from Google Sheet ─────────────────────────────
+  let billingData = null;
+  if (billingSheetUrl) {
+    try {
+      const res = await fetch(`/.netlify/functions/sheet-billing-sync?sheetUrl=${encodeURIComponent(billingSheetUrl)}`);
+      if (res.ok) billingData = await res.json();
+    } catch(e) {
+      console.log('Billing sheet sync unavailable:', e.message);
+    }
+  }
+
+  // ── Pull numbers from billing data or fall back to Supabase fields ─────────
+  const totalBudget  = billingData?.totalBudget  || p.budgetTotal        || 0;
+  const totalActual  = billingData?.totalActual  || p.budgetCommitted    || 0;
+  const totalOverage = billingData?.totalOverage || 0;
+  const forecastRaw  = billingData?.forecastTotal || (totalBudget + changeOrders);
+  const forecasted   = forecastRaw + changeOrders;
+  const remaining    = forecasted - totalActual;
+  const spentPct     = forecasted ? Math.round(totalActual / forecasted * 100) : 0;
+  const healthCls    = spentPct > 95 ? 'over' : spentPct > 80 ? 'warn' : 'good';
+  const mainCats     = billingData?.mainCategories || cats.map(c => ({
+    name: c.name, budget: c.total || 0, actual: c.spent || 0,
+    overage: (c.spent || 0) - (c.total || 0), pct: 0, subCategories: [],
+  }));
 
   mountLayout('budget', 'Budget', `
     <div class="page-eyebrow">Financials</div>
     <div class="page-title">Budget</div>
     <p class="page-sub">Every cost was locked before groundbreaking. Here's how actual spend tracks against each category.</p>
 
-    <!-- Budget health -->
+    <!-- Budget health summary -->
     <div class="card dark" style="margin-bottom:1rem">
       <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <div>
@@ -289,8 +309,8 @@ async function initBudget() {
           <div style="font-size:11px;color:rgba(235,233,222,.4)">${spentPct}% of forecasted total spent</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:28px;font-weight:700;color:var(--cream);line-height:1;letter-spacing:-.02em">${currency(totalSpent)}</div>
-          <div style="font-size:11px;color:rgba(235,233,222,.35);margin-top:2px">spent to date</div>
+          <div style="font-size:28px;font-weight:700;color:var(--cream);line-height:1;letter-spacing:-.02em">${currency(totalActual)}</div>
+          <div style="font-size:11px;color:rgba(235,233,222,.35);margin-top:2px">actual spend to date</div>
         </div>
       </div>
       <div class="health-bar-wrap" style="background:rgba(255,255,255,.1)">
@@ -304,7 +324,9 @@ async function initBudget() {
         <div class="forecast-row" style="border-color:rgba(255,255,255,.07)">
           <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">
             Change orders
-            ${changeOrderItems.length > 0 ? `<span style="font-size:10px;opacity:.5;font-weight:400"> · ${changeOrderItems.length} approved</span>` : `<span style="font-size:10px;opacity:.4;font-weight:400"> · none to date</span>`}
+            ${changeOrderItems.length > 0
+              ? `<span style="font-size:10px;opacity:.5;font-weight:400"> · ${changeOrderItems.length} approved</span>`
+              : `<span style="font-size:10px;opacity:.4;font-weight:400"> · none to date</span>`}
           </span>
           <span class="forecast-val" style="color:${changeOrders > 0 ? '#f4a460' : changeOrders < 0 ? 'var(--green)' : 'rgba(235,233,222,.35)'}">
             ${changeOrders === 0 ? '—' : (changeOrders > 0 ? '+' : '') + currency(changeOrders)}
@@ -314,10 +336,19 @@ async function initBudget() {
           <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">Forecasted total</span>
           <span class="forecast-val" style="color:var(--cream);font-size:14px">${currency(forecasted)}</span>
         </div>
-        <div class="forecast-row" style="border:none">
+        <div class="forecast-row" style="border-color:rgba(255,255,255,.07)">
           <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">Remaining</span>
-          <span class="forecast-val" style="color:var(--green)">${currency(remaining)}</span>
+          <span class="forecast-val" style="color:${remaining < 0 ? 'var(--danger)' : 'var(--green)'}">
+            ${remaining < 0 ? '-' : ''}${currency(Math.abs(remaining))}
+          </span>
         </div>
+        ${totalOverage !== 0 ? `
+        <div class="forecast-row" style="border:none">
+          <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">Overall variance</span>
+          <span class="forecast-val" style="color:${totalOverage > 0 ? 'var(--danger)' : 'var(--green)'}">
+            ${totalOverage > 0 ? '+' : ''}${currency(totalOverage)}
+          </span>
+        </div>` : '<div></div>'}
       </div>
     </div>
 
@@ -325,37 +356,44 @@ async function initBudget() {
     <div class="card" style="margin-bottom:1rem">
       <div class="sh">
         <div class="sh-title">Category Breakdown</div>
-        <a href="${p.links?.budget||'#'}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;font-weight:500">Full budget →</a>
+        ${billingSheetUrl
+          ? `<a href="${billingSheetUrl}" target="_blank" style="font-size:11px;color:var(--green-dk);text-decoration:none;font-weight:500">Full budget →</a>`
+          : ''}
       </div>
-      ${cats.map((cat, ci) => {
-        const spent    = cat.spent  || 0;
-        const budget   = cat.total  || 0;
-        const pct      = budget ? Math.round(spent / budget * 100) : 0;
-        const over     = spent > budget;
-        const barCls   = over ? 'over' : (pct > 90 ? 'warn' : 'good');
-        const hasSubs  = cat.subCategories && cat.subCategories.length > 0;
-        const statusTag = {
-          complete:  '<span class="tag ok" style="font-size:9px">Complete</span>',
-          locked:    '<span class="tag ok" style="font-size:9px">Complete</span>',
-          active:    '<span class="tag neutral" style="font-size:9px">In Progress</span>',
-          reviewing: '<span class="tag neutral" style="font-size:9px">In Progress</span>',
-          pending:   '<span class="tag" style="font-size:9px;background:var(--cream-2);color:var(--charcoal-4)">Upcoming</span>',
-        }[cat.status] || '';
+      ${!billingData && !billingSheetUrl ? `
+        <div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4);font-style:italic">
+          Budget sheet not connected. Your Six Arrows team will link this soon.
+        </div>` : ''}
+      ${mainCats.map((cat, ci) => {
+        const budget  = cat.budget  || 0;
+        const actual  = cat.actual  || 0;
+        const overage = cat.overage || 0;
+        const pct     = budget > 0 ? Math.round(actual / budget * 100) : 0;
+        const isOver  = overage > 0;
+        const isUnder = overage < 0;
+        const barCls  = isOver ? 'over' : pct > 90 ? 'warn' : 'good';
+        const hasSubs = cat.subCategories && cat.subCategories.length > 0;
 
         const subRows = hasSubs ? cat.subCategories.map(sub => {
-          const ss = sub.spent || 0;
-          const sb = sub.total || 0;
-          const sp = sb ? Math.round(ss / sb * 100) : 0;
-          const so = ss > sb && sb > 0;
+          const sb = sub.budget || 0;
+          const sa = sub.actual || 0;
+          const so = sub.overage || 0;
+          const sp = sb > 0 ? Math.round(sa / sb * 100) : 0;
+          const subOver = so > 0;
           return `<div class="sub-cat-row">
             <div class="sub-cat-name">${sub.name}</div>
-            ${sb > 0 ? `
-            <div style="display:flex;align-items:center;gap:8px;flex:1">
-              <div class="health-bar-wrap" style="height:4px;flex:1;margin-bottom:0">
-                <div class="health-bar-fill ${so?'over':sp>90?'warn':'good'}" style="width:${Math.min(sp,100)}%"></div>
+            <div style="display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap">
+              ${sb > 0 ? `
+              <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:120px">
+                <div class="health-bar-wrap" style="height:4px;flex:1;margin-bottom:0">
+                  <div class="health-bar-fill ${subOver?'over':sp>90?'warn':'good'}" style="width:${Math.min(sp,100)}%"></div>
+                </div>
               </div>
-              <span class="sub-cat-amt">${currency(ss)} / ${currency(sb)}</span>
-            </div>` : `<span class="sub-cat-amt" style="color:var(--charcoal-4);font-style:italic">TBD</span>`}
+              <span class="sub-cat-amt">${currency(sa)} <span style="color:var(--charcoal-4)">/ ${currency(sb)}</span></span>
+              ${so !== 0 ? `<span style="font-size:11px;font-weight:600;color:${subOver?'var(--danger)':'var(--green-dk)'}">${subOver?'+':''}${currency(so)}</span>` : ''}
+              ` : `<span class="sub-cat-amt" style="color:var(--charcoal-4);font-style:italic">Not yet started</span>`}
+              ${sub.drawDate ? `<span style="font-size:10px;color:var(--charcoal-4);margin-left:auto">Drew ${sub.drawDate}</span>` : ''}
+            </div>
           </div>`;
         }).join('') : '';
 
@@ -363,7 +401,11 @@ async function initBudget() {
           <div class="bcat-head" onclick="${hasSubs ? `toggleCat(${ci})` : ''}" style="${hasSubs ? 'cursor:pointer' : ''}">
             <span class="bcat-name">${cat.name}</span>
             <div style="display:flex;align-items:center;gap:8px">
-              ${statusTag}
+              ${isOver
+                ? `<span class="tag" style="font-size:9px;background:rgba(184,50,50,.1);color:var(--danger)">+${currency(overage)} over</span>`
+                : isUnder && budget > 0
+                ? `<span class="tag ok" style="font-size:9px">${currency(Math.abs(overage))} under</span>`
+                : ''}
               ${hasSubs ? `<svg id="bcat-chev-${ci}" style="width:12px;height:12px;color:var(--charcoal-4);transition:transform .2s;flex-shrink:0" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5l4 3.5-4 3.5"/></svg>` : ''}
             </div>
           </div>
@@ -371,11 +413,13 @@ async function initBudget() {
             <div class="health-bar-fill ${barCls}" style="width:${Math.min(pct,100)}%"></div>
           </div>
           <div class="bcat-amounts">
-            <span>${currency(spent)} spent</span>
-            <span style="color:var(--charcoal-4)">of <strong>${budget > 0 ? currency(budget) : 'TBD'}</strong></span>
-            ${budget > 0 ? `<span style="color:${over?'var(--danger)':pct>90?'#c87000':'var(--charcoal-4)'}">${pct}%</span>` : ''}
+            <span style="font-weight:600">${currency(actual)}</span>
+            <span style="color:var(--charcoal-4)"> actual</span>
+            <span style="color:var(--charcoal-4);margin:0 4px">/</span>
+            <span style="color:var(--charcoal-4)">${budget > 0 ? currency(budget) : 'TBD'} budget</span>
+            ${budget > 0 ? `<span style="margin-left:auto;color:${isOver?'var(--danger)':pct>90?'#c87000':'var(--charcoal-4)'}">${pct}%</span>` : ''}
           </div>
-          ${hasSubs ? `<div class="sub-cat-wrap" id="sub-${ci}" style="max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1)">${subRows}</div>` : ''}
+          ${hasSubs ? `<div class="sub-cat-wrap" id="sub-${ci}" style="max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.4,0,.2,1)">${subRows}</div>` : ''}
         </div>`;
       }).join('')}
     </div>
@@ -387,13 +431,11 @@ async function initBudget() {
     expandState[ci] = !expandState[ci];
     const wrap = document.getElementById('sub-' + ci);
     const chev = document.getElementById('bcat-chev-' + ci);
-    if (wrap) {
-      wrap.style.maxHeight = expandState[ci] ? '1200px' : '0';
-      wrap.classList.toggle('open', expandState[ci]);
-    }
+    if (wrap) wrap.style.maxHeight = expandState[ci] ? '2000px' : '0';
     if (chev) chev.style.transform = expandState[ci] ? 'rotate(90deg)' : '';
   };
 }
 }
+
 initBudget();
 </script></body></html>

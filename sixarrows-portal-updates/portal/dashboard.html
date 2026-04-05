@@ -630,9 +630,13 @@ function constructionLayout() {
         </div>
         <div class="mc-eyebrow">Communication</div>
         <div class="mc-title">Updates</div>
-        <div style="font-size:11px;color:var(--charcoal-4);margin-top:8px;margin-bottom:2px">${p.updates[0].date}</div>
-        <div style="font-size:13px;font-weight:600;color:var(--charcoal);margin-bottom:4px">${p.updates[0].title}</div>
-        <div style="font-size:12px;color:var(--charcoal-3);line-height:1.45">${p.updates[0].body.substring(0,80)}…</div>
+        ${p.updates && p.updates.length > 0 ? `
+          <div style="font-size:11px;color:var(--charcoal-4);margin-top:8px;margin-bottom:2px">${p.updates[0].date}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--charcoal);margin-bottom:4px">${p.updates[0].title}</div>
+          <div style="font-size:12px;color:var(--charcoal-3);line-height:1.45">${(p.updates[0].body||'').substring(0,80)}…</div>
+        ` : `
+          <div style="font-size:12px;color:var(--charcoal-4);margin-top:8px;font-style:italic">No updates posted yet.</div>
+        `}
         <svg class="mc-arrow" viewBox="0 0 14 14" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
       </a>
     </div>
