@@ -614,13 +614,13 @@ function constructionLayout() {
       <a class="card card-link" href="budget.html">
         <div class="mc-top">
           <div class="mc-ico"><svg viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.3"><rect x=".5" y="1.5" width="13" height="11" rx="1"/><line x1=".5" y1="5" x2="13.5" y2="5"/><line x1="4.5" y1="5" x2="4.5" y2="12.5"/></svg></div>
-          <span class="tag ${budPct>88?'warn':'ok'}" style="font-size:9px">${budPct}% committed</span>
+          <span class="tag ok" style="font-size:9px" id="dash-bud-pct-tag">${budPct > 0 ? budPct + '% committed' : 'View Budget'}</span>
         </div>
         <div class="mc-eyebrow">Financials</div>
         <div class="mc-title">Budget</div>
-        <div style="font-size:20px;font-weight:700;color:var(--charcoal);letter-spacing:-.02em;margin:8px 0 3px">${currency(p.budgetCommitted)}</div>
-        <div class="mc-sub" style="margin-bottom:8px">of ${currency(p.budgetTotal)}</div>
-        <div class="track sm"><div class="bar ${budPct>88?'warn':''}" style="width:${budPct}%"></div></div>
+        <div style="font-size:20px;font-weight:700;color:var(--charcoal);letter-spacing:-.02em;margin:8px 0 3px" id="dash-bud-actual">${currency(p.budgetCommitted)}</div>
+        <div class="mc-sub" style="margin-bottom:8px" id="dash-bud-total">of ${currency(p.budgetTotal)}</div>
+        <div class="track sm"><div class="bar" id="dash-bud-bar" style="width:${Math.min(budPct,100)}%"></div></div>
         <svg class="mc-arrow" viewBox="0 0 14 14" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
       </a>
       <a class="card card-link" href="updates.html">
@@ -683,6 +683,28 @@ mountLayout('overview', 'Command Center',
   isSAB ? sabLayout() : constructionLayout(),
   TS
 );
+
+// ── Live billing data for construction budget card ───
+if (isConstruction && p.links?.budget && p.links.budget !== '#') {
+  fetch(`/.netlify/functions/sheet-billing-sync?sheetUrl=${encodeURIComponent(p.links.budget)}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !data.mainCategories) return;
+      const actual   = data.totalActual  || 0;
+      const budget   = data.totalBudget  || 0;
+      const pct      = budget > 0 ? Math.round(actual / budget * 100) : 0;
+      const pctCls   = pct > 88 ? 'warn' : 'ok';
+      const el = id => document.getElementById(id);
+      if (el('dash-bud-actual'))  el('dash-bud-actual').textContent  = currency(actual);
+      if (el('dash-bud-total'))   el('dash-bud-total').textContent   = `of ${currency(budget)}`;
+      if (el('dash-bud-bar'))     el('dash-bud-bar').style.width     = Math.min(pct, 100) + '%';
+      if (el('dash-bud-pct-tag')) {
+        el('dash-bud-pct-tag').textContent = pct + '% committed';
+        el('dash-bud-pct-tag').className   = `tag ${pctCls}`;
+      }
+    })
+    .catch(() => {});
+}
 
 // ── Recent photos preview (construction phase) ──────
 if (isConstruction) {
