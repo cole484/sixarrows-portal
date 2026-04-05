@@ -66,7 +66,7 @@ async function getAllTabs(sheetId, apiKey) {
 
 // Fetch values from a specific tab by name
 async function fetchTabValues(sheetId, tabTitle, apiKey) {
-  const range = `'${tabTitle}'!A:Z`;
+  const range = `'${tabTitle}'!A:AA`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`;
   const res = await fetch(url);
   if (!res.ok) {

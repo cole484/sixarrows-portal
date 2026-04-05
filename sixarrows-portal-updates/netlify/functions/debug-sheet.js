@@ -45,13 +45,14 @@ export const handler = async (event) => {
       try {
         const res  = await fetch(metaUrl);
         const data = res.ok ? await res.json() : await res.text();
-        const tabs = res.ok ? (data.sheets || []).map(s => ({ id: s.properties.sheetId, title: s.properties.title })) : [];
-        result.sheetTest = { status: res.status, ok: res.ok, sheetId, tabs };
+        const tabs = res.ok ? (data.sheets || []).map(s => ({ id: s.properties.sheetId, title: s.properties.title, cols: s.properties.gridProperties?.columnCount })) : [];
+        result.sheetTest = { status: res.status, ok: res.ok, sheetId, tabs, version: 'v3' };
 
         // If billing test requested, fetch the Billing tab
         if (billing && res.ok && tabs.length > 0) {
           const billingTab = tabs.find(t => t.title.toLowerCase() === 'billing') || tabs[0];
-          const range = `'${billingTab.title}'!A:Z`;
+          // Use A:AA to handle sheets where tag column is in col AA (index 26)
+          const range = `'${billingTab.title}'!A:AA`;
           const valUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`;
           const valRes  = await fetch(valUrl);
           const valData = valRes.ok ? await valRes.json() : null;
