@@ -1,8 +1,18 @@
 // netlify/functions/debug-sheet.js
 // Temporary debug function — remove after troubleshooting
-// Call: /.netlify/functions/debug-sheet?sheetUrl=YOUR_URL
+// Usage:
+//   /.netlify/functions/debug-sheet                          → check env vars only
+//   /.netlify/functions/debug-sheet?sheetUrl=URL            → test metadata
+//   /.netlify/functions/debug-sheet?sheetUrl=URL&billing=1  → test billing parse
 
 import { corsHeaders } from './lib/supabase-client.js';
+
+function parseCurrency(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  const str = String(val).replace(/[$,\s#DIV\/0!]/g, '').trim();
+  const n = parseFloat(str);
+  return isNaN(n) ? 0 : n;
+}
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -13,37 +23,69 @@ export const handler = async (event) => {
   const sbUrl   = process.env.SUPABASE_URL;
   const sbKey   = process.env.SUPABASE_ANON_KEY;
   const sheetUrl = event.queryStringParameters?.sheetUrl;
+  const billing  = event.queryStringParameters?.billing === '1';
 
   const result = {
     env: {
       GOOGLE_API_KEY:    apiKey  ? `set (${apiKey.length} chars, starts: ${apiKey.slice(0,8)}...)` : 'MISSING',
-      SUPABASE_URL:      sbUrl   ? `set` : 'MISSING',
-      SUPABASE_ANON_KEY: sbKey   ? `set` : 'MISSING',
+      SUPABASE_URL:      sbUrl   ? 'set' : 'MISSING',
+      SUPABASE_ANON_KEY: sbKey   ? 'set' : 'MISSING',
     },
     sheetTest: null,
+    billingTest: null,
   };
 
-  // If sheet URL provided, test the metadata call
   if (sheetUrl && apiKey) {
     const sheetIdMatch = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
     const sheetId = sheetIdMatch ? sheetIdMatch[1] : null;
 
     if (sheetId) {
+      // Test metadata
       const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?key=${apiKey}&fields=sheets.properties`;
       try {
         const res  = await fetch(metaUrl);
-        const text = await res.text();
-        result.sheetTest = {
-          status:  res.status,
-          ok:      res.ok,
-          sheetId,
-          response: res.ok ? JSON.parse(text) : text.slice(0, 500),
-        };
+        const data = res.ok ? await res.json() : await res.text();
+        const tabs = res.ok ? (data.sheets || []).map(s => ({ id: s.properties.sheetId, title: s.properties.title, cols: s.properties.gridProperties?.columnCount })) : [];
+        result.sheetTest = { status: res.status, ok: res.ok, sheetId, tabs, version: 'v3' };
+
+        // If billing test requested, fetch the Billing tab
+        if (billing && res.ok && tabs.length > 0) {
+          const billingTab = tabs.find(t => t.title.toLowerCase() === 'billing') || tabs[0];
+          // Use A:AA to handle sheets where tag column is in col AA (index 26)
+          const range = `'${billingTab.title}'!A:AA`;
+          const valUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`;
+          const valRes  = await fetch(valUrl);
+          const valData = valRes.ok ? await valRes.json() : null;
+          const rows    = valData?.values || [];
+
+          // Find tagged rows — search header row for "Budget Portal Category"
+          const headerRow = rows[0] || [];
+          let tagCol = -1;
+          for (let i = 0; i < headerRow.length; i++) {
+            const h = (headerRow[i] || '').toString().toLowerCase();
+            if (h.includes('budget portal') || h.includes('portal category')) {
+              tagCol = i;
+              break;
+            }
+          }
+          if (tagCol === -1) tagCol = headerRow.length - 1; // fallback to last col
+
+          const tagged = rows
+            .filter(r => r[tagCol] && r[tagCol].toString().trim() && r[tagCol].toString().trim().toLowerCase() !== 'budget portal category')
+            .map(r => ({ tag: r[tagCol], name: r[0], budget: parseCurrency(r[1]), actual: parseCurrency(r[3]) }));
+
+          result.billingTest = {
+            tab: billingTab.title,
+            totalRows: rows.length,
+            tagColFound: tagCol,
+            tagColHeader: headerRow[tagCol] || 'not found',
+            taggedRows: tagged.length,
+            tagged: tagged.slice(0, 15),
+          };
+        }
       } catch(e) {
         result.sheetTest = { error: e.message };
       }
-    } else {
-      result.sheetTest = { error: 'Could not parse sheet ID from URL' };
     }
   }
 
