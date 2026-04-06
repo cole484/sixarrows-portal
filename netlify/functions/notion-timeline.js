@@ -84,6 +84,7 @@ function normalizeTask(page, schema) {
       trade:       prop(page, 'Trade')             || null,
       isMilestone: prop(page, 'Milestones')        || false,
       clientNote:  prop(page, 'Client-facing note')|| null,
+      definitionOfDone: prop(page, 'Definition of done') || null,
       duration:    prop(page, 'Duration (days)')   || null,
     };
   } else {
@@ -106,14 +107,15 @@ function normalizeTask(page, schema) {
 // Status classification
 function statusGroup(status) {
   const s = (status || '').toLowerCase();
-  if (s === 'completed')                          return 'completed';
-  if (s === 'in progress')                        return 'active';
-  if (s === 'scheduled')                          return 'scheduled';
-  if (s === 'estimated time frame')               return 'estimated';
-  if (s === 'needs scheduling')                   return 'needs_scheduling';
-  if (s === 'not ready to schedule')              return 'not_ready';
-  if (s === 'waiting on client')                  return 'waiting';
-  if (s === 'on hold')                            return 'on_hold';
+  if (s === 'completed')                                return 'completed';
+  if (s === 'in progress')                              return 'active';
+  if (s === 'scheduled')                                return 'scheduled';
+  if (s === 'estimated time frame')                     return 'estimated';
+  if (s === 'needs scheduling')                         return 'needs_scheduling';
+  if (s === 'not ready to schedule')                    return 'not_ready';
+  if (s === 'not ready / estimated timeframe')          return 'estimated';
+  if (s === 'waiting on client')                        return 'waiting';
+  if (s === 'on hold')                                  return 'on_hold';
   return 'needs_scheduling';
 }
 
@@ -206,6 +208,7 @@ export const handler = async (event) => {
       phase:      t.phase,
       trade:      t.trade,
       clientNote: t.clientNote,
+      definitionOfDone: t.definitionOfDone || null,
       duration:   t.duration,
       sequence:   t.sequence,
     }));

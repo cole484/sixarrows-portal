@@ -393,6 +393,9 @@ async function initTimeline() {
     const doneCount        = usesNotion
       ? milestones.filter(m => m.group === 'completed').length
       : milestones.filter(m => m.done).length;
+    const nextMilestone    = usesNotion
+      ? milestones.find(m => m.group !== 'completed')
+      : milestones.find(m => !m.done);
 
     // Rolling tasks
     const tasks          = notionData?.tasks || [];
@@ -400,7 +403,8 @@ async function initTimeline() {
     const completedCount = notionData?.completedCount || 0;
     const totalTasks     = notionData?.totalTasks || 0;
 
-    function taskStatusTag(task) {
+    // ── Status tag helper ────────────────────────────────────────────────────
+    function taskStatusTag(group) {
       const map = {
         completed:        `<span class="tag ok" style="font-size:9px">Complete</span>`,
         active:           `<span class="tag" style="font-size:9px;background:var(--green-lt);color:var(--green-deep)">In Progress</span>`,
@@ -411,38 +415,74 @@ async function initTimeline() {
         waiting:          `<span class="tag" style="font-size:9px;background:rgba(200,112,0,.1);color:#c87000">Waiting on Client</span>`,
         on_hold:          `<span class="tag" style="font-size:9px;background:var(--cream-2);color:var(--charcoal-4)">On Hold</span>`,
       };
-      return map[task.group] || '';
+      return map[group] || '';
+    }
+
+    // ── Task row renderer ────────────────────────────────────────────────────
+    function renderTaskRow(task) {
+      const isActive    = task.windowRole === 'active';
+      const isCompleted = task.windowRole === 'completed';
+
+      // Client-facing note: shown as a teal callout if present
+      const noteHtml = task.clientNote
+        ? `<div style="font-size:11px;color:var(--green-dk);background:var(--green-pale);border-left:2px solid var(--green);padding:5px 8px;border-radius:3px;margin:4px 0;line-height:1.45">${task.clientNote}</div>`
+        : '';
+
+      // Definition of done: shown as secondary text when task is active or upcoming
+      const dodHtml = task.definitionOfDone && !isCompleted
+        ? `<div style="font-size:11px;color:var(--charcoal-3);line-height:1.45;margin-top:3px"><span style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);font-weight:600">Done when: </span>${task.definitionOfDone}</div>`
+        : '';
+
+      // Date line
+      const dateHtml = task.dateLabel && ['scheduled','active','estimated'].includes(task.group)
+        ? `<div style="font-size:10px;color:var(--charcoal-4);margin-top:2px">${task.group === 'estimated' ? 'Est. ' : ''}${task.dateLabel}</div>`
+        : '';
+
+      // Trade/phase label
+      const metaHtml = task.phase
+        ? `<div style="font-size:10px;color:var(--charcoal-4);margin-top:2px">${task.phase}${task.trade ? ' · ' + task.trade : ''}</div>`
+        : task.trade
+        ? `<div style="font-size:10px;color:var(--charcoal-4);margin-top:2px">${task.trade}</div>`
+        : '';
+
+      const rowStyle = [
+        'display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)',
+        isActive    ? 'border-left:3px solid var(--green);background:var(--green-pale);padding:12px;border-radius:6px;border-bottom:none;margin-bottom:4px' : '',
+        isCompleted ? 'opacity:.55' : '',
+      ].filter(Boolean).join(';');
+
+      return `<div style="${rowStyle}">
+        <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:2px;background:${isCompleted||isActive?'var(--green)':'var(--cream-2)'}">
+          ${isCompleted
+            ? `<svg viewBox="0 0 9 9" style="width:10px;height:10px"><path d="M1.5 4.5l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`
+            : isActive
+            ? `<div style="width:7px;height:7px;border-radius:50%;background:white"></div>`
+            : `<div style="width:6px;height:6px;border-radius:50%;background:var(--charcoal-4)"></div>`}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:${isActive?'700':'500'};color:${isCompleted?'var(--charcoal-3)':'var(--charcoal)'};line-height:1.3">${task.name}</div>
+          ${noteHtml}
+          ${dodHtml}
+          ${metaHtml}
+          ${dateHtml}
+        </div>
+        <div style="flex-shrink:0;margin-top:2px">${taskStatusTag(task.group)}</div>
+      </div>`;
     }
 
     const taskListHtml = tasks.length === 0
       ? `<div style="font-size:13px;color:var(--charcoal-4);padding:1.5rem;text-align:center;font-style:italic">
            ${timelineDbId ? 'Syncing with Notion…' : 'Build schedule will appear here once your project starts.'}
          </div>`
-      : tasks.map(task => {
-          const isActive    = task.windowRole === 'active';
-          const isCompleted = task.windowRole === 'completed';
-          return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)${isActive ? ';border-left:3px solid var(--green);background:var(--green-pale);padding:12px;border-radius:var(--r-md);margin-bottom:4px' : ''}${isCompleted ? ';opacity:.6' : ''}">
-            <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;background:${isCompleted||isActive ? 'var(--green)' : 'var(--cream-2)'}">
-              ${isCompleted ? `<svg viewBox="0 0 9 9" style="width:10px;height:10px"><path d="M1.5 4.5l2 2 4-4" stroke="white" stroke-width="1.3" fill="none"/></svg>`
-                : isActive ? `<div style="width:7px;height:7px;border-radius:50%;background:white"></div>`
-                : `<div style="width:6px;height:6px;border-radius:50%;background:var(--charcoal-4)"></div>`}
-            </div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:${isActive?'700':'500'};color:${isCompleted?'var(--charcoal-3)':'var(--charcoal)'};line-height:1.3;margin-bottom:3px">${task.name}</div>
-              ${task.clientNote ? `<div style="font-size:11px;color:var(--charcoal-3);line-height:1.4;margin-bottom:3px">${task.clientNote}</div>` : ''}
-              ${task.phase ? `<div style="font-size:10px;color:var(--charcoal-4)">${task.phase}${task.trade ? ' · ' + task.trade : ''}</div>` : task.trade ? `<div style="font-size:10px;color:var(--charcoal-4)">${task.trade}</div>` : ''}
-              ${task.dateLabel && ['scheduled','active','estimated'].includes(task.group) ? `<div style="font-size:11px;color:var(--charcoal-4)">${task.group === 'estimated' ? 'Est. ' : ''}${task.dateLabel}</div>` : ''}
-            </div>
-            <div style="flex-shrink:0">${taskStatusTag(task)}</div>
-          </div>`;
-        }).join('');
+      : tasks.map(renderTaskRow).join('');
 
-    function renderMilestones() {
-      if (milestones.length === 0) return `<div style="font-size:13px;color:var(--charcoal-4);padding:8px 0">Milestones will appear here as your build progresses.</div>`;
-      return `<div class="milestone-list">${milestones.map((m, i) => {
-        const isLast = i === milestones.length - 1;
-        const isDone = usesNotion ? m.group === 'completed' : m.done;
-        const isNext = !isDone && milestones.slice(0,i).every(x => usesNotion ? x.group === 'completed' : x.done);
+    // ── Milestone list renderer (collapsed by default) ───────────────────────
+    function renderMilestoneList() {
+      if (!milestones.length) return '';
+      return milestones.map((m, i) => {
+        const isLast  = i === milestones.length - 1;
+        const isDone  = usesNotion ? m.group === 'completed' : m.done;
+        const isNext  = !isDone && milestones.slice(0,i).every(x => usesNotion ? x.group === 'completed' : x.done);
         const dateStr = usesNotion ? (m.dateLabel || '') : (m.date || '');
         const title   = usesNotion ? m.name : m.title;
         const note    = usesNotion ? '' : (m.note || '');
@@ -461,8 +501,21 @@ async function initTimeline() {
             ${isDone ? `<div class="milestone-tag"><span class="tag ok" style="font-size:9px">Complete</span></div>` : ''}
           </div>
         </div>`;
-      }).join('')}</div>`;
+      }).join('');
     }
+
+    // ── Next milestone callout ───────────────────────────────────────────────
+    const nextMilestoneName = usesNotion ? nextMilestone?.name : nextMilestone?.title;
+    const nextMilestoneDate = usesNotion ? (nextMilestone?.dateLabel || '') : (nextMilestone?.date || '');
+    const nextMilestoneHtml = nextMilestoneName ? `
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--green-pale);border-left:3px solid var(--green);border-radius:6px;margin-bottom:10px">
+        <svg viewBox="0 0 14 14" fill="none" stroke="var(--green-dk)" stroke-width="1.4" style="width:16px;height:16px;flex-shrink:0"><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3 3l1.5 1.5M9.5 9.5L11 11M3 11l1.5-1.5M9.5 4.5L11 3"/><circle cx="7" cy="7" r="2.5"/></svg>
+        <div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--green-dk);font-weight:700;margin-bottom:1px">Next Milestone</div>
+          <div style="font-size:13px;font-weight:600;color:var(--charcoal)">${nextMilestoneName}</div>
+          ${nextMilestoneDate ? `<div style="font-size:11px;color:var(--charcoal-4)">${nextMilestoneDate}</div>` : ''}
+        </div>
+      </div>` : '';
 
     return `
       <div class="page-eyebrow">Schedule</div>
@@ -480,27 +533,45 @@ async function initTimeline() {
         </div>
       </div>
 
-      <div class="card" style="margin-bottom:1rem">
-        <div class="sh">
-          <div class="sh-title">Build Milestones</div>
-          <span class="tag ok" style="font-size:9px">${doneCount} of ${milestones.length} complete</span>
-        </div>
-        ${renderMilestones()}
-      </div>
-
+      <!-- WHAT'S HAPPENING NOW — first, most immediate -->
       <div class="card" style="margin-bottom:1rem">
         <div class="sh">
           <div class="sh-title">What's Happening Now</div>
           ${totalTasks > 0 ? `<span style="font-size:11px;color:var(--charcoal-4)">${overallPct}% complete</span>` : ''}
         </div>
-        <p style="font-size:12px;color:var(--charcoal-4);margin-bottom:12px;line-height:1.5">Recent completions, current work, and what's coming next.</p>
         ${taskListHtml}
+      </div>
+
+      <!-- BUILD MILESTONES — collapsed by default, next milestone shown as callout -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="sh" style="cursor:pointer" onclick="toggleMilestones()">
+          <div class="sh-title">Build Milestones</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="tag ok" style="font-size:9px">${doneCount} of ${milestones.length} complete</span>
+            <svg id="ms-chev" viewBox="0 0 12 12" fill="none" stroke="var(--charcoal-4)" stroke-width="1.5" style="width:12px;height:12px;transition:transform .2s"><path d="M4 2.5l4 3.5-4 3.5"/></svg>
+          </div>
+        </div>
+        ${nextMilestoneHtml}
+        <div id="ms-list" style="max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.4,0,.2,1)">
+          <div class="milestone-list" style="margin-top:8px">
+            ${renderMilestoneList()}
+          </div>
+        </div>
+        ${milestones.length === 0 ? `<div style="font-size:13px;color:var(--charcoal-4);padding:4px 0">Milestones will appear here as your build progresses.</div>` : ''}
       </div>
     `;
   }
 
+  let _msOpen = false;
+  window.toggleMilestones = function() {
+    _msOpen = !_msOpen;
+    const list = document.getElementById('ms-list');
+    const chev = document.getElementById('ms-chev');
+    if (list) list.style.maxHeight = _msOpen ? '2000px' : '0';
+    if (chev) chev.style.transform = _msOpen ? 'rotate(90deg)' : '';
+  };
 
-  const layoutHtml = isSAB ? sabLayout() : await constructionLayout();
+    const layoutHtml = isSAB ? sabLayout() : await constructionLayout();
   mountLayout('timeline', 'Timeline', layoutHtml);
 }
 
