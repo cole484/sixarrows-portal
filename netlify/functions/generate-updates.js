@@ -1,16 +1,13 @@
 // netlify/functions/generate-updates.js
 // Generates AI-drafted project updates for construction clients
-// by reading their Notion build schedule and calling Claude API.
+// Reads Notion build schedule + calls Claude API
+// Writes draft to Supabase updates table with approved=false
+// Admin reviews, edits if needed, and approves before client sees it
 //
-// POST body: { clientId, type: 'monday' | 'friday' | 'midweek' }
-//
-// Writes a draft update to Supabase updates table with approved=false
-// Admin reviews and approves before it goes live to the client portal.
-//
-// Schedule (via Netlify cron — set in netlify.toml):
-//   Monday   8:00 AM CT  — week preview + upcoming decisions
-//   Friday   4:00 PM CT  — week recap + what's complete
-//   Optional midweek via admin manual trigger
+// Cron schedule (netlify.toml):
+//   Monday   5:00 AM CT  — week preview + open decisions
+//   Friday   1:00 PM CT  — week recap
+//   Midweek  — admin manual trigger only
 
 import { respond, corsHeaders } from './lib/supabase-client.js';
 
@@ -24,13 +21,21 @@ const N_TOKEN = () => process.env.NOTION_TOKEN;
 const AI_KEY  = () => process.env.ANTHROPIC_API_KEY;
 
 function notionHeaders() {
-  return { 'Authorization': `Bearer ${N_TOKEN()}`, 'Notion-Version': NOTION_VERSION, 'Content-Type': 'application/json' };
+  return {
+    'Authorization':  `Bearer ${N_TOKEN()}`,
+    'Notion-Version': NOTION_VERSION,
+    'Content-Type':   'application/json',
+  };
 }
 function sbHeaders() {
-  return { 'apikey': SB_KEY(), 'Authorization': `Bearer ${SB_KEY()}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+  return {
+    'apikey':        SB_KEY(),
+    'Authorization': `Bearer ${SB_KEY()}`,
+    'Content-Type':  'application/json',
+    'Prefer':        'return=representation',
+  };
 }
 
-// Fetch all construction clients with a notion_timeline_db_id
 async function getConstructionClients(clientId) {
   let url = `${SB_URL()}/rest/v1/clients?status_type=eq.construction&notion_timeline_db_id=not.is.null&select=id,client_name,project_name,notion_timeline_db_id,pm_name,cx_name`;
   if (clientId) url += `&id=eq.${clientId}`;
@@ -39,19 +44,20 @@ async function getConstructionClients(clientId) {
   return await res.json();
 }
 
-// Query Notion database for all tasks
 async function getNotionTasks(dbId) {
   const res = await fetch(`${NOTION_API}/databases/${dbId}/query`, {
-    method: 'POST',
+    method:  'POST',
     headers: notionHeaders(),
-    body: JSON.stringify({ page_size: 100, sorts: [{ property: 'Sequence #', direction: 'ascending' }] }),
+    body:    JSON.stringify({
+      page_size: 100,
+      sorts: [{ property: 'Sequence #', direction: 'ascending' }],
+    }),
   });
   if (!res.ok) throw new Error(`Notion query: ${res.status}`);
   const data = await res.json();
   return data.results || [];
 }
 
-// Extract property value from Notion page
 function prop(page, name) {
   const p = page.properties?.[name];
   if (!p) return null;
@@ -67,67 +73,63 @@ function prop(page, name) {
   }
 }
 
-// Detect schema version
 function detectSchema(pages) {
   if (!pages.length) return 'old';
   const keys = Object.keys(pages[0].properties || {});
   return keys.includes('Task') && keys.includes('Sequence #') ? 'new' : 'old';
 }
 
-// Normalize page to task object
 function normalizeTask(page, schema) {
   if (schema === 'new') {
     return {
-      name:            prop(page, 'Task') || 'Untitled',
-      status:          prop(page, 'Status') || 'Needs Scheduling',
-      startDate:       prop(page, 'Start') || null,
-      sequence:        prop(page, 'Sequence #') || 9999,
-      phase:           prop(page, 'Phase') || null,
-      trade:           prop(page, 'Trade') || null,
-      isMilestone:     prop(page, 'Milestones') || false,
-      clientNote:      prop(page, 'Client-facing note') || null,
-      definitionOfDone:prop(page, 'Definition of done') || null,
+      name:             prop(page, 'Task')                 || 'Untitled',
+      status:           prop(page, 'Status')               || 'Needs Scheduling',
+      startDate:        prop(page, 'Start')                || null,
+      sequence:         prop(page, 'Sequence #')           || 9999,
+      phase:            prop(page, 'Phase')                || null,
+      trade:            prop(page, 'Trade')                || null,
+      isMilestone:      prop(page, 'Milestones')           || false,
+      clientNote:       prop(page, 'Client-facing note')   || null,
+      definitionOfDone: prop(page, 'Definition of done')   || null,
     };
   }
   return {
-    name:            prop(page, 'Task Description') || 'Untitled',
-    status:          prop(page, 'Status') || 'Needs Scheduling',
-    startDate:       prop(page, 'Start Date') || null,
-    sequence:        9999,
-    phase:           null,
-    trade:           prop(page, 'Trade') || null,
-    isMilestone:     false,
-    clientNote:      prop(page, 'Notes') || null,
-    definitionOfDone:null,
+    name:             prop(page, 'Task Description') || 'Untitled',
+    status:           prop(page, 'Status')           || 'Needs Scheduling',
+    startDate:        prop(page, 'Start Date')       || null,
+    sequence:         9999,
+    phase:            null,
+    trade:            prop(page, 'Trade')            || null,
+    isMilestone:      false,
+    clientNote:       prop(page, 'Notes')            || null,
+    definitionOfDone: null,
   };
 }
 
-// Determine if a task was recently completed (within last 7 days)
 function isRecentlyCompleted(task) {
   if (task.status !== 'Completed') return false;
-  if (!task.startDate) return true; // no date — include if completed
+  if (!task.startDate) return true;
   const taskDate = new Date(task.startDate + 'T00:00:00');
   const cutoff   = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
   return taskDate >= cutoff;
 }
 
-// Format date nicely
 function fmtDate(d) {
-  if (!d) return null;
+  if (!d) return '';
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// Build the context block for Claude
 function buildContext(client, tasks, schema, type) {
-  const completed   = tasks.filter(t => t.status === 'Completed');
-  const active      = tasks.filter(t => t.status === 'In Progress');
-  const scheduled   = tasks.filter(t => t.status === 'Scheduled');
-  const recent      = completed.filter(t => isRecentlyCompleted(t));
-  const upcoming    = [...active, ...scheduled].slice(0, 5);
-  const milestones  = tasks.filter(t => t.isMilestone);
+  const completed     = tasks.filter(t => t.status === 'Completed');
+  const active        = tasks.filter(t => t.status === 'In Progress');
+  const scheduled     = tasks.filter(t => t.status === 'Scheduled');
+  const waitingClient = tasks.filter(t => t.status === 'Waiting on Client');
+  const recent        = completed.filter(t => isRecentlyCompleted(t));
+  const upcoming      = [...active, ...scheduled].slice(0, 5);
+  const milestones    = tasks.filter(t => t.isMilestone);
   const nextMilestone = milestones.find(m => m.status !== 'Completed');
-  const totalTasks  = tasks.length;
-  const donePct     = totalTasks > 0 ? Math.round(completed.length / totalTasks * 100) : 0;
+  const totalTasks    = tasks.length;
+  const donePct       = totalTasks > 0 ? Math.round(completed.length / totalTasks * 100) : 0;
 
   const taskLine = t => {
     const date = t.startDate ? ` (${fmtDate(t.startDate)})` : '';
@@ -136,11 +138,15 @@ function buildContext(client, tasks, schema, type) {
     return `  - ${t.name}${date}${dod}${note}`;
   };
 
+  const decisionsSection = waitingClient.length > 0
+    ? `\nDECISIONS NEEDED FROM CLIENT:\n${waitingClient.map(taskLine).join('\n')}`
+    : '\nDECISIONS NEEDED FROM CLIENT:\n  - None at this time';
+
   return `
 CLIENT: ${client.client_name}
 PROJECT: ${client.project_name || 'Custom Home Build'}
 PROJECT MANAGER: ${client.pm_name || client.cx_name || 'Cole'}
-UPDATE TYPE: ${type === 'monday' ? 'Monday — Week Preview' : type === 'friday' ? 'Friday — Week Recap' : 'Midweek Progress Update'}
+UPDATE TYPE: ${type === 'monday' ? 'Monday Week Preview' : type === 'friday' ? 'Friday Week Recap' : 'Midweek Progress Update'}
 OVERALL PROGRESS: ${completed.length} of ${totalTasks} tasks complete (${donePct}%)
 
 RECENTLY COMPLETED (last 7 days):
@@ -153,50 +159,76 @@ SCHEDULED NEXT:
 ${scheduled.slice(0,4).map(taskLine).join('\n') || '  - No tasks scheduled yet'}
 
 NEXT MILESTONE:
-${nextMilestone ? `  - ${nextMilestone.name}${nextMilestone.startDate ? ' — ' + fmtDate(nextMilestone.startDate) : ''}` : '  - No upcoming milestones set'}
+${nextMilestone ? `  - ${nextMilestone.name}${nextMilestone.startDate ? ' (' + fmtDate(nextMilestone.startDate) + ')' : ''}` : '  - No upcoming milestones set'}
+${decisionsSection}
 `.trim();
 }
 
-// Call Claude to generate the update
-async function generateWithClaude(context, type, clientName) {
+async function generateWithClaude(context, type, clientName, pmName) {
+  const pm = pmName || 'Cole';
+
   const typeInstructions = {
-    monday: `You are writing a MONDAY morning project update — this sets expectations for the week ahead.
-Focus on: what work starts or continues this week, what the client should expect to see happening, any decisions or inputs needed from them, and the positive momentum of the project.`,
-    friday: `You are writing a FRIDAY afternoon project update — this recaps the week's accomplishments.
-Focus on: what was completed this week, what the crew accomplished, how that advances the project, and what's coming up next week. Celebrate progress.`,
-    midweek: `You are writing a MIDWEEK progress update — a brief touchpoint to keep the client informed.
-Focus on: what's actively happening right now on site, any notable progress since Monday, and a quick preview of what's coming before the week is out.`,
+    monday: `This is a MONDAY MORNING update — it sets the week's expectations.
+Structure the update with these exact sections in this order:
+1. A short 1-2 sentence opening that sets the tone for the week ahead. Be specific about what is happening this week.
+2. "Completed last week:" followed by bullet points of what was finished (omit this section if nothing was completed).
+3. "This week:" followed by bullet points of what is actively happening or starting this week.
+4. "Coming up next:" followed by bullet points of the next 2-3 tasks on the schedule with estimated dates where available.
+5. "Your input needed:" section ONLY if there are decisions needed from the client — list each one as a bullet. If no decisions needed, omit this section entirely.
+6. Sign off.`,
+
+    friday: `This is a FRIDAY AFTERNOON recap — it celebrates what was accomplished this week.
+Structure the update with these exact sections in this order:
+1. A short 1-2 sentence opening that acknowledges the week's work with energy and confidence.
+2. "Completed this week:" followed by bullet points of everything finished this week. Be specific.
+3. "Currently in progress:" followed by bullet points of active work that will carry into next week.
+4. "On deck for next week:" followed by bullet points of the next 2-3 items coming up.
+5. "Your input needed:" section ONLY if there are decisions needed from the client. Omit if none.
+6. Sign off.`,
+
+    midweek: `This is a MIDWEEK touchpoint — brief and focused on what is happening right now.
+Structure the update with these exact sections in this order:
+1. A short 1-2 sentence opener about what is actively happening on site today.
+2. "In progress now:" followed by 1-2 bullet points of active work.
+3. "Finishing up this week:" followed by bullet points of what will be completed before Friday.
+4. "Your input needed:" section ONLY if there are decisions needed. Omit if none.
+5. Sign off.`,
   };
 
-  const systemPrompt = `You are the project manager for Six Arrows Construction, writing a client-facing project update for ${clientName}'s custom home build.
+  const systemPrompt = `You are ${pm}, the project manager at Six Arrows Construction, writing a client-facing project update for the ${clientName} custom home build.
 
-Your tone: Warm, professional, confident. You sound like a skilled PM who is in complete control of the project and genuinely cares about keeping the client informed and at ease. You write like a real person — not a corporate template, not AI-generated filler. Every sentence should be specific and grounded in the actual project data provided.
+VOICE AND TONE:
+- Write as ${pm} personally, not as "your Six Arrows team"
+- Warm, confident, and direct. You are in complete control of the project
+- Write like a real person texting a valued client, not a corporate template
+- Every sentence must be specific and grounded in the actual project data provided
+- Never use vague filler like "work is progressing nicely" or "things are moving along"
+- Always reference specific task names from the data provided
 
-Rules:
-- Use the client's last name naturally (e.g. "the Smith home")
-- Never say "I hope this finds you well" or generic openers
-- Never use words like "synergy", "leverage", "utilize", or corporate jargon
-- Never write vague filler like "work is progressing nicely"
-- Always reference specific tasks by name
-- Keep it concise — 150 to 250 words max
-- Write in paragraphs, not bullet points
-- End with one sentence of forward momentum or an action item if needed
-- Sign off with just: "— Your Six Arrows Project Team"
+FORMATTING RULES (strictly follow these):
+- Use the section headers and bullet points exactly as instructed
+- Bullet points use a hyphen and space: "- Item"
+- Keep each bullet point to one clear sentence
+- No em dashes anywhere. Use commas, colons, or periods instead
+- No corporate jargon: no "leverage", "synergy", "utilize", "touch base"
+- No filler openers like "I hope this finds you well" or "Happy Friday"
+- Keep the total update to 150-220 words
+- Sign off with exactly: "- ${pm}, Six Arrows"
 
 ${typeInstructions[type] || typeInstructions.monday}`;
 
-  const userPrompt = `Here is the current project data:\n\n${context}\n\nWrite the ${type} update now. Start directly with the update — no subject line, no "Title:", no preamble.`;
+  const userPrompt = `Here is the current project data:\n\n${context}\n\nWrite the update now following the format instructions exactly. Start directly with the opening sentence.`;
 
   const res = await fetch(ANTHROPIC_API, {
     method: 'POST',
     headers: {
-      'Content-Type':  'application/json',
-      'x-api-key':     AI_KEY(),
-      'anthropic-version': '2023-06-01',
+      'Content-Type':       'application/json',
+      'x-api-key':          AI_KEY(),
+      'anthropic-version':  '2023-06-01',
     },
     body: JSON.stringify({
       model:      'claude-sonnet-4-5',
-      max_tokens: 500,
+      max_tokens: 600,
       messages:   [{ role: 'user', content: userPrompt }],
       system:     systemPrompt,
     }),
@@ -211,20 +243,19 @@ ${typeInstructions[type] || typeInstructions.monday}`;
   return data.content?.[0]?.text?.trim() || '';
 }
 
-// Write draft update to Supabase
 async function saveDraftUpdate(clientId, title, body, type) {
   const now  = new Date();
   const date = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
   const res = await fetch(`${SB_URL()}/rest/v1/updates`, {
-    method: 'POST',
+    method:  'POST',
     headers: sbHeaders(),
-    body: JSON.stringify({
+    body:    JSON.stringify({
       client_id:    clientId,
       title,
       body,
       date,
-      approved:     false,    // ← DRAFT — admin must approve before client sees it
+      approved:     false,
       approved_at:  null,
       manual:       false,
       update_type:  type,
@@ -232,18 +263,13 @@ async function saveDraftUpdate(clientId, title, body, type) {
     }),
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Supabase write error: ${err}`);
-  }
-
+  if (!res.ok) throw new Error(`Supabase write: ${await res.text()}`);
   return await res.json();
 }
 
-// Build update title
 function buildTitle(client, type) {
-  const now  = new Date();
-  const week = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const now    = new Date();
+  const week   = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const labels = { monday: 'Week Preview', friday: 'Weekly Recap', midweek: 'Progress Update' };
   return `${labels[type] || 'Update'} — Week of ${week}`;
 }
@@ -260,16 +286,14 @@ export const handler = async (event) => {
 
   let clientId, type;
 
-  // Support both POST (manual trigger) and scheduled GET
   if (event.httpMethod === 'POST') {
     const body = JSON.parse(event.body || '{}');
-    clientId = body.clientId;
-    type     = body.type || 'monday';
+    clientId   = body.clientId;
+    type       = body.type || 'monday';
   } else {
-    // Scheduled: determine type by day of week
-    const day = new Date().getDay(); // 0=Sun,1=Mon,...,5=Fri
-    type = day === 1 ? 'monday' : day === 5 ? 'friday' : 'midweek';
-    clientId = event.queryStringParameters?.clientId || null;
+    const day = new Date().getDay();
+    type      = day === 1 ? 'monday' : day === 5 ? 'friday' : 'midweek';
+    clientId  = event.queryStringParameters?.clientId || null;
   }
 
   try {
@@ -284,17 +308,20 @@ export const handler = async (event) => {
         const schema  = detectSchema(pages);
         const tasks   = pages.map(p => normalizeTask(p, schema));
         const context = buildContext(client, tasks, schema, type);
-        const body    = await generateWithClaude(context, type, client.client_name);
+        const pmName  = client.pm_name || client.cx_name || 'Cole';
+        const body    = await generateWithClaude(context, type, client.client_name, pmName);
         const title   = buildTitle(client, type);
-        const saved   = await saveDraftUpdate(client.id, title, body, type);
-
+        await saveDraftUpdate(client.id, title, body, type);
         results.push({ clientId: client.id, clientName: client.client_name, status: 'draft_saved', title });
       } catch(err) {
         results.push({ clientId: client.id, clientName: client.client_name, status: 'error', error: err.message });
       }
     }
 
-    return respond(200, { generated: results.filter(r => r.status === 'draft_saved').length, results });
+    return respond(200, {
+      generated: results.filter(r => r.status === 'draft_saved').length,
+      results,
+    });
 
   } catch(err) {
     console.error('generate-updates error:', err);

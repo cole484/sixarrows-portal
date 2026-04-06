@@ -384,8 +384,10 @@ function renderAdmin() {
   // ── UPDATES VIEW ─────────────────────────────────────
   else if (activeView === 'updates') {
     mainContent = renderUpdatesView(p);
-    // Load pending AI drafts async after render
-    setTimeout(() => loadPendingDrafts(p.id), 100);
+    setTimeout(() => {
+      loadPendingDrafts(p.id);
+      refreshPostedUpdates(p.id);
+    }, 100);
   }
 
   // ── TIMELINE / MILESTONES VIEW ────────────────────────
@@ -816,8 +818,34 @@ async function approveDraft(projectId, draftId) {
       const msgEl = document.getElementById('gen-msg');
       if (msgEl) { msgEl.style.display='block'; msgEl.className='adm-msg success'; msgEl.textContent='Posted to client portal'; }
       loadPendingDrafts(projectId);
-      setTimeout(() => renderAdmin(), 1000);
+      // Refresh posted updates list from Supabase
+      refreshPostedUpdates(projectId);
     }
+  } catch(e) {}
+}
+
+async function refreshPostedUpdates(projectId) {
+  const listEl  = document.getElementById('posted-list');
+  const countEl = document.getElementById('posted-count');
+  if (!listEl) return;
+  try {
+    const res  = await fetch('/.netlify/functions/client-updates?clientId=' + projectId);
+    const data = res.ok ? await res.json() : { updates: [] };
+    const updates = data.updates || [];
+    if (countEl) countEl.textContent = updates.length + ' total';
+    if (updates.length === 0) {
+      listEl.innerHTML = '<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No updates posted yet.</div>';
+      return;
+    }
+    listEl.innerHTML = updates.map(u => `
+      <div class="list-item-row">
+        <div class="list-item-body">
+          <div class="list-item-meta">${u.date}</div>
+          <div class="list-item-title">${u.title}</div>
+          <div class="list-item-note" style="white-space:pre-wrap">${u.body}</div>
+        </div>
+        <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="deleteUpdate('${projectId}','${u.id}')">Remove</button>
+      </div>`).join('');
   } catch(e) {}
 }
 

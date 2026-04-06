@@ -6,15 +6,15 @@
   node_bundler = "esbuild"
 
 # ── Scheduled update generation ───────────────────────────────────────────────
-# Monday 9:00 AM CT (14:00 UTC) — week preview
+# Monday 5:00 AM CT (10:00 UTC) — week preview
 [[scheduled_functions]]
   name = "generate-updates"
-  cron = "0 14 * * 1"
+  cron = "0 10 * * 1"
 
-# Friday 4:00 PM CT (21:00 UTC) — weekly recap
+# Friday 1:00 PM CT (18:00 UTC) — weekly recap
 [[scheduled_functions]]
   name = "generate-updates"
-  cron = "0 21 * * 5"
+  cron = "0 18 * * 5"
 # ─────────────────────────────────────────────────────────────────────────────
 
 [[headers]]
