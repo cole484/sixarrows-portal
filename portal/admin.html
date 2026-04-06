@@ -731,16 +731,16 @@ function renderUpdatesView(p) {
       <div class="sh"><div class="sh-title">Posted Updates</div><span class="tag neutral" style="font-size:9px">${stored.length} total</span></div>
       <div id="posted-list">
         ${all.length === 0
-          ? \`<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No updates posted yet.</div>\`
-          : all.map((u, i) => \`
+          ? `<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No updates posted yet.</div>`
+          : all.map((u, i) => `
             <div class="list-item-row">
               <div class="list-item-body">
-                <div class="list-item-meta">\${u.date}</div>
-                <div class="list-item-title">\${u.title}</div>
-                <div class="list-item-note">\${u.body}</div>
+                <div class="list-item-meta">${u.date}</div>
+                <div class="list-item-title">${u.title}</div>
+                <div class="list-item-note">${u.body}</div>
               </div>
-              <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="deleteUpdate('${p.id}',\${stored.length-1-i})">Remove</button>
-            </div>\`).join('')
+              <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="deleteUpdate('${p.id}',${stored.length-1-i})">Remove</button>
+            </div>`).join('')
         }
       </div>
     </div>`;
