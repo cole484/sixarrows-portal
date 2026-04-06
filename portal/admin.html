@@ -384,6 +384,8 @@ function renderAdmin() {
   // ── UPDATES VIEW ─────────────────────────────────────
   else if (activeView === 'updates') {
     mainContent = renderUpdatesView(p);
+    // Load pending AI drafts async after render
+    setTimeout(() => loadPendingDrafts(p.id), 100);
   }
 
   // ── TIMELINE / MILESTONES VIEW ────────────────────────
@@ -680,14 +682,40 @@ function setStepDate(pi, si, projectId, val) {
 // ════════════════════════════════════════════════════════
 function renderUpdatesView(p) {
   const stored = adminGet(p.id, 'updates') || [];
-  const all    = [...stored].reverse(); // newest first for display
+  const all    = [...stored].reverse();
 
   return `
+    <div class="card" style="margin-bottom:1rem;border-left:3px solid var(--green)">
+      <div class="sh">
+        <div class="sh-title">Generate AI Draft</div>
+        <span class="tag ok" style="font-size:9px">Powered by Claude</span>
+      </div>
+      <p style="font-size:12px;color:var(--charcoal-4);line-height:1.55;margin-bottom:12px">
+        Reads live Notion schedule data and drafts an update in your voice. You review and approve before it goes live.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="adm-btn adm-btn-green" onclick="generateDraft('${p.id}','monday')" style="flex:1;min-width:100px">Monday Preview</button>
+        <button class="adm-btn adm-btn-green" onclick="generateDraft('${p.id}','friday')" style="flex:1;min-width:100px">Friday Recap</button>
+        <button class="adm-btn" onclick="generateDraft('${p.id}','midweek')" style="flex:1;min-width:100px">Midweek Update</button>
+      </div>
+      <span id="gen-msg" class="adm-msg" style="margin:0;display:none"></span>
+    </div>
+
+    <div class="card" id="drafts-card" style="margin-bottom:1rem">
+      <div class="sh">
+        <div class="sh-title">Pending Drafts</div>
+        <span class="tag neutral" style="font-size:9px" id="drafts-count">Loading...</span>
+      </div>
+      <div id="drafts-list">
+        <div style="font-size:13px;color:var(--charcoal-4);text-align:center;padding:1.5rem">Loading drafts...</div>
+      </div>
+    </div>
+
     <div class="card" style="margin-bottom:1rem">
-      <div class="sh"><div class="sh-title">Post New Update</div></div>
+      <div class="sh"><div class="sh-title">Post Manual Update</div></div>
       <div class="adm-field">
         <label>Title</label>
-        <input class="adm-inp" id="upd-title" type="text" placeholder="e.g. Wave 2 selections complete">
+        <input class="adm-inp" id="upd-title" type="text" placeholder="e.g. Framing complete — roof work begins Monday">
       </div>
       <div class="adm-field">
         <label>Message</label>
@@ -701,66 +729,105 @@ function renderUpdatesView(p) {
 
     <div class="card">
       <div class="sh"><div class="sh-title">Posted Updates</div><span class="tag neutral" style="font-size:9px">${stored.length} total</span></div>
-      ${all.length === 0
-        ? `<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No updates posted yet.</div>`
-        : all.map((u, i) => `
-          <div class="list-item-row">
-            <div class="list-item-body">
-              <div class="list-item-meta">${u.date}</div>
-              <div class="list-item-title">${u.title}</div>
-              <div class="list-item-note">${u.body}</div>
-            </div>
-            <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="deleteUpdate('${p.id}',${stored.length-1-i})">Remove</button>
-          </div>`).join('')
-      }
+      <div id="posted-list">
+        ${all.length === 0
+          ? \`<div style="text-align:center;padding:2rem;font-size:13px;color:var(--charcoal-4)">No updates posted yet.</div>\`
+          : all.map((u, i) => \`
+            <div class="list-item-row">
+              <div class="list-item-body">
+                <div class="list-item-meta">\${u.date}</div>
+                <div class="list-item-title">\${u.title}</div>
+                <div class="list-item-note">\${u.body}</div>
+              </div>
+              <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="deleteUpdate('${p.id}',\${stored.length-1-i})">Remove</button>
+            </div>\`).join('')
+        }
+      </div>
     </div>`;
 }
 
-async function postUpdate(projectId) {
-  const title     = document.getElementById('upd-title')?.value.trim();
-  const body      = document.getElementById('upd-body')?.value.trim();
-  const btn       = document.querySelector('[onclick*="postUpdate"]');
-  if (!title || !body) { showMsg('upd-msg','error','Title and message required.'); return; }
-  const date = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-
-  // Try Supabase first
+async function loadPendingDrafts(projectId) {
+  const listEl  = document.getElementById('drafts-list');
+  const countEl = document.getElementById('drafts-count');
+  if (!listEl) return;
   try {
-    const res = await fetch(`/.netlify/functions/client-updates?clientId=${projectId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, updateBody: body, date }),
-    });
-    if (res.ok) {
-      showMsg('upd-msg','success','Update posted ✓');
-      document.getElementById('upd-title').value = '';
-      document.getElementById('upd-body').value = '';
-      setTimeout(() => renderAdmin(), 800);
+    const res    = await fetch(`/.netlify/functions/client-updates?clientId=${projectId}&drafts=1`);
+    const data   = res.ok ? await res.json() : { drafts: [] };
+    const drafts = data.drafts || [];
+    if (countEl) countEl.textContent = drafts.length + ' pending';
+    if (drafts.length === 0) {
+      listEl.innerHTML = `<div style="font-size:13px;color:var(--charcoal-4);text-align:center;padding:1.5rem;font-style:italic">No pending drafts. Generate one above.</div>`;
       return;
     }
-  } catch(e) {}
-
-  // Fallback: localStorage
-  const updates = adminGet(projectId, 'updates') || [];
-  updates.push({ date, title, body });
-  adminSet(projectId, 'updates', updates);
-  showMsg('upd-msg','success','Update posted (local) ✓');
-  setTimeout(() => renderAdmin(), 800);
+    listEl.innerHTML = drafts.map(d => `
+      <div class="list-item-row" id="draft-${d.id}" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--green-dk);font-weight:600;margin-bottom:2px">${(d.update_type||'draft').toUpperCase()} DRAFT - ${d.date}</div>
+            <div class="list-item-title">${d.title}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="adm-btn adm-btn-green" style="padding:5px 10px;font-size:11px" onclick="approveDraft('${projectId}','${d.id}')">Approve & Post</button>
+            <button class="adm-btn adm-btn-danger" style="padding:5px 10px;font-size:11px" onclick="discardDraft('${projectId}','${d.id}')">Discard</button>
+          </div>
+        </div>
+        <textarea class="adm-inp adm-textarea" id="draft-body-${d.id}" style="font-size:12px;min-height:120px;line-height:1.6">${d.body||''}</textarea>
+        <div style="font-size:10px;color:var(--charcoal-4)">Edit above before approving if needed</div>
+      </div>`).join('<div style="border-top:0.5px solid var(--border);margin:8px 0"></div>');
+  } catch(e) {
+    if (listEl) listEl.innerHTML = `<div style="font-size:12px;color:var(--charcoal-4)">Could not load drafts.</div>`;
+  }
 }
 
-async function deleteUpdate(projectId, updateId, idx) {
-  // Try Supabase delete by ID
-  if (updateId) {
-    try {
-      await fetch(`/.netlify/functions/client-updates?clientId=${projectId}&updateId=${updateId}`, {
-        method: 'DELETE',
-      });
-    } catch(e) {}
+async function generateDraft(projectId, type) {
+  const labels = { monday: 'Monday Preview', friday: 'Friday Recap', midweek: 'Midweek Update' };
+  const msgEl = document.getElementById('gen-msg');
+  if (msgEl) { msgEl.style.display = 'block'; msgEl.className = 'adm-msg neutral'; msgEl.textContent = 'Generating ' + (labels[type]||type) + '... (5-10 seconds)'; }
+  try {
+    const res  = await fetch('/.netlify/functions/generate-updates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: projectId, type }),
+    });
+    const data = res.ok ? await res.json() : null;
+    if (data && data.generated > 0) {
+      if (msgEl) { msgEl.className = 'adm-msg success'; msgEl.textContent = 'Draft generated - review in Pending Drafts above'; }
+      setTimeout(() => loadPendingDrafts(projectId), 600);
+    } else {
+      const err = data && data.results && data.results[0] ? data.results[0].error : 'Generation failed';
+      if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = err; }
+    }
+  } catch(e) {
+    if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'Error: ' + e.message; }
   }
-  // Also remove from localStorage
-  const updates = adminGet(projectId, 'updates') || [];
-  if (idx !== undefined) updates.splice(idx, 1);
-  adminSet(projectId, 'updates', updates);
-  renderAdmin();
+}
+
+async function approveDraft(projectId, draftId) {
+  const editedBody = document.getElementById('draft-body-' + draftId) && document.getElementById('draft-body-' + draftId).value.trim();
+  try {
+    const res = await fetch('/.netlify/functions/client-updates?clientId=' + projectId + '&draftId=' + draftId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved: true, body: editedBody }),
+    });
+    if (res.ok) {
+      const el = document.getElementById('draft-' + draftId);
+      if (el) el.remove();
+      const msgEl = document.getElementById('gen-msg');
+      if (msgEl) { msgEl.style.display='block'; msgEl.className='adm-msg success'; msgEl.textContent='Posted to client portal'; }
+      loadPendingDrafts(projectId);
+      setTimeout(() => renderAdmin(), 1000);
+    }
+  } catch(e) {}
+}
+
+async function discardDraft(projectId, draftId) {
+  try {
+    await fetch('/.netlify/functions/client-updates?clientId=' + projectId + '&updateId=' + draftId, { method: 'DELETE' });
+    const el = document.getElementById('draft-' + draftId);
+    if (el) el.remove();
+    loadPendingDrafts(projectId);
+  } catch(e) {}
 }
 
 // ════════════════════════════════════════════════════════

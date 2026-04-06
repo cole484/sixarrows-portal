@@ -332,9 +332,9 @@ async function initBudget() {
             ${changeOrders === 0 ? '—' : (changeOrders > 0 ? '+' : '') + currency(changeOrders)}
           </span>
         </div>
-        <div class="forecast-row" style="border-color:rgba(255,255,255,.07)">
-          <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">Forecasted total</span>
-          <span class="forecast-val" style="color:var(--cream);font-size:14px">${currency(forecasted)}</span>
+        <div class="forecast-row" style="border-color:rgba(255,255,255,.15);background:rgba(255,255,255,.06);margin:4px -4px;padding:10px 4px;border-radius:6px">
+          <span class="forecast-lbl" style="color:var(--cream);font-weight:700;font-size:13px;letter-spacing:-.01em">Forecasted Total</span>
+          <span class="forecast-val" style="color:var(--cream);font-size:20px;font-weight:700;letter-spacing:-.02em">${currency(forecasted)}</span>
         </div>
         <div class="forecast-row" style="border-color:rgba(255,255,255,.07)">
           <span class="forecast-lbl" style="color:rgba(235,233,222,.4)">Remaining</span>
