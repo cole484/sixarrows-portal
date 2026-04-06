@@ -727,12 +727,15 @@ if (isConstruction && p.notionTimelineDbId) {
         const active  = data.tasks.find(t => t.windowRole === 'active');
         const next    = data.tasks.find(t => t.windowRole === 'upcoming' && ['scheduled','estimated','needs_scheduling'].includes(t.group));
 
-        const statusDot = group => ({
-          active:           `<div style="width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;margin-top:4px"></div>`,
-          scheduled:        `<div style="width:7px;height:7px;border-radius:50%;background:var(--charcoal-3);flex-shrink:0;margin-top:4px"></div>`,
-          estimated:        `<div style="width:7px;height:7px;border-radius:50%;background:var(--charcoal-3);flex-shrink:0;margin-top:4px"></div>`,
-          needs_scheduling: `<div style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--charcoal-3);flex-shrink:0;margin-top:4px"></div>`,
-        }[group] || `<div style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--charcoal-3);flex-shrink:0;margin-top:4px"></div>`;
+        const statusDot = group => {
+          const dotFill = `<div style="width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;margin-top:4px"></div>`;
+          const dotGray = `<div style="width:7px;height:7px;border-radius:50%;background:var(--charcoal-3);flex-shrink:0;margin-top:4px"></div>`;
+          const dotHollow = `<div style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--charcoal-3);flex-shrink:0;margin-top:4px"></div>`;
+          if (group === 'active')    return dotFill;
+          if (group === 'scheduled') return dotGray;
+          if (group === 'estimated') return dotGray;
+          return dotHollow;
+        };
 
         const taskRow = (task, isFirst) => {
           const dateStr = task.dateLabel && ['scheduled','active','estimated'].includes(task.group)
