@@ -255,6 +255,7 @@ async function loadAllClientsFromSupabase() {
         reviewLeft:          !!client.review_left,
         showReviewCard:      !!client.show_review_card,
         projectType:         client.project_type || 'new_build',
+        notionTimelineDbId:  client.notion_timeline_db_id || null,
         budgetCategories:    budgetCats,
         updates:             updates.length ? updates : (existing.updates || []),
         timeline:            timeline.length ? timeline : (existing.timeline || []),
@@ -1168,6 +1169,11 @@ function renderProjectView(p) {
           <label>Notion tracker page ID <span style="font-size:10px;font-weight:400;color:var(--charcoal-4)">(for SAB tracker sync)</span></label>
           <input class="adm-inp" id="pi-notionId" type="text" placeholder="2fb4737b-ea6f-80dc-9b3b-..." value="${p.notionTrackerPageId||''}">
         </div>
+        <div class="adm-field" style="margin-top:8px">
+          <label>Notion timeline database ID <span style="font-size:10px;font-weight:400;color:var(--charcoal-4)">(for construction timeline)</span></label>
+          <input class="adm-inp" id="pi-notionTimelineDb" type="text" placeholder="2e84737b-ea6f-8083-8517-..." value="${p.notionTimelineDbId||''}">
+          <div style="font-size:10px;color:var(--charcoal-4);margin-top:3px">Paste the Notion database ID from the client's build schedule (not the page ID).</div>
+        </div>
       </div>
       <div style="border-top:0.5px solid var(--border);padding-top:12px;margin-top:4px">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:8px">Customer Experience Contact <span style="font-weight:400;color:var(--charcoal-4)">(primary)</span></div>
@@ -1283,7 +1289,8 @@ function saveProjectInfo(projectId) {
   p.groundbreakingDate = document.getElementById('pi-gbDate')?.value ?? p.groundbreakingDate ?? '';
   if (PROJECTS[projectId]) PROJECTS[projectId].groundbreakingDate = p.groundbreakingDate;
   const budgetLink = document.getElementById('pi-budgetLink')?.value.trim() || '';
-  const notionId   = document.getElementById('pi-notionId')?.value.trim()   || '';
+  const notionId   = document.getElementById('pi-notionId')?.value.trim()          || '';
+  const notionTimelineDb = document.getElementById('pi-notionTimelineDb')?.value.trim() || '';
   const cxName  = document.getElementById('pi-cxName')?.value.trim()  || p.cxName  || 'Cole Borders';
   const cxPhone = document.getElementById('pi-cxPhone')?.value.trim() || p.cxPhone || '(270) 782-5388';
   const cxEmail = document.getElementById('pi-cxEmail')?.value.trim() || p.cxEmail || 'cole@sixarrowsconstruction.com';
@@ -1295,6 +1302,7 @@ function saveProjectInfo(projectId) {
   if (!p.links) p.links = {};
   p.links.budget = budgetLink;
   p.notionTrackerPageId = notionId || p.notionTrackerPageId;
+  p.notionTimelineDbId  = notionTimelineDb !== undefined ? notionTimelineDb : (p.notionTimelineDbId || '');
   p.cxName = cxName; p.cxPhone = cxPhone; p.cxEmail = cxEmail;
   p.pmName = pmName; p.pmPhone = pmPhone; p.pmEmail = pmEmail;
   p.teamLead = cxName; p.teamPhone = cxPhone; p.teamEmail = cxEmail;
@@ -1302,6 +1310,7 @@ function saveProjectInfo(projectId) {
     if (!PROJECTS[projectId].links) PROJECTS[projectId].links = {};
     PROJECTS[projectId].links.budget = budgetLink;
     PROJECTS[projectId].notionTrackerPageId = p.notionTrackerPageId;
+    PROJECTS[projectId].notionTimelineDbId  = p.notionTimelineDbId;
     PROJECTS[projectId].cxName  = cxName;  PROJECTS[projectId].cxPhone = cxPhone;  PROJECTS[projectId].cxEmail = cxEmail;
     PROJECTS[projectId].pmName  = pmName;  PROJECTS[projectId].pmPhone = pmPhone;  PROJECTS[projectId].pmEmail = pmEmail;
     PROJECTS[projectId].teamLead = cxName; PROJECTS[projectId].teamPhone = cxPhone; PROJECTS[projectId].teamEmail = cxEmail;
@@ -1332,6 +1341,7 @@ function saveProjectInfo(projectId) {
       status_type: p.statusType, phase_label: p.phaseLabel, construction_pct: p.constructionPct,
       timeline_start: p.timelineStart, timeline_target: p.timelineTarget,
       notion_tracker_page_id: p.notionTrackerPageId,
+      notion_timeline_db_id: p.notionTimelineDbId || null,
       budget_link: budgetLink,
       team_lead: cxName, team_phone: cxPhone, team_email: cxEmail,
       cx_name: cxName, cx_phone: cxPhone, cx_email: cxEmail,

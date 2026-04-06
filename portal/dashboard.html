@@ -592,8 +592,8 @@ function constructionLayout() {
       <div class="card">
         <div class="kpi">
           <div class="kpi-lbl">Next Milestone</div>
-          <div class="kpi-val" style="font-size:17px;line-height:1.25">${nextMilestone?.title||'On track'}</div>
-          <div class="kpi-sub">${nextMilestone?.date||''} ${nextMilestone?.note?'· '+nextMilestone.note:''}</div>
+          <div class="kpi-val" style="font-size:17px;line-height:1.25" id="dash-next-milestone-title">${nextMilestone?.title||'On track'}</div>
+          <div class="kpi-sub" id="dash-next-milestone-date">${nextMilestone?.date||''} ${nextMilestone?.note?'· '+nextMilestone.note:''}</div>
         </div>
       </div>
     </div>
@@ -701,6 +701,32 @@ if (isConstruction && p.links?.budget && p.links.budget !== '#') {
       if (el('dash-bud-pct-tag')) {
         el('dash-bud-pct-tag').textContent = pct + '% committed';
         el('dash-bud-pct-tag').className   = `tag ${pctCls}`;
+      }
+    })
+    .catch(() => {});
+}
+
+// ── Live Notion timeline data — next milestone card ──
+if (isConstruction && p.notionTimelineDbId) {
+  fetch(`/.netlify/functions/notion-timeline?dbId=${p.notionTimelineDbId}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) return;
+      const el = id => document.getElementById(id);
+      // Update overall progress %
+      if (data.overallPct > 0) {
+        const pctEl = el('dash-con-pct');
+        const barEl = el('dash-con-bar');
+        if (pctEl) pctEl.textContent = data.overallPct + '%';
+        if (barEl) barEl.style.width = data.overallPct + '%';
+      }
+      // Update next milestone
+      const next = data.nextMilestone;
+      if (next) {
+        const titleEl = el('dash-next-milestone-title');
+        const dateEl  = el('dash-next-milestone-date');
+        if (titleEl) titleEl.textContent = next.name;
+        if (dateEl)  dateEl.textContent  = next.dateLabel || '';
       }
     })
     .catch(() => {});
