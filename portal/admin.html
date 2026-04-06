@@ -1774,22 +1774,52 @@ function renderPhotosView(p) {
     </div>`;
 }
 
-function addAdminPhoto(projectId) {
+async function addAdminPhoto(projectId) {
   const caption = document.getElementById('adm-ph-caption')?.value.trim();
   const url     = document.getElementById('adm-ph-url')?.value.trim();
   const phase   = document.getElementById('adm-ph-phase')?.value;
   const dateVal = document.getElementById('adm-ph-date')?.value;
   if (!url) { showMsg('adm-ph-msg','error','Image URL required.'); return; }
-  const PHOTO_KEY = `sa_photos_${projectId}`;
+  const dateLabel = dateVal
+    ? new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+    : new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+  // Save to Supabase so all clients see it on their own devices
+  try {
+    const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+    const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/documents', {
+      method: 'POST',
+      headers: sbH,
+      body: JSON.stringify({
+        client_id: projectId,
+        name:      caption || 'Build Photo',
+        url,
+        category:  'photos',
+        type:      'image',
+        date:      dateLabel,
+        phase,
+      }),
+    });
+    if (res.ok) {
+      showMsg('adm-ph-msg','success','Photo added ✓');
+      if (document.getElementById('adm-ph-caption')) document.getElementById('adm-ph-caption').value = '';
+      if (document.getElementById('adm-ph-url'))     document.getElementById('adm-ph-url').value = '';
+      setTimeout(() => renderAdmin(), 600);
+      return;
+    }
+  } catch(e) {
+    console.log('Supabase photo save failed, falling back to localStorage:', e);
+  }
+
+  // Fallback: localStorage (same-browser only)
+  const PHOTO_KEY = 'sa_photos_' + projectId;
   let photos = [];
   try { photos = JSON.parse(localStorage.getItem(PHOTO_KEY)||'[]'); } catch(e) {}
-  const dateLabel = dateVal ? new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  photos.push({ id:'adm'+Date.now(), category:'photos', phase, caption, url, date:dateLabel });
+  photos.push({ id: 'adm'+Date.now(), category:'photos', phase, caption, url, date: dateLabel });
   localStorage.setItem(PHOTO_KEY, JSON.stringify(photos));
-  showMsg('adm-ph-msg','success','Added ✓');
+  showMsg('adm-ph-msg','success','Added (local only) ✓');
   setTimeout(() => renderAdmin(), 600);
 }
-
 function removeAdminPhoto(projectId, idx) {
   const PHOTO_KEY = `sa_photos_${projectId}`;
   let photos = [];
@@ -1805,14 +1835,14 @@ function removeAdminPhoto(projectId, idx) {
 function renderAddClientView() {
   return `
     <div class="card" style="margin-bottom:1rem">
-      <div class="sh"><div class="sh-title">New Client Setup</div></div>
+      <div class="sh"><div class="sh-title">Add New Client</div></div>
       <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:1.25rem;line-height:1.6">
-        Fill in the client details below. This generates the <code style="font-size:11px;background:var(--cream-2);padding:1px 5px;border-radius:3px">data.js</code> entry you'll need to add to the portal. Once the Supabase backend is live, this will create the client directly — no code editing required.
+        Fill in the details below and click <strong>Create Client</strong>. The client is created directly in Supabase and appears immediately in the portal — no code editing required.
       </p>
 
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin-bottom:10px">Client & Project</div>
       <div class="adm-grid2">
-        <div class="adm-field"><label>Client name</label><input class="adm-inp" id="nc-clientName" type="text" placeholder="e.g. Johnson Family"></div>
+        <div class="adm-field"><label>Client name <span style="color:var(--danger)">*</span></label><input class="adm-inp" id="nc-clientName" type="text" placeholder="e.g. Johnson Family"></div>
         <div class="adm-field"><label>Project name</label><input class="adm-inp" id="nc-projectName" type="text" placeholder="e.g. Custom Home — Smith Rd"></div>
         <div class="adm-field"><label>Location</label><input class="adm-inp" id="nc-location" type="text" placeholder="e.g. Bowling Green, KY"></div>
         <div class="adm-field"><label>Phase</label>
@@ -1831,17 +1861,16 @@ function renderAddClientView() {
 
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Portal Login</div>
       <div class="adm-grid2">
-        <div class="adm-field"><label>Client email</label><input class="adm-inp" id="nc-email" type="email" placeholder="client@email.com"></div>
-        <div class="adm-field"><label>Access code</label><input class="adm-inp" id="nc-password" type="text" placeholder="e.g. johnson2026"></div>
+        <div class="adm-field"><label>Client email <span style="color:var(--danger)">*</span></label><input class="adm-inp" id="nc-email" type="email" placeholder="client@email.com"></div>
+        <div class="adm-field"><label>Access code <span style="color:var(--danger)">*</span></label><input class="adm-inp" id="nc-password" type="text" placeholder="e.g. johnson2026"></div>
       </div>
 
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Notion & Google Connections</div>
-      <p style="font-size:11px;color:var(--charcoal-4);margin-bottom:10px">These IDs connect the portal to your Notion pages and Google Sheet. Required for the auto-sync features in the next build phase.</p>
       <div class="adm-grid2">
-        <div class="adm-field"><label>SAB Tracker Notion Page ID</label><input class="adm-inp" id="nc-notionTracker" type="text" placeholder="e.g. 2d14737bea6f8095bd88..."></div>
-        <div class="adm-field"><label>Timeline Database Notion ID</label><input class="adm-inp" id="nc-notionTimeline" type="text" placeholder="e.g. 2424737bea6f806ab663..."></div>
+        <div class="adm-field"><label>SAB Tracker Notion Page ID</label><input class="adm-inp" id="nc-notionTracker" type="text" placeholder="e.g. 2d14737b-ea6f-8095-bd88-..."></div>
+        <div class="adm-field"><label>Timeline Database Notion ID</label><input class="adm-inp" id="nc-notionTimeline" type="text" placeholder="e.g. 2424737b-ea6f-806a-b663-..."></div>
       </div>
-      <div class="adm-field"><label>Budget Google Sheet URL</label><input class="adm-inp" id="nc-sheetUrl" type="text" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
+      <div class="adm-field"><label>Budget Google Sheet URL</label><input class="adm-inp" id="nc-sheetUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
 
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Timeline Dates</div>
       <div class="adm-grid2">
@@ -1849,150 +1878,142 @@ function renderAddClientView() {
         <div class="adm-field"><label>Target completion</label><input class="adm-inp" id="nc-tlTarget" type="text" placeholder="e.g. Dec 1, 2026"></div>
       </div>
 
-      <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
-        <button class="adm-btn adm-btn-green" onclick="generateClientEntry()">Generate data.js Entry</button>
-        <button class="adm-btn adm-btn-ghost" onclick="activeView='tracker';renderAdmin()">Cancel</button>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin:16px 0 10px">Team</div>
+      <div class="adm-grid2">
+        <div class="adm-field"><label>PM Name</label><input class="adm-inp" id="nc-pmName" type="text" placeholder="Cole Borders" value="Cole Borders"></div>
+        <div class="adm-field"><label>PM Phone</label><input class="adm-inp" id="nc-pmPhone" type="text" placeholder="(270) 782-5388" value="(270) 782-5388"></div>
+        <div class="adm-field"><label>PM Email</label><input class="adm-inp" id="nc-pmEmail" type="email" placeholder="cole@sixarrowsconstruction.com" value="cole@sixarrowsconstruction.com"></div>
       </div>
-    </div>
 
-    <div id="nc-output" style="display:none">
-      <div class="card">
-        <div class="sh">
-          <div class="sh-title">Generated data.js Entry</div>
-          <button class="adm-btn adm-btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyClientEntry()">Copy</button>
-        </div>
-        <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">
-          Add this block inside the <code style="font-size:11px;background:var(--cream-2);padding:1px 5px;border-radius:3px">PROJECTS</code> object in <code style="font-size:11px;background:var(--cream-2);padding:1px 5px;border-radius:3px">data.js</code>, after the last existing client entry (before the closing <code style="font-size:11px;background:var(--cream-2);padding:1px 5px;border-radius:3px">}</code>).
-        </p>
-        <pre id="nc-code" style="font-size:11px;line-height:1.6;background:var(--charcoal);color:var(--cream);padding:1rem;border-radius:var(--r-md);overflow-x:auto;white-space:pre-wrap;word-break:break-all"></pre>
-        <span id="nc-copy-msg" class="adm-msg success" style="margin-top:8px"></span>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap">
+        <button class="adm-btn adm-btn-green" onclick="createClientDirect()">Create Client</button>
+        <button class="adm-btn adm-btn-ghost" onclick="activeView='tracker';renderAdmin()">Cancel</button>
+        <span id="nc-msg" class="adm-msg" style="margin:0"></span>
       </div>
     </div>`;
 }
 
-function generateClientEntry() {
-  const clientName    = document.getElementById('nc-clientName')?.value.trim();
-  const projectName   = document.getElementById('nc-projectName')?.value.trim();
-  const location      = document.getElementById('nc-location')?.value.trim() || 'Bowling Green, KY';
-  const phase         = document.getElementById('nc-phase')?.value;
-  const projectType   = document.getElementById('nc-projectType')?.value || 'new_build';
-  const email         = document.getElementById('nc-email')?.value.trim();
-  const password      = document.getElementById('nc-password')?.value.trim();
-  const notionTracker = document.getElementById('nc-notionTracker')?.value.trim();
-  const notionTimeline= document.getElementById('nc-notionTimeline')?.value.trim();
-  const sheetUrl      = document.getElementById('nc-sheetUrl')?.value.trim();
-  const tlStart       = document.getElementById('nc-tlStart')?.value.trim();
-  const tlTarget      = document.getElementById('nc-tlTarget')?.value.trim();
+async function createClientDirect() {
+  const clientName     = document.getElementById('nc-clientName')?.value.trim();
+  const projectName    = document.getElementById('nc-projectName')?.value.trim();
+  const location       = document.getElementById('nc-location')?.value.trim() || 'Bowling Green, KY';
+  const phase          = document.getElementById('nc-phase')?.value || 'sab';
+  const projectType    = document.getElementById('nc-projectType')?.value || 'new_build';
+  const email          = document.getElementById('nc-email')?.value.trim();
+  const password       = document.getElementById('nc-password')?.value.trim();
+  const notionTracker  = document.getElementById('nc-notionTracker')?.value.trim() || null;
+  const notionTimeline = document.getElementById('nc-notionTimeline')?.value.trim() || null;
+  const sheetUrl       = document.getElementById('nc-sheetUrl')?.value.trim() || null;
+  const tlStart        = document.getElementById('nc-tlStart')?.value.trim() || 'TBD';
+  const tlTarget       = document.getElementById('nc-tlTarget')?.value.trim() || 'TBD';
+  const pmName         = document.getElementById('nc-pmName')?.value.trim() || 'Cole Borders';
+  const pmPhone        = document.getElementById('nc-pmPhone')?.value.trim() || '(270) 782-5388';
+  const pmEmail        = document.getElementById('nc-pmEmail')?.value.trim() || 'cole@sixarrowsconstruction.com';
+
+  const msgEl = document.getElementById('nc-msg');
 
   if (!clientName || !email || !password) {
-    alert('Client name, email, and access code are required.');
+    if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.style.display = 'block'; msgEl.textContent = 'Client name, email, and access code are required.'; }
     return;
   }
 
-  // Generate a clean ID from the client name
-  const id = clientName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g,'');
+  // Generate a clean ID from client name
+  const id = clientName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/, '');
 
-  const entry = `\n  ${id}: {
-    id: '${id}',
-    email: '${email}',
-    password: '${password}',
-    clientName: '${clientName}',
-    projectName: '${projectName || 'Custom Home'}',
-    location: '${location}',
-    status: '${phase === 'sab' ? 'In SAB™ Process' : 'Active Construction'}',
-    statusType: '${phase}',
-    projectType: '${projectType}',
-    constructionPct: 0,
-    sabProgress: 0,
-    phaseLabel: '${phase === 'sab' ? 'Phase 1 — Design & Architecture' : 'Active Build'}',
-    nextDecision: '',
-    nextDecisionDueDays: 0,
-    groundbreakingDate: '',
-    budgetTotal: 0,
-    budgetCommitted: 0,
-    budgetAllowance: 0,
-    budgetContingency: 0,
-    changeOrders: 0,
-    changeOrderItems: [],
-    timelineStart: '${tlStart || 'TBD'}',
-    timelineTarget: '${tlTarget || 'TBD'}',
-    teamLead: 'Cole Borders',
-    teamPhone: '(270) 782-5388',
-    teamEmail: 'cole@sixarrowsconstruction.com',
-    quickSummary: 'Welcome to your Six Arrows client portal.',
-    selectionsClientKey: '${id}',
-    links: {
-      budget: '${sheetUrl || '#'}',
-      timeline: '#',
-    },
-    // Notion connections (used by API bridge — next build phase)
-    notionTrackerPageId: '${notionTracker || ''}',
-    notionTimelineDbId:  '${notionTimeline || ''}',
-    decisions: [],
-    updates: [],
-    timeline: [],
-    documents: [],
-    budgetCategories: ${projectType === 'remodel' ? `[
-      // Set categories via Admin > Budget > Add Category to match your budget sheet
-    ]` : `[
-      { name:'Design & Planning',           total:0, spent:0, status:'pending', subCategories:[
-        { name:'Surveying & Permits', total:0, spent:0 },
-        { name:'Interior Design',     total:0, spent:0 },
-      ]},
-      { name:'Construction Costs',          total:0, spent:0, status:'pending', subCategories:[
-        { name:'Foundation', total:0, spent:0 }, { name:'Framing', total:0, spent:0 },
-        { name:'Roofing', total:0, spent:0 }, { name:'Windows & Doors', total:0, spent:0 },
-        { name:'Exterior Siding & Masonry', total:0, spent:0 },
-        { name:'Porches & Accents', total:0, spent:0 }, { name:'Exterior Painting', total:0, spent:0 },
-      ]},
-      { name:'Mechanical Systems',          total:0, spent:0, status:'pending', subCategories:[
-        { name:'Plumbing', total:0, spent:0 }, { name:'Electrical', total:0, spent:0 },
-        { name:'HVAC', total:0, spent:0 }, { name:'Insulation', total:0, spent:0 },
-      ]},
-      { name:'Interior Finishes',           total:0, spent:0, status:'pending', subCategories:[
-        { name:'Drywall', total:0, spent:0 }, { name:'Paint & Staining', total:0, spent:0 },
-        { name:'Tile & Masonry', total:0, spent:0 }, { name:'Flooring', total:0, spent:0 },
-        { name:'Cabinetry', total:0, spent:0 }, { name:'Countertops', total:0, spent:0 },
-        { name:'Interior Doors', total:0, spent:0 }, { name:'Trim Work & Moldings', total:0, spent:0 },
-        { name:'Fireplaces', total:0, spent:0 }, { name:'Electrical Fixtures', total:0, spent:0 },
-        { name:'Plumbing Fixtures', total:0, spent:0 }, { name:'Appliances', total:0, spent:0 },
-        { name:'Bathroom Fixtures', total:0, spent:0 }, { name:'Closet Systems', total:0, spent:0 },
-      ]},
-      { name:'Exterior Work',               total:0, spent:0, status:'pending', subCategories:[
-        { name:'Dirt & Grading', total:0, spent:0 }, { name:'Rock & Concrete', total:0, spent:0 },
-        { name:'Final Grade & Landscaping', total:0, spent:0 },
-      ]},
-      { name:'Utilities & Hookups',         total:0, spent:0, status:'pending', subCategories:[
-        { name:'Water & Sewer Lines', total:0, spent:0 }, { name:'Septic System', total:0, spent:0 },
-        { name:'Water Meter', total:0, spent:0 }, { name:'Utility Trenching', total:0, spent:0 },
-        { name:'Gas Connection', total:0, spent:0 }, { name:'Electrical Connection', total:0, spent:0 },
-      ]},
-      { name:'Miscellaneous',               total:0, spent:0, status:'pending', subCategories:[
-        { name:'Contingency Fund', total:0, spent:0 },
-      ]},
-      { name:'Other Costs & Management Fee',total:0, spent:0, status:'pending', subCategories:[
-        { name:'Temp Utilities', total:0, spent:0 }, { name:'Dumpsters & Toilet', total:0, spent:0 },
-        { name:'Site Clean Up & Builders Risk', total:0, spent:0 },
-        { name:'Six Arrows Management Fee', total:0, spent:0 },
-      ]},
-    ]`},
-    sabPhases: JSON.parse(JSON.stringify(PROJECTS[Object.keys(PROJECTS)[0]].sabPhases)),
-  },`;
+  if (msgEl) { msgEl.className = 'adm-msg neutral'; msgEl.style.display = 'block'; msgEl.textContent = 'Creating client...'; }
 
-  const output = document.getElementById('nc-output');
-  const code   = document.getElementById('nc-code');
-  if (output) output.style.display = 'block';
-  if (code)   code.textContent = entry;
-}
+  const record = {
+    id,
+    email,
+    password,
+    client_name:            clientName,
+    project_name:           projectName || 'Custom Home',
+    location,
+    status_type:            phase,
+    project_type:           projectType,
+    phase_label:            phase === 'sab' ? 'Phase 1 - Design & Architecture' : 'Active Build',
+    construction_pct:       0,
+    timeline_start:         tlStart,
+    timeline_target:        tlTarget,
+    budget_link:            sheetUrl,
+    notion_tracker_page_id: notionTracker,
+    notion_timeline_db_id:  notionTimeline,
+    team_lead:              pmName,
+    team_phone:             pmPhone,
+    team_email:             pmEmail,
+    cx_name:                pmName,
+    cx_phone:               pmPhone,
+    cx_email:               pmEmail,
+    pm_name:                pmName,
+    pm_phone:               pmPhone,
+    pm_email:               pmEmail,
+    quick_summary:          'Welcome to your Six Arrows client portal.',
+    show_review_card:       false,
+    review_left:            false,
+  };
 
-function copyClientEntry() {
-  const code = document.getElementById('nc-code')?.textContent;
-  if (!code) return;
-  navigator.clipboard.writeText(code).then(() => {
-    showMsg('nc-copy-msg', 'success', 'Copied to clipboard ✓');
-  }).catch(() => {
-    showMsg('nc-copy-msg', 'error', 'Copy failed — select text manually');
-  });
+  try {
+    const sbH = {
+      'apikey':        SUPABASE_ANON,
+      'Authorization': 'Bearer ' + SUPABASE_ANON,
+      'Content-Type':  'application/json',
+      'Prefer':        'return=minimal',
+    };
+
+    const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
+      method:  'POST',
+      headers: sbH,
+      body:    JSON.stringify(record),
+    });
+
+    if (res.status === 409) {
+      if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'A client with ID "' + id + '" already exists. Try a slightly different name.'; }
+      return;
+    }
+
+    if (!res.ok) {
+      const err = await res.text();
+      if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'Supabase error: ' + err; }
+      return;
+    }
+
+    // Add to in-memory PROJECTS so admin can switch to the new client immediately
+    PROJECTS[id] = {
+      id, email, password,
+      clientName, projectName: projectName || 'Custom Home', location,
+      status: phase === 'sab' ? 'In SAB Process' : 'Active Construction',
+      statusType: phase,
+      projectType,
+      constructionPct: 0, sabProgress: 0,
+      phaseLabel: phase === 'sab' ? 'Phase 1 - Design & Architecture' : 'Active Build',
+      groundbreakingDate: '', budgetTotal: 0, budgetCommitted: 0,
+      budgetAllowance: 0, budgetContingency: 0, changeOrders: 0, changeOrderItems: [],
+      timelineStart: tlStart, timelineTarget: tlTarget,
+      teamLead: pmName, teamPhone: pmPhone, teamEmail: pmEmail,
+      cxName: pmName, cxPhone: pmPhone, cxEmail: pmEmail,
+      pmName, pmPhone, pmEmail,
+      quickSummary: 'Welcome to your Six Arrows client portal.',
+      selectionsClientKey: id,
+      notionTrackerPageId: notionTracker || null,
+      notionTimelineDbId:  notionTimeline || null,
+      links: { budget: sheetUrl || '#', timeline: '#' },
+      decisions: [], updates: [], timeline: [], documents: [],
+      budgetCategories: [],
+      sabPhases: JSON.parse(JSON.stringify(DEFAULT_SAB_PHASES)),
+    };
+
+    if (msgEl) { msgEl.className = 'adm-msg success'; msgEl.textContent = 'Client created! Switching to their admin view...'; }
+
+    // Switch to the new client's tracker view
+    setTimeout(() => {
+      currentProjectId = id;
+      activeView = 'project_info';
+      renderAdmin();
+    }, 1000);
+
+  } catch(e) {
+    if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'Error: ' + e.message; }
+  }
 }
 
 // ════════════════════════════════════════════════════════

@@ -262,7 +262,13 @@ function loadDocs() {
   return (p.documents || []).filter(d => d.category !== 'photos');
 }
 function loadPhotos() {
-  return (p.documents || []).filter(d => d.category === 'photos');
+  const basePhotos  = (p.documents || []).filter(d => d.category === 'photos');
+  let adminPhotos   = [];
+  try { adminPhotos = JSON.parse(localStorage.getItem(PHOTO_KEY) || '[]'); } catch(e) {}
+  // Merge, deduplicate by id, most recent first
+  const all = [...basePhotos, ...adminPhotos];
+  const seen = new Set();
+  return all.filter(ph => { if (seen.has(ph.id)) return false; seen.add(ph.id); return true; }).reverse();
 }
 function loadInspo() {
   try { return JSON.parse(localStorage.getItem(INSPO_KEY) || '[]'); } catch(e) { return []; }
@@ -321,7 +327,8 @@ function canPreview(doc) {
 
 // ── State ─────────────────────────────────────────────
 let activeFilter  = 'all';
-let activeSection = 'docs'; // 'docs' | 'photos' | 'inspo'
+const _tabParam   = new URLSearchParams(window.location.search).get('tab');
+let activeSection = (_tabParam === 'photos' || _tabParam === 'inspo') ? _tabParam : 'docs';
 let openPreviews  = {};
 let lightboxPhotos = [];
 let lightboxIdx    = 0;
