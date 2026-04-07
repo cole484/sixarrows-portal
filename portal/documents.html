@@ -314,11 +314,18 @@ const TYPE_ICO = {
 // Convert Google Drive share URL to embeddable image URL
 function driveImgUrl(url) {
   if (!url) return url;
-  // https://drive.google.com/file/d/FILEID/view → https://drive.google.com/uc?export=view&id=FILEID
-  const match = url.match(/\/file\/d\/([^\/\?]+)/);
-  if (match) return `https://drive.google.com/uc?export=view&id=${match[1]}`;
-  // Already in uc format
-  if (url.includes('uc?export')) return url;
+  // Extract file ID from any Drive URL format
+  let fileId = null;
+  const m1 = url.match(/\/file\/d\/([^\/\?&]+)/);
+  const m2 = url.match(/[?&]id=([^\/\?&]+)/);
+  if (m1) fileId = m1[1];
+  else if (m2) fileId = m2[1];
+  if (fileId) {
+    // thumbnail API is more reliable than uc?export=view for shared files
+    return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w800';
+  }
+  // Already in a usable format
+  if (url.includes('thumbnail') || url.includes('uc?export')) return url;
   return url;
 }
 
