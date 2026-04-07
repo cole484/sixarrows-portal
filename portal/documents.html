@@ -279,6 +279,48 @@ function loadPhotos() {
   const seen = new Set();
   return all.filter(ph => { if (seen.has(ph.id)) return false; seen.add(ph.id); return true; }).reverse();
 }
+
+// Load Drive folder photos async and merge into the photo grid
+async function loadFolderPhotos() {
+  const FOLDER_KEY = `sa_photo_folders_${p.id}`;
+  let folders = [];
+  try { folders = JSON.parse(localStorage.getItem(FOLDER_KEY) || '[]'); } catch(e) {}
+  if (!folders.length) return;
+
+  // Build the folders query string: "URL:Label,URL:Label"
+  const folderParam = folders.map(f => `${f.url}:${encodeURIComponent(f.label)}`).join(',');
+
+  try {
+    const res = await fetch(`/.netlify/functions/drive-photos?folders=${encodeURIComponent(folderParam)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Convert Drive files to the photo shape documents.html expects
+    const drivePhotos = [];
+    for (const folder of (data.folders || [])) {
+      for (const file of (folder.files || [])) {
+        drivePhotos.push({
+          id:       'drive_' + file.id,
+          category: 'photos',
+          name:     file.name,
+          caption:  file.name,
+          url:      `https://drive.google.com/file/d/${file.id}/view`,
+          phase:    folder.label,
+          date:     file.date,
+          fromDrive: true,
+        });
+      }
+    }
+
+    if (drivePhotos.length > 0) {
+      // Merge drive photos into lightboxPhotos and re-render
+      lightboxPhotos = [...loadPhotos(), ...drivePhotos];
+      renderPhotos(lightboxPhotos);
+    }
+  } catch(e) {
+    console.log('Drive folder photos unavailable:', e.message);
+  }
+}
 function loadInspo() {
   try { return JSON.parse(localStorage.getItem(INSPO_KEY) || '[]'); } catch(e) { return []; }
 }
@@ -358,7 +400,10 @@ function render() {
   ].map(s => `<button class="doc-filter-pill ${activeSection===s.key?'active':''}" onclick="switchSection('${s.key}')">${s.label}</button>`).join('');
 
   if (activeSection === 'docs')   renderDocs();
-  if (activeSection === 'photos') renderPhotos();
+  if (activeSection === 'photos') {
+    renderPhotos();
+    loadFolderPhotos(); // async — appends Drive folder photos after initial render
+  }
   if (activeSection === 'inspo')  renderInspo();
 }
 
@@ -445,9 +490,9 @@ function togglePreview(id) {
 }
 
 // ── Build Photos ──────────────────────────────────────
-function renderPhotos() {
-  const photos = loadPhotos();
-  lightboxPhotos = photos;
+function renderPhotos(photosOverride) {
+  const photos = photosOverride || loadPhotos();
+  if (!photosOverride) lightboxPhotos = photos; // only reset lightbox on initial load
 
   if (photos.length === 0) {
     document.getElementById('main-content').innerHTML = `
