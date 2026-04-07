@@ -1158,6 +1158,7 @@ async function syncSABCategoriesFromSheet(projectId) {
     showMsg('bcat-sync-msg', 'error', 'Error: ' + e.message);
   }
 }
+async function syncCategoriesFromSheet(projectId) {
   const p        = PROJECTS[projectId];
   const msgEl    = document.getElementById('bcat-sync-msg');
   const sheetUrl = p.links?.budget;
