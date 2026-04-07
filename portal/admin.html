@@ -1904,16 +1904,16 @@ function renderPhotosView(p) {
       <div class="sh"><div class="sh-title">Individually Added Photos (${allPhotos.length})</div></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">
         ${allPhotos.map((ph,i)=>{
-          const isAdmin = i >= basePhotos.length;
           const m1 = (ph.url||'').match(/\/file\/d\/([^\/\?&]+)/);
           const fileId = m1 ? m1[1] : null;
           const imgUrl = fileId ? 'https://drive.google.com/thumbnail?id='+fileId+'&sz=w400' : ph.url;
           return `<div style="position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/3;background:var(--cream-2);border:0.5px solid var(--border)">
             <img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">
             <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:3px 5px">
-              <div style="font-size:9px;color:white">${ph.caption||ph.name||''}</div>
+              <div style="font-size:9px;color:white">${ph.caption||ph.name||'—'}</div>
+              <div style="font-size:8px;color:rgba(255,255,255,.5)">${ph.date||''}</div>
             </div>
-            ${isAdmin ? `<button onclick="removeAdminPhoto('${p.id}','${ph.id}')" style="position:absolute;top:3px;right:3px;background:rgba(184,50,50,.85);border:none;border-radius:50%;width:18px;height:18px;color:white;cursor:pointer;font-size:11px">×</button>` : ''}
+            ${ph.id ? `<button onclick="removeAdminPhoto('${p.id}','${ph.id}')" style="position:absolute;top:3px;right:3px;background:rgba(184,50,50,.85);border:none;border-radius:50%;width:20px;height:20px;color:white;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center">×</button>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -1922,51 +1922,79 @@ function renderPhotosView(p) {
 }
 
 async function addPhotoFolder(projectId) {
-  const url      = document.getElementById('pf-url')?.value.trim();
+  const urlVal   = document.getElementById('pf-url')?.value.trim();
   const custom   = document.getElementById('pf-custom')?.value.trim();
   const selected = document.getElementById('pf-label')?.value;
-  const label    = custom || selected;
+  const label    = custom || selected || 'Photos';
   const msgEl    = document.getElementById('pf-msg');
 
-  if (!url) { if(msgEl){msgEl.className='adm-msg error';msgEl.textContent='Folder URL required';} return; }
-  if (!url.includes('drive.google.com')) { if(msgEl){msgEl.className='adm-msg error';msgEl.textContent='Must be a Google Drive URL';} return; }
+  const setMsg = (type, txt) => { if (msgEl) { msgEl.className = 'adm-msg ' + type; msgEl.textContent = txt; } };
 
-  const p = PROJECTS[projectId];
-  const folders = Array.isArray(p.photoFolders) ? [...p.photoFolders] : [];
-  folders.push({ label, url });
-  p.photoFolders = folders;
-  // Save to Supabase
-  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
-  await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
-    method: 'POST', headers: sbH,
-    body: JSON.stringify({ id: projectId, photo_folders: folders }),
-  }).then(res => {
+  if (!urlVal) { setMsg('error', 'Folder URL required'); return; }
+  if (!urlVal.includes('drive.google.com')) { setMsg('error', 'Must be a Google Drive URL'); return; }
+
+  setMsg('success', 'Saving...');
+
+  // Get current folders from PROJECTS, defaulting to empty array
+  const p = PROJECTS[projectId] || {};
+  if (!p.photoFolders) p.photoFolders = [];
+  const folders = [...p.photoFolders, { label, url: urlVal }];
+
+  const sbH = {
+    'apikey': SUPABASE_ANON,
+    'Authorization': 'Bearer ' + SUPABASE_ANON,
+    'Content-Type': 'application/json',
+    'Prefer': 'resolution=merge-duplicates,return=minimal',
+  };
+
+  try {
+    const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
+      method: 'POST',
+      headers: sbH,
+      body: JSON.stringify({ id: projectId, photo_folders: folders }),
+    });
     if (res.ok) {
-      if (document.getElementById('pf-url')) document.getElementById('pf-url').value = '';
-      if (document.getElementById('pf-custom')) document.getElementById('pf-custom').value = '';
-      if (msgEl) { msgEl.className='adm-msg success'; msgEl.textContent='Folder saved'; }
-      // Update session cache
+      // Update in-memory project
+      p.photoFolders = folders;
+      if (PROJECTS[projectId]) PROJECTS[projectId].photoFolders = folders;
+      // Update session cache so client portal picks it up
       try {
         const raw = localStorage.getItem('sa_session_v3');
-        if (raw) { const s = JSON.parse(raw); if (s.data && s.data.id === projectId) { s.data.photoFolders = folders; s.ts = 0; localStorage.setItem('sa_session_v3', JSON.stringify(s)); } }
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (s.data && s.data.id === projectId) { s.data.photoFolders = folders; s.ts = 0; localStorage.setItem('sa_session_v3', JSON.stringify(s)); }
+        }
       } catch(e) {}
+      if (document.getElementById('pf-url')) document.getElementById('pf-url').value = '';
+      if (document.getElementById('pf-custom')) document.getElementById('pf-custom').value = '';
+      setMsg('success', 'Folder saved ✓');
       setTimeout(() => renderAdmin(), 400);
     } else {
-      if (msgEl) { msgEl.className='adm-msg error'; msgEl.textContent='Save failed'; }
+      const err = await res.text();
+      console.error('addPhotoFolder Supabase error:', res.status, err);
+      setMsg('error', 'Save failed (' + res.status + ') — check console');
     }
-  }).catch(e => { if (msgEl) { msgEl.className='adm-msg error'; msgEl.textContent='Error: ' + e.message; } });
+  } catch(e) {
+    console.error('addPhotoFolder error:', e);
+    setMsg('error', 'Error: ' + e.message);
+  }
 }
 
 async function removePhotoFolder(projectId, idx) {
-  const p = PROJECTS[projectId];
+  if (!confirm('Remove this photo folder? Photos in the folder will no longer appear in the portal.')) return;
+  const p = PROJECTS[projectId] || {};
   const updatedFolders = Array.isArray(p.photoFolders) ? [...p.photoFolders] : [];
   updatedFolders.splice(idx, 1);
   p.photoFolders = updatedFolders;
+  if (PROJECTS[projectId]) PROJECTS[projectId].photoFolders = updatedFolders;
   const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
-  await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
-    method: 'POST', headers: sbH,
-    body: JSON.stringify({ id: projectId, photo_folders: updatedFolders }),
-  }).catch(e => console.error('removePhotoFolder save error:', e));
+  try {
+    const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
+      method: 'POST', headers: sbH,
+      body: JSON.stringify({ id: projectId, photo_folders: updatedFolders }),
+    });
+    if (!res.ok) console.error('removePhotoFolder error:', res.status, await res.text());
+  } catch(e) { console.error('removePhotoFolder error:', e); }
   renderAdmin();
 }
 
