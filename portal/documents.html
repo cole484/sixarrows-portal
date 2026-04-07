@@ -249,13 +249,22 @@
 </head>
 <body>
 <script>
-const p = AUTH.requireAuth();
+let p = AUTH.requireAuth();
 if (!p) throw new Error('Not authed');
 
 // ── Storage keys ─────────────────────────────────────
 const DOC_KEY   = `sa_docs_${p.id}`;
 const PHOTO_KEY = `sa_photos_${p.id}`;
 const INSPO_KEY = `sa_inspo_${p.id}`;
+
+// Refresh from Supabase immediately so newly-added docs/photos appear
+// without requiring the client to log out and back in
+AUTH.refreshSession(p.id).then(fresh => {
+  if (fresh) {
+    p = fresh;
+    render(); // re-render with up-to-date documents list
+  }
+}).catch(() => {});
 
 function loadDocs() {
   // Documents come from Supabase via client session (p.documents)
