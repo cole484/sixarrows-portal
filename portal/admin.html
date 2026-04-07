@@ -486,6 +486,7 @@ async function loadNotionDynamicForClient(projectId) {
 function renderTrackerView(p) {
   const TS = getTrackerState(p);
   const isRemodel = p.projectType === 'remodel';
+  const clientKey = p.selectionsClientKey || p.id;
 
   // Groundbreaking date card
   const gbDate = adminGet(p.id, 'gbDate') || p.groundbreakingDate || '';
@@ -604,7 +605,50 @@ function renderTrackerView(p) {
     });
   });
 
+  // Design Book & Export card
+  html += `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sh"><div class="sh-title">Design Book & Selections Export</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:14px">Generate the client's Design Book or export all selections as a CSV spreadsheet for budgeting and procurement.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <a href="design-book.html" target="_blank" class="adm-btn adm-btn-green" style="text-decoration:none">
+          View Design Book →
+        </a>
+        <button class="adm-btn" onclick="exportSelectionsCSV('${p.id}','${p.selectionsClientKey||p.id}','${(p.clientName||'').replace(/'/g,'')}')" >
+          Export CSV ↓
+        </button>
+        <span id="export-msg" class="adm-msg success" style="margin:0"></span>
+      </div>
+    </div>`;
+
   return html;
+}
+
+async function exportSelectionsCSV(projectId, clientKey, clientName) {
+  const msgEl = document.getElementById('export-msg');
+  if (msgEl) { msgEl.className = 'adm-msg success'; msgEl.textContent = 'Generating...'; }
+  try {
+    const res = await fetch(
+      '/.netlify/functions/selections-export?clientKey=' + encodeURIComponent(clientKey) +
+      '&clientName=' + encodeURIComponent(clientName)
+    );
+    if (!res.ok) { throw new Error('Export failed: ' + res.status); }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const safeName = (clientName || clientKey).replace(/[^a-z0-9]/gi,'_');
+    a.href     = url;
+    a.download = safeName + '_Selections_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if (msgEl) { msgEl.textContent = 'Downloaded ✓'; }
+    setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
+  } catch(e) {
+    console.error('exportSelectionsCSV error:', e);
+    if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'Error: ' + e.message; }
+  }
 }
 
 async function loadAndRenderDynTracker(projectId) {

@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Design Selections Book — Six Arrows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --cream:    #F5F0E8;
+  --cream-dk: #EDE6D6;
+  --stone:    #C9BBA8;
+  --charcoal: #2C2C2A;
+  --charcoal-lt: #4A4845;
+  --sage:     #5C6B5A;
+  --sage-lt:  #8FA08C;
+  --gold:     #B8965A;
+  --gold-lt:  #D4AF7A;
+  --white:    #FAFAF8;
+  --border:   rgba(44,44,42,.12);
+
+  --serif:    'Cormorant Garamond', Georgia, serif;
+  --sans:     'Jost', sans-serif;
+
+  --page-w:   960px;
+  --gutter:   48px;
+}
+
+html { background: var(--cream); color: var(--charcoal); font-family: var(--sans); }
+body { min-height: 100vh; }
+
+/* ── Loading ── */
+#loading-screen {
+  position:fixed;inset:0;background:var(--charcoal);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:9999;transition:opacity .6s;
+}
+#loading-screen.fade-out { opacity:0;pointer-events:none; }
+.loading-logo { font-family:var(--serif);font-size:28px;color:var(--cream);letter-spacing:.2em;margin-bottom:16px; }
+.loading-sub { font-size:11px;color:var(--stone);letter-spacing:.2em;text-transform:uppercase; }
+.loading-bar { width:120px;height:1px;background:rgba(255,255,255,.15);margin-top:24px;position:relative;overflow:hidden; }
+.loading-bar::after { content:'';position:absolute;inset:0;background:var(--gold);animation:loadbar 1.4s ease-in-out infinite; }
+@keyframes loadbar { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
+
+/* ── Print / Download Bar ── */
+#action-bar {
+  position:sticky;top:0;z-index:100;
+  background:var(--charcoal);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px var(--gutter);
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.ab-logo { font-family:var(--serif);font-size:15px;color:var(--cream);letter-spacing:.12em; }
+.ab-title { font-size:11px;color:var(--stone);letter-spacing:.15em;text-transform:uppercase; }
+.ab-actions { display:flex;gap:12px; }
+.ab-btn {
+  font-family:var(--sans);font-size:11px;font-weight:500;letter-spacing:.12em;
+  text-transform:uppercase;padding:8px 20px;border-radius:2px;cursor:pointer;
+  transition:all .2s;border:none;
+}
+.ab-btn-outline { background:transparent;border:1px solid var(--stone);color:var(--stone); }
+.ab-btn-outline:hover { border-color:var(--cream);color:var(--cream); }
+.ab-btn-primary { background:var(--gold);color:var(--charcoal); }
+.ab-btn-primary:hover { background:var(--gold-lt); }
+
+/* ── Book Container ── */
+#book { max-width:var(--page-w);margin:0 auto;padding:0 24px 80px; }
+
+/* ── Cover Page ── */
+.cover-page {
+  min-height:85vh;display:flex;flex-direction:column;justify-content:flex-end;
+  padding:var(--gutter);margin:40px 0;
+  background:var(--charcoal);position:relative;overflow:hidden;
+}
+.cover-page::before {
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(92,107,90,.3) 0%,transparent 60%),
+             linear-gradient(315deg,rgba(184,150,90,.15) 0%,transparent 50%);
+}
+.cover-ornament {
+  position:absolute;top:40px;right:40px;
+  width:180px;height:180px;
+  border:1px solid rgba(184,150,90,.2);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+}
+.cover-ornament::before {
+  content:'';width:140px;height:140px;
+  border:1px solid rgba(184,150,90,.12);border-radius:50%;position:absolute;
+}
+.cover-ornament-text {
+  font-family:var(--serif);font-size:11px;color:rgba(184,150,90,.5);
+  letter-spacing:.3em;text-transform:uppercase;
+}
+.cover-eyebrow {
+  font-size:10px;letter-spacing:.3em;text-transform:uppercase;
+  color:var(--sage-lt);margin-bottom:20px;position:relative;
+}
+.cover-title {
+  font-family:var(--serif);font-size:clamp(40px,6vw,72px);
+  font-weight:300;color:var(--cream);line-height:1.05;
+  letter-spacing:-.01em;position:relative;margin-bottom:8px;
+}
+.cover-title em { font-style:italic;color:var(--gold-lt); }
+.cover-subtitle {
+  font-family:var(--serif);font-size:18px;color:var(--stone);
+  font-style:italic;margin-bottom:32px;position:relative;
+}
+.cover-divider { width:60px;height:1px;background:var(--gold);margin-bottom:28px;position:relative; }
+.cover-meta { display:flex;gap:40px;position:relative; }
+.cover-meta-item label { font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--stone);display:block;margin-bottom:4px; }
+.cover-meta-item span { font-family:var(--serif);font-size:16px;color:var(--cream); }
+.cover-sa {
+  position:absolute;bottom:40px;right:40px;
+  font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.2);
+}
+
+/* ── Section Divider ── */
+.section-divider {
+  display:flex;align-items:center;gap:20px;
+  padding:40px 0 24px;
+}
+.section-divider-line { flex:1;height:1px;background:var(--border); }
+.section-divider-label {
+  font-size:9px;letter-spacing:.3em;text-transform:uppercase;
+  color:var(--stone);white-space:nowrap;
+}
+
+/* ── PART 1: Room Collage Spreads ── */
+.room-spread {
+  margin-bottom:60px;
+  border:1px solid var(--border);
+  background:var(--white);
+  overflow:hidden;
+}
+.room-spread-header {
+  padding:28px 36px 20px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-end;justify-content:space-between;
+  background:linear-gradient(to right,var(--cream),var(--white));
+}
+.room-name {
+  font-family:var(--serif);font-size:36px;font-weight:300;
+  color:var(--charcoal);letter-spacing:-.01em;
+}
+.room-name em { font-style:italic;color:var(--sage); }
+.room-item-count {
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--stone);
+}
+.room-collage {
+  display:grid;gap:0;
+}
+.room-collage.layout-2 { grid-template-columns:1fr 1fr; }
+.room-collage.layout-3 { grid-template-columns:2fr 1fr 1fr; }
+.room-collage.layout-4 { grid-template-columns:1fr 1fr;grid-template-rows:auto auto; }
+.room-collage.layout-featured { grid-template-columns:3fr 2fr; }
+
+.collage-cell {
+  position:relative;min-height:220px;overflow:hidden;
+  border:1px solid var(--border);margin:-0.5px;
+}
+.collage-cell.tall { min-height:400px; }
+.collage-img-wrap {
+  width:100%;height:100%;
+  background:var(--cream-dk);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;min-height:220px;
+}
+.collage-img-wrap img {
+  width:100%;height:100%;object-fit:cover;
+  transition:transform .4s ease;display:block;
+}
+.collage-cell:hover .collage-img-wrap img { transform:scale(1.03); }
+
+/* Image placeholder */
+.img-placeholder {
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:100%;height:100%;min-height:220px;
+  background:linear-gradient(135deg,var(--cream-dk) 0%,var(--cream) 100%);
+  position:relative;
+}
+.img-placeholder::before {
+  content:'';position:absolute;inset:20px;
+  border:1px dashed rgba(184,150,90,.25);
+}
+.img-placeholder-icon {
+  font-size:28px;margin-bottom:8px;opacity:.4;
+}
+.img-placeholder-label {
+  font-family:var(--serif);font-size:13px;font-style:italic;
+  color:var(--stone);text-align:center;padding:0 20px;
+  line-height:1.5;
+}
+.img-placeholder-sku {
+  font-size:9px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--sage-lt);margin-top:6px;
+}
+
+/* Collage cell overlay */
+.collage-overlay {
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(to top,rgba(44,44,42,.85) 0%,transparent 100%);
+  padding:20px 16px 14px;
+}
+.collage-item-label {
+  font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(255,255,255,.55);margin-bottom:3px;
+}
+.collage-item-value {
+  font-family:var(--serif);font-size:15px;color:var(--cream);
+  line-height:1.3;
+}
+
+/* ── PART 2: Detailed Item Catalog ── */
+.catalog-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:2px;
+  margin-bottom:60px;
+}
+.catalog-card {
+  background:var(--white);border:1px solid var(--border);
+  overflow:hidden;
+}
+.catalog-card-img {
+  aspect-ratio:4/3;
+  background:var(--cream-dk);
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;position:relative;
+}
+.catalog-card-img img { width:100%;height:100%;object-fit:cover; }
+.catalog-card-img .img-placeholder { min-height:auto;height:100%; }
+.catalog-card-body { padding:16px; }
+.catalog-card-cat {
+  font-size:8px;letter-spacing:.25em;text-transform:uppercase;
+  color:var(--sage);margin-bottom:6px;
+}
+.catalog-card-name {
+  font-family:var(--serif);font-size:18px;font-weight:400;
+  color:var(--charcoal);margin-bottom:8px;line-height:1.2;
+}
+.catalog-card-value {
+  font-size:12px;color:var(--charcoal-lt);line-height:1.55;margin-bottom:10px;
+}
+.catalog-card-meta {
+  border-top:1px solid var(--border);padding-top:10px;
+  display:flex;flex-direction:column;gap:4px;
+}
+.catalog-meta-row {
+  display:flex;justify-content:space-between;align-items:baseline;
+  font-size:10px;
+}
+.catalog-meta-label { color:var(--stone);letter-spacing:.08em; }
+.catalog-meta-val { color:var(--charcoal);font-weight:500; }
+
+/* ── Category Header ── */
+.cat-header {
+  padding:32px 0 16px;
+  display:flex;align-items:flex-end;gap:20px;
+}
+.cat-header-num {
+  font-family:var(--serif);font-size:48px;font-weight:300;
+  color:var(--border);line-height:1;
+}
+.cat-header-info {}
+.cat-header-name {
+  font-family:var(--serif);font-size:28px;font-weight:300;
+  color:var(--charcoal);
+}
+.cat-header-count {
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--stone);
+  margin-top:2px;
+}
+
+/* ── Empty state ── */
+.empty-book {
+  text-align:center;padding:80px 40px;
+}
+.empty-book-title {
+  font-family:var(--serif);font-size:28px;color:var(--charcoal);
+  margin-bottom:12px;
+}
+.empty-book-sub { font-size:14px;color:var(--stone);line-height:1.6; }
+
+/* ── Print styles ── */
+@media print {
+  #action-bar { display:none!important; }
+  body { background:white; }
+  .room-spread, .catalog-card { break-inside:avoid; }
+  .cover-page { min-height:100vh;margin:0; }
+}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="loading-logo">Six Arrows</div>
+  <div class="loading-sub">Preparing Design Selections Book</div>
+  <div class="loading-bar"></div>
+</div>
+
+<div id="action-bar">
+  <div>
+    <div class="ab-logo">Six Arrows Construction</div>
+    <div class="ab-title">Design Selections Book</div>
+  </div>
+  <div class="ab-actions">
+    <button class="ab-btn ab-btn-outline" onclick="window.print()">Print / Save PDF</button>
+    <button class="ab-btn ab-btn-primary" onclick="window.location.href='dashboard.html'">← Back to Portal</button>
+  </div>
+</div>
+
+<div id="book">
+  <div id="book-content"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+// ── Auth & Session ────────────────────────────────────
+let p = AUTH.requireAuth();
+if (!p) throw new Error('Not authed');
+
+// ── Helpers ──────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function currency(n) {
+  if (!n || isNaN(n)) return '';
+  return '$' + Number(n).toLocaleString();
+}
+
+// ── Category definitions (mirrors selections-app.html) ──
+const ROOM_GROUPS = [
+  {
+    id: 'kitchen',
+    name: 'Kitchen',
+    subtitle: 'Countertops, Appliances & Fixtures',
+    cats: ['countertops','appliances','plumbing','lighting'],
+    roomFilter: r => /kitchen|kit/i.test(r),
+  },
+  {
+    id: 'primary_bath',
+    name: 'Primary Bath',
+    subtitle: 'Tile, Fixtures & Finishes',
+    cats: ['tile','plumbing','lighting'],
+    roomFilter: r => /master|primary|main/i.test(r),
+  },
+  {
+    id: 'baths',
+    name: 'Additional Baths',
+    subtitle: 'Tile, Fixtures & Finishes',
+    cats: ['tile','plumbing','lighting'],
+    roomFilter: r => /bath|powder|guest/i.test(r) && !/master|primary|main/i.test(r),
+  },
+  {
+    id: 'interior',
+    name: 'Interior',
+    subtitle: 'Flooring, Doors, Hardware & Trim',
+    cats: ['flooring','doors','hardware','specialty_trim','paint'],
+    roomFilter: null,
+  },
+  {
+    id: 'exterior',
+    name: 'Exterior',
+    subtitle: 'Finishes, Roofing & Lighting',
+    cats: ['exterior_finishes'],
+    roomFilter: null,
+  },
+];
+
+const CAT_LABELS = {
+  fireplace:         'Fireplace',
+  appliances:        'Appliances',
+  exterior_finishes: 'Exterior Finishes',
+  specialty_trim:    'Specialty Trim & Built-Ins',
+  flooring:          'Flooring',
+  tile:              'Tile Selections',
+  plumbing:          'Plumbing Fixtures',
+  lighting:          'Lighting Fixtures',
+  countertops:       'Countertops',
+  hardware:          'Hardware',
+  paint:             'Paint & Stain Colors',
+  doors:             'Interior Doors & Trim',
+};
+
+// ── Load selections from Supabase ─────────────────────
+async function loadSelections(clientKey) {
+  try {
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${clientKey}`);
+    if (!res.ok) return { answers: {}, saved: {}, rooms: [] };
+    const data = await res.json();
+    const all  = data.data || {};
+    return {
+      answers: all.ans || {},
+      saved:   all.sav || {},
+      rooms:   all.rms ? (typeof all.rms === 'string' ? JSON.parse(all.rms) : all.rms) : [],
+    };
+  } catch(e) {
+    console.error('loadSelections error:', e);
+    return { answers: {}, saved: {}, rooms: [] };
+  }
+}
+
+// ── Parse answers into structured items ───────────────
+function parseSelections(answers, saved, rooms) {
+  const items = [];
+
+  // ── Countertops ──
+  if (answers.ct_product || answers.ct_kit) {
+    items.push({
+      cat: 'countertops', room: 'Kitchen',
+      label: 'Kitchen Countertop',
+      material: answers.ct_kit || '',
+      color: answers.ct_color || '',
+      edge: answers.ct_edge || '',
+      product: answers.ct_product || '',
+      notes: answers.ct_notes || '',
+      image: answers.ct_photo || '',
+    });
+    if (answers.ct_isl === 'Yes — contrasting material' || answers.ct_isl === 'Yes — contrasting color') {
+      items.push({
+        cat: 'countertops', room: 'Kitchen',
+        label: 'Island Countertop',
+        material: answers.ct_isl_mat || '',
+        product: answers.ct_isl_mat || '',
+        image: '',
+      });
+    }
+  }
+
+  // ── Per-bathroom countertops ──
+  const bathrooms = Array.isArray(rooms) ? rooms.filter(r => /bath|powder/i.test(r.name||'')) : [];
+  bathrooms.forEach(rm => {
+    const rk = (rm.id || rm.name || '').replace(/\s+/g,'_').toLowerCase();
+    const mat = answers[`ct_bath_${rk}_mat`] || answers[`ct_bath_${rk}`];
+    if (mat) {
+      items.push({
+        cat: 'countertops', room: rm.name || rk,
+        label: `${rm.name} Countertop`,
+        material: mat,
+        product: answers[`ct_bath_${rk}_product`] || mat,
+        image: '',
+      });
+    }
+  });
+
+  // ── Flooring ──
+  if (Array.isArray(rooms)) {
+    rooms.forEach(rm => {
+      const rk = (rm.id || rm.name || '').replace(/\s+/g,'_').toLowerCase();
+      const type = answers[`flooring_${rk}_type`];
+      if (type) {
+        items.push({
+          cat: 'flooring', room: rm.name || rk,
+          label: `${rm.name} Flooring`,
+          material: type,
+          color: answers[`flooring_${rk}_color`] || '',
+          product: answers[`flooring_${rk}_product`] || '',
+          notes: answers[`flooring_${rk}_notes`] || '',
+          image: answers[`flooring_${rk}_photo`] || '',
+        });
+      }
+    });
+  }
+
+  // ── Appliances ──
+  const appFields = [
+    ['app_range','Range / Cooktop'],['app_hood','Range Hood'],
+    ['app_ref','Refrigerator'],['app_dw','Dishwasher'],
+    ['app_mw','Microwave'],['app_oven','Wall Oven'],
+  ];
+  appFields.forEach(([key, name]) => {
+    const val = answers[`${key}_product`] || answers[key];
+    if (val) {
+      items.push({
+        cat: 'appliances', room: 'Kitchen',
+        label: name,
+        product: val,
+        finish: answers[`${key}_finish`] || '',
+        image: answers[`${key}_photo`] || '',
+      });
+    }
+  });
+
+  // ── Hardware ──
+  if (answers.hw_finish || answers.hw_product) {
+    items.push({
+      cat: 'hardware', room: 'Whole Home',
+      label: 'Door & Cabinet Hardware',
+      finish: answers.hw_finish || '',
+      style: answers.hw_door_style || '',
+      cabinetStyle: answers.hw_cabinet || '',
+      product: answers.hw_product || '',
+      notes: answers.hw_notes || '',
+      image: answers.hw_photo || '',
+    });
+  }
+
+  // ── Doors & Trim ──
+  if (answers.dr_sty || answers.tr_product) {
+    items.push({
+      cat: 'doors', room: 'Whole Home',
+      label: 'Interior Doors',
+      style: answers.dr_sty || '',
+      height: answers.dr_ht || '',
+      finish: answers.dr_col || '',
+      product: answers.tr_product || '',
+      notes: [answers.dr_spec, answers.tr_notes].filter(Boolean).join(' — '),
+      image: '',
+    });
+    items.push({
+      cat: 'doors', room: 'Whole Home',
+      label: 'Trim & Molding',
+      style: answers.tr_prof || '',
+      height: answers.tr_base || '',
+      crown: answers.tr_crown || '',
+      product: answers.tr_product || '',
+      image: '',
+    });
+  }
+
+  // ── Exterior Finishes ──
+  ['roof','soffit','gutter'].forEach(part => {
+    const mat = answers[`ext_${part}_mat`] || answers[`ext_${part}`];
+    if (mat) {
+      items.push({
+        cat: 'exterior_finishes', room: 'Exterior',
+        label: part.charAt(0).toUpperCase() + part.slice(1),
+        material: mat,
+        color: answers[`ext_${part}_color`] || '',
+        product: answers[`ext_${part}_product`] || mat,
+        image: answers[`ext_${part}_photo`] || '',
+      });
+    }
+  });
+
+  // ── Tile (per bathroom) ──
+  if (Array.isArray(rooms)) {
+    rooms.filter(r => /bath|shower|powder/i.test(r.name||'')).forEach(rm => {
+      const rk = (rm.id || rm.name || '').replace(/\s+/g,'_').toLowerCase();
+      const floor = answers[`tile_${rk}_floor`] || answers[`tile_${rk}_floor_product`];
+      if (floor) {
+        items.push({
+          cat: 'tile', room: rm.name,
+          label: `${rm.name} Floor Tile`,
+          material: floor,
+          product: answers[`tile_${rk}_floor_product`] || floor,
+          grout: answers[`tile_${rk}_floor_grout`] || '',
+          image: answers[`tile_${rk}_floor_photo`] || '',
+        });
+      }
+      const shower = answers[`tile_${rk}_shower`] || answers[`tile_${rk}_shower_product`];
+      if (shower) {
+        items.push({
+          cat: 'tile', room: rm.name,
+          label: `${rm.name} Shower Tile`,
+          material: shower,
+          product: answers[`tile_${rk}_shower_product`] || shower,
+          grout: answers[`tile_${rk}_shower_grout`] || '',
+          image: answers[`tile_${rk}_shower_photo`] || '',
+        });
+      }
+    });
+  }
+
+  // ── Specialty trim ──
+  const trimItems = [
+    {id:'beams',name:'Exposed Beams',fields:['beams_loc','beams_style','beams_fin']},
+    {id:'shelves',name:'Floating Shelves',fields:['shelves_loc','shelves_mat']},
+    {id:'mantle',name:'Fireplace Mantle',fields:['mantle_style','mantle_fin']},
+    {id:'wainscot',name:'Wainscoting / Paneling',fields:['wain_style','wain_ht']},
+  ];
+  trimItems.forEach(ti => {
+    if (answers[ti.fields[0]]) {
+      items.push({
+        cat: 'specialty_trim', room: 'Whole Home',
+        label: ti.name,
+        material: answers[ti.fields[0]] || '',
+        style: answers[ti.fields[1]] || '',
+        finish: answers[ti.fields[2]] || '',
+        notes: answers[`${ti.id}_notes`] || '',
+        image: '',
+      });
+    }
+  });
+
+  // ── Fireplace ──
+  if (answers.fireplace_fp_want && answers.fireplace_fp_want !== 'No — no fireplace') {
+    items.push({
+      cat: 'fireplace', room: 'Great Room',
+      label: 'Fireplace',
+      fuel: answers.fireplace_fp_fuel || '',
+      style: answers.fireplace_fp_style || '',
+      count: answers.fireplace_fp_count || '1',
+      product: answers.fireplace_fp_product || '',
+      image: answers.fireplace_fp_photo || '',
+    });
+  }
+
+  return items;
+}
+
+// ── Render a single collage cell ─────────────────────
+function renderCollageCell(item, tall = false) {
+  const hasImg = !!item.image;
+  const primaryVal = item.product || item.material || item.style || item.finish || '';
+  const label = esc(item.label);
+  const val   = esc(primaryVal);
+
+  return `
+  <div class="collage-cell${tall?' tall':''}">
+    <div class="collage-img-wrap">
+      ${hasImg
+        ? `<img src="${esc(item.image)}" alt="${label}" loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'img-placeholder\\'><div class=\\'img-placeholder-icon\\'>🖼️</div><div class=\\'img-placeholder-label\\'>${label}</div></div>'">`
+        : `<div class="img-placeholder">
+            <div class="img-placeholder-icon">🖼️</div>
+            <div class="img-placeholder-label">${label}</div>
+            ${val ? `<div class="img-placeholder-sku">${esc(primaryVal.slice(0,40))}</div>` : ''}
+          </div>`
+      }
+    </div>
+    <div class="collage-overlay">
+      <div class="collage-item-label">${esc(CAT_LABELS[item.cat] || item.cat)}</div>
+      <div class="collage-item-value">${label}${val && val !== label ? ' — ' + val.slice(0,50) : ''}</div>
+    </div>
+  </div>`;
+}
+
+// ── Render a catalog card ─────────────────────────────
+function renderCatalogCard(item, num) {
+  const primaryVal = item.product || item.material || item.style || item.finish || '';
+  const details = [];
+  if (item.material && item.material !== primaryVal) details.push(['Material', item.material]);
+  if (item.color)   details.push(['Color', item.color]);
+  if (item.finish)  details.push(['Finish', item.finish]);
+  if (item.style && item.style !== primaryVal) details.push(['Style', item.style]);
+  if (item.edge)    details.push(['Edge Profile', item.edge]);
+  if (item.grout)   details.push(['Grout', item.grout]);
+  if (item.height)  details.push(['Height', item.height]);
+  if (item.crown)   details.push(['Crown', item.crown]);
+  if (item.fuel)    details.push(['Fuel Type', item.fuel]);
+
+  return `
+  <div class="catalog-card">
+    <div class="catalog-card-img">
+      ${item.image
+        ? `<img src="${esc(item.image)}" alt="${esc(item.label)}" loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'img-placeholder\\' style=\\'height:100%\\'><div class=\\'img-placeholder-icon\\'>🖼️</div><div class=\\'img-placeholder-label\\'>${esc(item.label)}</div></div>'">`
+        : `<div class="img-placeholder" style="height:100%">
+            <div class="img-placeholder-icon">🖼️</div>
+            <div class="img-placeholder-label">${esc(item.label)}</div>
+          </div>`
+      }
+    </div>
+    <div class="catalog-card-body">
+      <div class="catalog-card-cat">${esc(CAT_LABELS[item.cat] || item.cat)} · ${esc(item.room)}</div>
+      <div class="catalog-card-name">${esc(item.label)}</div>
+      <div class="catalog-card-value">${esc(primaryVal || 'Selection pending')}</div>
+      ${details.length ? `
+      <div class="catalog-card-meta">
+        ${details.map(([k,v]) => `
+        <div class="catalog-meta-row">
+          <span class="catalog-meta-label">${esc(k)}</span>
+          <span class="catalog-meta-val">${esc(v)}</span>
+        </div>`).join('')}
+      </div>` : ''}
+      ${item.notes ? `<div style="margin-top:10px;font-size:11px;color:var(--stone);font-style:italic;line-height:1.5">${esc(item.notes)}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ── Render room collage spread ────────────────────────
+function renderRoomSpread(group, items) {
+  const groupItems = items.filter(item => group.cats.includes(item.cat));
+  if (!groupItems.length) return '';
+
+  const count = groupItems.length;
+  const layoutClass = count >= 4 ? 'layout-4'
+                    : count === 3 ? 'layout-3'
+                    : count === 2 ? 'layout-2'
+                    : 'layout-featured';
+
+  const cells = groupItems.slice(0, 4).map((item, i) =>
+    renderCollageCell(item, i === 0 && count >= 3)
+  ).join('');
+
+  return `
+  <div class="room-spread">
+    <div class="room-spread-header">
+      <div class="room-name"><em>${esc(group.name)}</em></div>
+      <div class="room-item-count">${count} selection${count !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="room-collage ${layoutClass}">
+      ${cells}
+    </div>
+  </div>`;
+}
+
+// ── Main render ───────────────────────────────────────
+async function renderBook() {
+  // Refresh session for latest data
+  try {
+    const fresh = await AUTH.refreshSession(p.id);
+    if (fresh) p = fresh;
+  } catch(e) {}
+
+  const clientKey = p.selectionsClientKey || p.id;
+  const { answers, saved, rooms } = await loadSelections(clientKey);
+  const items = parseSelections(answers, saved, rooms);
+
+  const el = document.getElementById('book-content');
+
+  if (!items.length) {
+    el.innerHTML = `
+    <div class="empty-book">
+      <div class="empty-book-title">No selections completed yet</div>
+      <div class="empty-book-sub">Complete your selections in the Selections section of your portal.<br>Your Design Book will populate as each section is finished.</div>
+    </div>`;
+    fadeOut();
+    return;
+  }
+
+  const date = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+
+  let html = `
+  <!-- COVER -->
+  <div class="cover-page">
+    <div class="cover-ornament"><span class="cover-ornament-text">Six Arrows</span></div>
+    <div class="cover-eyebrow">Custom Home Build · Design Selections Package</div>
+    <div class="cover-title">${esc(p.clientName || p.projectName)}<br><em>Design Book</em></div>
+    <div class="cover-subtitle">${esc(p.projectName || 'Custom Home')}</div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta">
+      <div class="cover-meta-item"><label>Location</label><span>${esc(p.location || '—')}</span></div>
+      <div class="cover-meta-item"><label>Prepared</label><span>${date}</span></div>
+      <div class="cover-meta-item"><label>Selections</label><span>${items.length} Items</span></div>
+    </div>
+    <div class="cover-sa">Six Arrows Construction · Bowling Green, KY</div>
+  </div>
+
+  <!-- PART 1: Room Spreads -->
+  <div class="section-divider">
+    <div class="section-divider-line"></div>
+    <div class="section-divider-label">Part One · Room by Room</div>
+    <div class="section-divider-line"></div>
+  </div>`;
+
+  // Room collage spreads
+  ROOM_GROUPS.forEach(group => {
+    html += renderRoomSpread(group, items);
+  });
+
+  // Part 2: Full catalog
+  html += `
+  <div class="section-divider">
+    <div class="section-divider-line"></div>
+    <div class="section-divider-label">Part Two · Complete Selections Catalog</div>
+    <div class="section-divider-line"></div>
+  </div>`;
+
+  // Group by category for the catalog
+  const ALL_CATS = ['countertops','flooring','appliances','plumbing','tile','lighting','hardware','doors','specialty_trim','exterior_finishes','fireplace','paint'];
+  let catNum = 0;
+  ALL_CATS.forEach(catId => {
+    const catItems = items.filter(i => i.cat === catId);
+    if (!catItems.length) return;
+    catNum++;
+    html += `
+    <div class="cat-header">
+      <div class="cat-header-num">0${catNum}</div>
+      <div class="cat-header-info">
+        <div class="cat-header-name">${esc(CAT_LABELS[catId] || catId)}</div>
+        <div class="cat-header-count">${catItems.length} selection${catItems.length !== 1 ? 's' : ''}</div>
+      </div>
+    </div>
+    <div class="catalog-grid">
+      ${catItems.map((item, i) => renderCatalogCard(item, i + 1)).join('')}
+    </div>`;
+  });
+
+  el.innerHTML = html;
+  fadeOut();
+}
+
+function fadeOut() {
+  const loading = document.getElementById('loading-screen');
+  loading.classList.add('fade-out');
+  setTimeout(() => loading.remove(), 700);
+}
+
+renderBook();
+</script>
+</body>
+</html>
