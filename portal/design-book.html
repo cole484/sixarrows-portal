@@ -347,15 +347,15 @@ const ROOM_GROUPS = [
   {
     id: 'primary_bath',
     name: 'Primary Bath',
-    subtitle: 'Tile, Fixtures & Finishes',
-    cats: ['tile','plumbing','lighting'],
+    subtitle: 'Countertops, Tile, Fixtures & Finishes',
+    cats: ['countertops','tile','plumbing','lighting'],
     roomFilter: r => /master|primary|main/i.test(r),
   },
   {
     id: 'baths',
     name: 'Additional Baths',
-    subtitle: 'Tile, Fixtures & Finishes',
-    cats: ['tile','plumbing','lighting'],
+    subtitle: 'Countertops, Tile, Fixtures & Finishes',
+    cats: ['countertops','tile','plumbing','lighting'],
     roomFilter: r => /bath|powder|guest/i.test(r) && !/master|primary|main/i.test(r),
   },
   {
@@ -676,7 +676,10 @@ function renderCatalogCard(item, num) {
 
 // ── Render room collage spread ────────────────────────
 function renderRoomSpread(group, items) {
-  const groupItems = items.filter(item => group.cats.includes(item.cat));
+  const groupItems = items.filter(item =>
+    group.cats.includes(item.cat) &&
+    (!group.roomFilter || group.roomFilter(item.room || ''))
+  );
   if (!groupItems.length) return '';
 
   const count = groupItems.length;
