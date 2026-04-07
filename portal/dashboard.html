@@ -780,20 +780,45 @@ if (isConstruction) {
   const allPhotos = [...basePhotos, ...adminPhotos].reverse();
   const grid = document.getElementById('photos-preview-grid');
   const lbl  = document.getElementById('photo-count-lbl');
-  if (grid) {
-    if (allPhotos.length === 0) {
+
+  function renderPhotoGrid(photos) {
+    if (!grid) return;
+    if (photos.length === 0) {
       grid.innerHTML = `<div style="font-size:12px;color:var(--charcoal-4);grid-column:span 3;padding:4px 0;line-height:1.5">Photos will appear here as the build progresses.</div>`;
     } else {
-      grid.innerHTML = allPhotos.slice(0,6).map(ph => {
+      grid.innerHTML = photos.slice(0,6).map(ph => {
         const m1 = (ph.url||'').match(/\/file\/d\/([^\/\?&]+)/);
-        const m2 = (ph.url||'').match(/[?&]id=([^\/\?&]+)/);
-        const fileId = m1 ? m1[1] : m2 ? m2[1] : null;
-        const imgUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w400` : ph.url;
+        const fileId = m1 ? m1[1] : (ph.id && ph.id.startsWith('drive_') ? ph.id.replace('drive_','') : null);
+        const imgUrl = ph.thumbUrl || (fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w400` : ph.url);
         return `<div style="aspect-ratio:1;border-radius:5px;overflow:hidden;background:var(--cream-2)"><img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'"></div>`;
       }).join('');
     }
+    if (lbl) lbl.textContent = photos.length > 0 ? `${photos.length} photo${photos.length!==1?'s':''}` : '';
   }
-  if (lbl) lbl.textContent = allPhotos.length > 0 ? `${allPhotos.length} photo${allPhotos.length!==1?'s':''}` : '';
+
+  // Render immediately with individually-uploaded photos
+  renderPhotoGrid(allPhotos);
+
+  // Then load Drive folder photos async and merge
+  const folders = Array.isArray(p.photoFolders) ? p.photoFolders : [];
+  if (folders.length > 0) {
+    fetch('/.netlify/functions/drive-photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folders }),
+    }).then(r => r.ok ? r.json() : null).then(data => {
+      if (!data) return;
+      const drivePhotos = [];
+      for (const folder of (data.folders || [])) {
+        for (const file of (folder.files || [])) {
+          drivePhotos.push({ id: 'drive_'+file.id, url: file.thumbUrl || `https://drive.google.com/thumbnail?id=${file.id}&sz=w400`, thumbUrl: file.thumbUrl, phase: folder.label, date: file.date });
+        }
+      }
+      if (drivePhotos.length > 0) {
+        renderPhotoGrid([...drivePhotos, ...allPhotos]);
+      }
+    }).catch(() => {});
+  }
 }
 
 // ── Countdown timer ─────────────────────────────────

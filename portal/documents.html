@@ -283,16 +283,11 @@ function loadPhotos() {
 // Load Drive folder photos async and merge into the photo grid
 async function loadFolderPhotos() {
   // Photo folders come from Supabase via p.photoFolders
-  // p may have been updated by refreshSession — always read current p
   const folders = Array.isArray(p.photoFolders) ? p.photoFolders : [];
-  if (!folders.length) {
-    console.log('loadFolderPhotos: no folders configured for this client');
-    return;
-  }
-  console.log('loadFolderPhotos: loading', folders.length, 'folder(s)');
+  console.log('loadFolderPhotos called — p.photoFolders:', JSON.stringify(p.photoFolders), '| folders:', folders.length);
+  if (!folders.length) return;
 
   try {
-    // Send folder data as JSON in the request body to avoid URL encoding issues
     const res = await fetch('/.netlify/functions/drive-photos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -300,11 +295,11 @@ async function loadFolderPhotos() {
     });
     if (!res.ok) {
       const err = await res.text();
-      console.error('drive-photos error:', res.status, err);
+      console.error('drive-photos function error:', res.status, err);
       return;
     }
     const data = await res.json();
-    console.log('drive-photos response:', data);
+    console.log('drive-photos response:', JSON.stringify(data));
 
     const drivePhotos = [];
     for (const folder of (data.folders || [])) {
