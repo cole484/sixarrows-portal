@@ -256,6 +256,7 @@ async function loadAllClientsFromSupabase() {
         showReviewCard:      !!client.show_review_card,
         projectType:         client.project_type || 'new_build',
         notionTimelineDbId:  client.notion_timeline_db_id || null,
+        photoFolders:        Array.isArray(client.photo_folders) ? client.photo_folders : [],
         budgetCategories:    budgetCats,
         updates:             updates.length ? updates : (existing.updates || []),
         timeline:            timeline.length ? timeline : (existing.timeline || []),
@@ -1821,9 +1822,8 @@ function renderPhotosView(p) {
   const allPhotos = [...basePhotos, ...adminPhotos];
 
   // Load saved photo folders from localStorage
-  const FOLDER_KEY = `sa_photo_folders_${p.id}`;
-  let folders = [];
-  try { folders = JSON.parse(localStorage.getItem(FOLDER_KEY)||'[]'); } catch(e) {}
+  // Photo folders come from Supabase via p.photoFolders (loaded in _normalize)
+  const folders = Array.isArray(p.photoFolders) ? p.photoFolders : [];
 
   const PHASES = [
     {id:'pre',label:'Pre-Construction'},{id:'sitework',label:'Sitework'},
@@ -1913,7 +1913,7 @@ function renderPhotosView(p) {
             <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:3px 5px">
               <div style="font-size:9px;color:white">${ph.caption||ph.name||''}</div>
             </div>
-            ${isAdmin ? `<button onclick="removeAdminPhoto('${p.id}',${i-basePhotos.length})" style="position:absolute;top:3px;right:3px;background:rgba(184,50,50,.85);border:none;border-radius:50%;width:18px;height:18px;color:white;cursor:pointer;font-size:11px">×</button>` : ''}
+            ${isAdmin ? `<button onclick="removeAdminPhoto('${p.id}','${ph.id}')" style="position:absolute;top:3px;right:3px;background:rgba(184,50,50,.85);border:none;border-radius:50%;width:18px;height:18px;color:white;cursor:pointer;font-size:11px">×</button>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -1921,7 +1921,7 @@ function renderPhotosView(p) {
   `;
 }
 
-function addPhotoFolder(projectId) {
+async function addPhotoFolder(projectId) {
   const url      = document.getElementById('pf-url')?.value.trim();
   const custom   = document.getElementById('pf-custom')?.value.trim();
   const selected = document.getElementById('pf-label')?.value;
@@ -1931,25 +1931,42 @@ function addPhotoFolder(projectId) {
   if (!url) { if(msgEl){msgEl.className='adm-msg error';msgEl.textContent='Folder URL required';} return; }
   if (!url.includes('drive.google.com')) { if(msgEl){msgEl.className='adm-msg error';msgEl.textContent='Must be a Google Drive URL';} return; }
 
-  const FOLDER_KEY = 'sa_photo_folders_' + projectId;
-  let folders = [];
-  try { folders = JSON.parse(localStorage.getItem(FOLDER_KEY)||'[]'); } catch(e) {}
-
+  const p = PROJECTS[projectId];
+  const folders = Array.isArray(p.photoFolders) ? [...p.photoFolders] : [];
   folders.push({ label, url });
-  localStorage.setItem(FOLDER_KEY, JSON.stringify(folders));
-
-  if (document.getElementById('pf-url')) document.getElementById('pf-url').value = '';
-  if (document.getElementById('pf-custom')) document.getElementById('pf-custom').value = '';
-  if (msgEl) { msgEl.className='adm-msg success'; msgEl.textContent='Folder added'; }
-  setTimeout(() => renderAdmin(), 400);
+  p.photoFolders = folders;
+  // Save to Supabase
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+  await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
+    method: 'POST', headers: sbH,
+    body: JSON.stringify({ id: projectId, photo_folders: folders }),
+  }).then(res => {
+    if (res.ok) {
+      if (document.getElementById('pf-url')) document.getElementById('pf-url').value = '';
+      if (document.getElementById('pf-custom')) document.getElementById('pf-custom').value = '';
+      if (msgEl) { msgEl.className='adm-msg success'; msgEl.textContent='Folder saved'; }
+      // Update session cache
+      try {
+        const raw = localStorage.getItem('sa_session_v3');
+        if (raw) { const s = JSON.parse(raw); if (s.data && s.data.id === projectId) { s.data.photoFolders = folders; s.ts = 0; localStorage.setItem('sa_session_v3', JSON.stringify(s)); } }
+      } catch(e) {}
+      setTimeout(() => renderAdmin(), 400);
+    } else {
+      if (msgEl) { msgEl.className='adm-msg error'; msgEl.textContent='Save failed'; }
+    }
+  }).catch(e => { if (msgEl) { msgEl.className='adm-msg error'; msgEl.textContent='Error: ' + e.message; } });
 }
 
-function removePhotoFolder(projectId, idx) {
-  const FOLDER_KEY = 'sa_photo_folders_' + projectId;
-  let folders = [];
-  try { folders = JSON.parse(localStorage.getItem(FOLDER_KEY)||'[]'); } catch(e) {}
-  folders.splice(idx, 1);
-  localStorage.setItem(FOLDER_KEY, JSON.stringify(folders));
+async function removePhotoFolder(projectId, idx) {
+  const p = PROJECTS[projectId];
+  const updatedFolders = Array.isArray(p.photoFolders) ? [...p.photoFolders] : [];
+  updatedFolders.splice(idx, 1);
+  p.photoFolders = updatedFolders;
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+  await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
+    method: 'POST', headers: sbH,
+    body: JSON.stringify({ id: projectId, photo_folders: updatedFolders }),
+  }).catch(e => console.error('removePhotoFolder save error:', e));
   renderAdmin();
 }
 
@@ -2000,13 +2017,20 @@ async function addAdminPhoto(projectId) {
     console.error('addAdminPhoto exception:', e);
   }
 }
-function removeAdminPhoto(projectId, idx) {
-  const PHOTO_KEY = `sa_photos_${projectId}`;
-  let photos = [];
-  try { photos = JSON.parse(localStorage.getItem(PHOTO_KEY)||'[]'); } catch(e) {}
-  photos.splice(idx, 1);
-  localStorage.setItem(PHOTO_KEY, JSON.stringify(photos));
-  renderAdmin();
+async function removeAdminPhoto(projectId, docId) {
+  if (!docId) { console.error('removeAdminPhoto: no docId'); return; }
+  if (!confirm('Remove this photo?')) return;
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON };
+  try {
+    await fetch(SUPABASE_DIRECT_URL + '/rest/v1/documents?id=eq.' + docId + '&client_id=eq.' + projectId, {
+      method: 'DELETE', headers: sbH,
+    });
+    // Remove from in-memory PROJECTS
+    if (PROJECTS[projectId]?.documents) {
+      PROJECTS[projectId].documents = PROJECTS[projectId].documents.filter(d => String(d.id) !== String(docId));
+    }
+    renderAdmin();
+  } catch(e) { console.error('removeAdminPhoto error:', e); }
 }
 
 // ════════════════════════════════════════════════════════

@@ -282,9 +282,8 @@ function loadPhotos() {
 
 // Load Drive folder photos async and merge into the photo grid
 async function loadFolderPhotos() {
-  const FOLDER_KEY = `sa_photo_folders_${p.id}`;
-  let folders = [];
-  try { folders = JSON.parse(localStorage.getItem(FOLDER_KEY) || '[]'); } catch(e) {}
+  // Photo folders come from Supabase via p.photoFolders (normalized in data.js)
+  const folders = Array.isArray(p.photoFolders) ? p.photoFolders : [];
   if (!folders.length) return;
 
   // Build the folders query string: "URL:Label,URL:Label"
