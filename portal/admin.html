@@ -1904,7 +1904,7 @@ function renderPhotosView(p) {
       </div>
       <div class="adm-field">
         <label>Google Drive folder URL</label>
-        <input class="adm-inp" id="pf-url" type="url" placeholder="https://drive.google.com/drive/folders/...">
+        <input class="adm-inp" id="pf-url" type="text" placeholder="https://drive.google.com/drive/folders/...">
       </div>
       <div style="display:flex;align-items:center;gap:10px">
         <button class="adm-btn adm-btn-green" onclick="addPhotoFolder('${p.id}')">Add Folder</button>
@@ -1931,6 +1931,7 @@ function renderPhotosView(p) {
 
 
 async function addPhotoFolder(projectId) {
+  console.log('addPhotoFolder called for:', projectId);
   const urlVal   = document.getElementById('pf-url')?.value.trim();
   const custom   = document.getElementById('pf-custom')?.value.trim();
   const selected = document.getElementById('pf-label')?.value;
