@@ -1003,16 +1003,11 @@ function renderBudgetView(p) {
       <div style="padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px;font-size:12px;color:var(--charcoal-4)">
         Set a Budget Google Sheet URL in Project Info to enable one-click category import.
       </div>` : p.links?.budget && p.links.budget !== '#' ? `
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px">
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:600;color:var(--charcoal);margin-bottom:2px">Import from Budget Sheet</div>
-          <div style="font-size:11px;color:var(--charcoal-4)">Reads the Budget tab — detects main categories by status column. Replaces existing categories.</div>
-        </div>
-        <button class="adm-btn adm-btn-green" onclick="syncSABCategoriesFromSheet('${p.id}')">Sync from Budget Sheet</button>
-        <span id="bcat-sync-msg" class="adm-msg success" style="margin:0;min-width:120px"></span>
+      <div style="padding:10px 12px;background:var(--green-pale);border-left:3px solid var(--green);border-radius:var(--r-md);margin-bottom:12px;font-size:12px;color:var(--charcoal-3)">
+        <strong style="color:var(--charcoal)">Auto-reading from Budget Sheet.</strong> Categories and statuses load directly from column Z tags in your Google Sheet — no sync needed. Just add the column Z tags to your Budget tab and the portal reads them automatically.
       </div>` : `
       <div style="padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px;font-size:12px;color:var(--charcoal-4)">
-        Set a Budget Google Sheet URL in Project Info to enable one-click category import from the Budget tab.
+        Set a Budget Google Sheet URL in Project Info. Once set, the portal reads categories directly from column Z tags in the Budget tab.
       </div>`}
       ${(p.budgetCategories||[]).map((cat, ci) => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">

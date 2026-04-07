@@ -124,10 +124,23 @@ async function initBudget() {
   const isSAB     = p.statusType === 'sab';
   const isRemodel = p.projectType === 'remodel';
   const hasSheet  = p.links?.budget && p.links.budget !== '#';
-  const hasCats   = (p.budgetCategories || []).length > 0;
 
-  // ── Auto-import categories for remodel clients on first load ──────────────
-  // If remodel + sheet URL set + no categories yet → auto-sync silently
+  // ── SAB new build: auto-fetch from Budget tab (column Z tagged) ──────────
+  // Sheet is source of truth — no Supabase sync needed
+  let sabSheetData = null;
+  if (isSAB && !isRemodel && hasSheet) {
+    try {
+      const res = await fetch(
+        `/.netlify/functions/sheet-sab-budget-sync?sheetUrl=${encodeURIComponent(p.links.budget)}`
+      );
+      if (res.ok) sabSheetData = await res.json();
+    } catch(e) {
+      console.log('SAB budget sheet unavailable:', e.message);
+    }
+  }
+
+  // ── Remodel SAB: auto-import categories from column Z Budget tab ──────────
+  const hasCats = (p.budgetCategories || []).length > 0;
   if (isSAB && isRemodel && hasSheet && !hasCats) {
     try {
       const importRes = await fetch(
@@ -136,7 +149,6 @@ async function initBudget() {
       if (importRes.ok) {
         const importData = await importRes.json();
         if (importData.synced > 0) {
-          // Refresh session to pick up the new categories
           const fresh = await AUTH.refreshSession(p.id);
           if (fresh) p = fresh;
         }
@@ -146,8 +158,8 @@ async function initBudget() {
     }
   }
 
-  // ── Sync statuses from Google Sheet on every load ─────────────────────────
-  if (isSAB && hasSheet) {
+  // ── Sync remodel statuses from Google Sheet on every load ─────────────────
+  if (isSAB && isRemodel && hasSheet) {
     try {
       const syncRes = await fetch(
         `/.netlify/functions/sheet-budget-sync?clientId=${p.id}&sheetUrl=${encodeURIComponent(p.links.budget)}`
@@ -165,7 +177,10 @@ async function initBudget() {
   }
 
   // ── Budget categories ──
-  const cats = p.budgetCategories || [];
+  // For SAB new builds: use live sheet data if available, fall back to Supabase
+  const cats = (isSAB && !isRemodel && sabSheetData?.mainCategories?.length)
+    ? sabSheetData.mainCategories
+    : (p.budgetCategories || []);
 
   if (isSAB) {
   // ── SAB MODE — no dollar amounts, show category completion status ──
@@ -179,10 +194,14 @@ async function initBudget() {
   const budgetLink = p.links?.budget || '';
 
   function sabStatus(status) {
-    if (status === 'complete') return { cls:'confirmed', label:'Numbers confirmed', dotCls:'confirmed' };
-    if (status === 'active')   return { cls:'progress',  label:'In progress',       dotCls:'progress' };
-    return                            { cls:'pending',   label:'Not started',       dotCls:'pending' };
+    if (status === 'complete' || status === 'confirmed')    return { cls:'confirmed', label:'Confirmed',       dotCls:'confirmed' };
+    if (status === 'active'   || status === 'in progress') return { cls:'progress',  label:'In Progress',     dotCls:'progress' };
+    return                                                        { cls:'pending',   label:'Need Estimate',   dotCls:'pending' };
   }
+
+  // Use sheet data totals if available, otherwise fall back to Supabase
+  const totalFromSheet = sabSheetData?.totalCost || 0;
+  const forecastTotal  = sabSheetData?.forecastTotal || 0;
 
   mountLayout('budget', 'Budget', `
     <div class="page-eyebrow">Financials</div>
@@ -194,9 +213,12 @@ async function initBudget() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div>
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin-bottom:2px">Budget Completion</div>
-          <div style="font-size:13px;color:var(--charcoal-3)">${confirmed} of ${total} categories have confirmed numbers</div>
+          <div style="font-size:13px;color:var(--charcoal-3)">${confirmed} of ${total} categories confirmed</div>
         </div>
-        <div style="font-size:32px;font-weight:700;color:var(--charcoal);line-height:1">${pct}%</div>
+        <div style="text-align:right">
+          <div style="font-size:32px;font-weight:700;color:var(--charcoal);line-height:1">${pct}%</div>
+          ${totalFromSheet > 0 ? '<div style="font-size:11px;color:var(--charcoal-4);margin-top:2px">' + currency(totalFromSheet) + ' estimated</div>' : ''}
+        </div>
       </div>
       <div class="health-bar-wrap">
         <div class="health-bar-fill good" style="width:${pct}%"></div>
@@ -212,7 +234,7 @@ async function initBudget() {
         </div>
         <div style="display:flex;align-items:center;gap:5px">
           <div class="status-dot pending"></div>
-          <span style="font-size:11px;color:var(--charcoal-3)">${pending} not started</span>
+          <span style="font-size:11px;color:var(--charcoal-3)">${pending} need estimate</span>
         </div>
       </div>
     </div>
@@ -246,6 +268,7 @@ async function initBudget() {
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <span class="sab-cat-status ${s.cls}">${s.label}</span>
+              ${cat.cost > 0 ? `<span style="font-size:12px;font-weight:600;color:var(--charcoal)">${currency(cat.cost)}</span>` : ''}
               ${hasSubs ? `<svg id="sab-chev-${ci}" style="width:12px;height:12px;color:var(--charcoal-4);transition:transform .2s;flex-shrink:0" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5l4 3.5-4 3.5"/></svg>` : ''}
             </div>
           </div>
