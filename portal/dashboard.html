@@ -238,6 +238,22 @@ async function initDashboard() {
     if (fresh) p = fresh;
   } catch(e) {}
 
+// ── SAB new build: fetch budget categories from Google Sheet (same as budget page) ──
+let sabSheetData = null;
+const isSABEarly  = p.statusType === 'sab';
+const isRemodelEarly = p.projectType === 'remodel';
+const hasSheetEarly  = p.links?.budget && p.links.budget !== '#';
+if (isSABEarly && !isRemodelEarly && hasSheetEarly) {
+  try {
+    const res = await fetch(
+      `/.netlify/functions/sheet-sab-budget-sync?sheetUrl=${encodeURIComponent(p.links.budget)}`
+    );
+    if (res.ok) sabSheetData = await res.json();
+  } catch(e) {
+    console.log('SAB budget sheet unavailable:', e.message);
+  }
+}
+
 // ── Load tracker state (Notion first, localStorage fallback) ─────
 let TS = {};
 try { const r = localStorage.getItem('sa_tracker_v3_' + p.id); if (r) TS = JSON.parse(r); } catch(e) {}
@@ -382,10 +398,12 @@ function sabLayout() {
     }
   }
 
-  // ── Budget completion (locked categories = finalized) ──
-  const budCats     = p.budgetCategories || [];
-  const budTotal    = budCats.filter(c => c.status !== 'reserved').length;
-  const budLocked   = budCats.filter(c => c.status === 'locked').length;
+  // ── Budget completion (same source as budget page) ──
+  const budCats     = (isSAB && !isRemodel && sabSheetData?.mainCategories?.length)
+    ? sabSheetData.mainCategories
+    : (p.budgetCategories || []);
+  const budTotal    = budCats.length;
+  const budLocked   = budCats.filter(c => c.status === 'complete' || c.status === 'confirmed').length;
   const budPctComp  = budTotal ? Math.round(budLocked / budTotal * 100) : 0;
 
   // ── Owner label for active step ──────────────────
