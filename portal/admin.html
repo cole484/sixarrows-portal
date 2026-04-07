@@ -628,32 +628,36 @@ function saveGbDate(projectId) {
   const TS = getTrackerState(p);
   TS['groundbreakingDate'] = val;
   setTrackerState(p, TS);
-  // Update localStorage session so client portal countdown picks it up immediately
+  // Update localStorage session so client portal picks it up immediately
   try {
     const raw = localStorage.getItem('sa_session_v3');
     if (raw) {
       const s = JSON.parse(raw);
       if (s.data && s.data.id === projectId) {
         s.data.groundbreakingDate = val;
-        s.ts = 0; // force Supabase re-fetch on next dashboard load
+        s.ts = 0; // force re-fetch on next dashboard load
         localStorage.setItem('sa_session_v3', JSON.stringify(s));
       }
     }
   } catch(e) {}
-  // Persist to Supabase
-  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-  fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients?id=eq.' + projectId, {
-    method: 'PATCH',
+  // Upsert to Supabase — works even if client row was never explicitly created there
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+  fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
+    method: 'POST',
     headers: sbH,
-    body: JSON.stringify({ groundbreaking_date: val }),
+    body: JSON.stringify({ id: projectId, groundbreaking_date: val }),
   }).then(async res => {
     if (res.ok) {
-      showMsg('gb-date-msg', 'success', 'Saved ✓');
+      showMsg('gb-date-msg', 'success', 'Saved \u2713');
     } else {
-      console.error('saveGbDate PATCH failed:', res.status, await res.text());
-      showMsg('gb-date-msg', 'success', 'Saved locally ✓');
+      const err = await res.text();
+      console.error('saveGbDate upsert failed:', res.status, err);
+      showMsg('gb-date-msg', 'error', 'Save failed (' + res.status + ') — check console');
     }
-  }).catch(() => showMsg('gb-date-msg', 'success', 'Saved locally ✓'));
+  }).catch(err => {
+    console.error('saveGbDate network error:', err);
+    showMsg('gb-date-msg', 'error', 'Network error');
+  });
 }
 function toggleStepDone(pi, si, projectId) {
   const p    = PROJECTS[projectId];
@@ -1443,27 +1447,39 @@ function saveProjectInfo(projectId) {
       }
     }
   } catch(e) {}
-  // Push to Supabase
-  // Push to Supabase directly
-  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
-    method: 'PATCH',
+  // Push to Supabase directly — use upsert so it works even if row doesn't exist yet
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+  const supabasePayload = {
+    id: projectId,
+    client_name: p.clientName, project_name: p.projectName, location: p.location,
+    status_type: p.statusType, phase_label: p.phaseLabel, construction_pct: p.constructionPct,
+    timeline_start: p.timelineStart, timeline_target: p.timelineTarget,
+    notion_tracker_page_id: p.notionTrackerPageId,
+    notion_timeline_db_id: p.notionTimelineDbId || null,
+    budget_link: budgetLink,
+    team_lead: cxName, team_phone: cxPhone, team_email: cxEmail,
+    cx_name: cxName, cx_phone: cxPhone, cx_email: cxEmail,
+    pm_name: pmName, pm_phone: pmPhone, pm_email: pmEmail,
+    groundbreaking_date: p.groundbreakingDate || null,
+    show_review_card: !!p.showReviewCard,
+    review_left: !!p.reviewLeft,
+    email: p.email || '',
+    password: p.password || '',
+  };
+  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients`, {
+    method: 'POST',
     headers: sbH,
-    body: JSON.stringify({
-      client_name: p.clientName, project_name: p.projectName, location: p.location,
-      status_type: p.statusType, phase_label: p.phaseLabel, construction_pct: p.constructionPct,
-      timeline_start: p.timelineStart, timeline_target: p.timelineTarget,
-      notion_tracker_page_id: p.notionTrackerPageId,
-      notion_timeline_db_id: p.notionTimelineDbId || null,
-      budget_link: budgetLink,
-      team_lead: cxName, team_phone: cxPhone, team_email: cxEmail,
-      cx_name: cxName, cx_phone: cxPhone, cx_email: cxEmail,
-      pm_name: pmName, pm_phone: pmPhone, pm_email: pmEmail,
-      groundbreaking_date: p.groundbreakingDate || null,
-      show_review_card: !!p.showReviewCard,
-      review_left: !!p.reviewLeft,
-    }),
-  }).catch(() => {});
+    body: JSON.stringify(supabasePayload),
+  }).then(async res => {
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('saveProjectInfo upsert failed:', res.status, err);
+      showMsg('pi-msg', 'error', `Save failed (${res.status}) — check console`);
+    }
+  }).catch(err => {
+    console.error('saveProjectInfo network error:', err);
+    showMsg('pi-msg', 'error', 'Network error — could not reach Supabase');
+  });
   showMsg('pi-msg','success','Saved ✓');
 }
 
