@@ -1815,14 +1815,11 @@ async function removeAdminDoc(projectId, docId) {
 }
 
 function renderPhotosView(p) {
-  const PHOTO_KEY = `sa_photos_${p.id}`;
+  const PHOTO_KEY = 'sa_photos_' + p.id;
   const basePhotos = (p.documents||[]).filter(d=>d.category==='photos');
   let adminPhotos = [];
   try { adminPhotos = JSON.parse(localStorage.getItem(PHOTO_KEY)||'[]'); } catch(e) {}
   const allPhotos = [...basePhotos, ...adminPhotos];
-
-  // Load saved photo folders from localStorage
-  // Photo folders come from Supabase via p.photoFolders (loaded in _normalize)
   const folders = Array.isArray(p.photoFolders) ? p.photoFolders : [];
 
   const PHASES = [
@@ -1832,6 +1829,54 @@ function renderPhotosView(p) {
     {id:'finishes',label:'Interior Finishes'},{id:'exterior',label:'Exterior Finishes'},
     {id:'completion',label:'Completion'},{id:'other',label:'Other'},
   ];
+
+  // Build folder list HTML without nested backticks
+  let folderListHtml = '';
+  if (folders.length === 0) {
+    folderListHtml = '<div style="font-size:12px;color:var(--charcoal-4);margin-bottom:12px;font-style:italic">No folders added yet.</div>';
+  } else {
+    folders.forEach(function(f, i) {
+      folderListHtml += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border)">'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:12px;font-weight:600;color:var(--charcoal)">' + (f.label||'') + '</div>'
+        + '<div style="font-size:10px;color:var(--charcoal-4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (f.url||'') + '</div>'
+        + '</div>'
+        + '<button class="adm-btn" style="padding:4px 8px;font-size:11px;flex-shrink:0;color:var(--danger)" onclick="removePhotoFolder(\'' + p.id + '\',' + i + ')">Remove</button>'
+        + '</div>';
+    });
+  }
+
+  // Build phase options without nested backticks
+  const phaseOptions = PHASES.map(function(ph) {
+    return '<option value="' + ph.label + '">' + ph.label + '</option>';
+  }).join('');
+
+  // Build photo grid without nested backticks
+  let photoGridHtml = '';
+  if (allPhotos.length > 0) {
+    let photoItems = '';
+    allPhotos.forEach(function(ph) {
+      const m1 = (ph.url||'').match(/\/file\/d\/([^\/\?&]+)/);
+      const fileId = m1 ? m1[1] : null;
+      const imgUrl = fileId ? 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400' : (ph.url||'');
+      const removeBtn = ph.id
+        ? '<button onclick="removeAdminPhoto(\'' + p.id + '\',\'' + ph.id + '\')" style="position:absolute;top:3px;right:3px;background:rgba(184,50,50,.85);border:none;border-radius:50%;width:20px;height:20px;color:white;cursor:pointer;font-size:13px;line-height:20px;text-align:center">×</button>'
+        : '';
+      photoItems += '<div style="position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/3;background:var(--cream-2);border:0.5px solid var(--border)">'
+        + '<img src="' + imgUrl + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'">'
+        + '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:3px 5px">'
+        + '<div style="font-size:9px;color:white">' + (ph.caption||ph.name||'') + '</div>'
+        + '<div style="font-size:8px;color:rgba(255,255,255,.5)">' + (ph.date||'') + '</div>'
+        + '</div>'
+        + removeBtn
+        + '</div>';
+    });
+    photoGridHtml = '<div class="card" style="margin-bottom:1rem">'
+      + '<div class="sh"><div class="sh-title">Individually Added Photos (' + allPhotos.length + ')</div></div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">'
+      + photoItems
+      + '</div></div>';
+  }
 
   return `
     <!-- Photo Folders (primary method) -->
@@ -1846,31 +1891,13 @@ function renderPhotosView(p) {
       <div style="font-size:11px;color:var(--charcoal-4);background:var(--cream-pale);padding:8px 10px;border-radius:6px;margin-bottom:12px">
         <strong>Requirements:</strong> Drive API must be enabled in Google Cloud Console. Each folder must be set to "Anyone with the link".
       </div>
-
-      <!-- Existing folders -->
-      <div id="folder-list">
-        ${folders.length === 0
-          ? '<div style="font-size:12px;color:var(--charcoal-4);margin-bottom:12px;font-style:italic">No folders added yet.</div>'
-          : folders.map((f, i) => `
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border)">
-              <div style="flex:1;min-width:0">
-                <div style="font-size:12px;font-weight:600;color:var(--charcoal)">${f.label}</div>
-                <div style="font-size:10px;color:var(--charcoal-4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.url}</div>
-              </div>
-              <button class="adm-btn" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="removePhotoFolder('${p.id}',${i})">Remove</button>
-            </div>`).join('')
-        }
-      </div>
-
-      <!-- Add new folder -->
+      <div id="folder-list">${folderListHtml}</div>
       <div class="adm-grid2" style="margin-top:12px">
         <div class="adm-field">
           <label>Phase label</label>
-          <select class="adm-inp adm-sel" id="pf-label">
-            ${PHASES.map(ph => `<option value="${ph.label}">${ph.label}</option>`).join('')}
-          </select>
+          <select class="adm-inp adm-sel" id="pf-label">${phaseOptions}</select>
         </div>
-        <div class="adm-field" style="grid-column:span 1">
+        <div class="adm-field">
           <label>Custom label (optional override)</label>
           <input class="adm-inp" id="pf-custom" type="text" placeholder="e.g. Foundation Week 1">
         </div>
@@ -1885,12 +1912,12 @@ function renderPhotosView(p) {
       </div>
     </div>
 
-    <!-- Individual photo upload (secondary/fallback) -->
+    <!-- Individual photo upload (secondary) -->
     <div class="card" style="margin-bottom:1rem">
       <div class="sh"><div class="sh-title">Add Individual Photo</div><span style="font-size:10px;color:var(--charcoal-4)">Alternative to folder method</span></div>
       <div class="adm-grid2">
         <div class="adm-field"><label>Caption</label><input class="adm-inp" id="adm-ph-caption" type="text" placeholder="e.g. Framing complete east wall"></div>
-        <div class="adm-field"><label>Build Phase</label><select class="adm-inp adm-sel" id="adm-ph-phase">${PHASES.map(ph=>`<option value="${ph.id}">${ph.label}</option>`).join('')}</select></div>
+        <div class="adm-field"><label>Build Phase</label><select class="adm-inp adm-sel" id="adm-ph-phase">${phaseOptions}</select></div>
       </div>
       <div class="adm-field"><label>Google Drive Image URL (file link)</label><input class="adm-inp" id="adm-ph-url" type="text" placeholder="https://drive.google.com/file/d/..."></div>
       <div class="adm-field"><label>Date</label><input class="adm-inp" id="adm-ph-date" type="date" style="width:auto"></div>
@@ -1898,28 +1925,10 @@ function renderPhotosView(p) {
       <span id="adm-ph-msg" class="adm-msg success" style="margin-left:10px"></span>
     </div>
 
-    <!-- All individually-uploaded photos -->
-    ${allPhotos.length > 0 ? `
-    <div class="card">
-      <div class="sh"><div class="sh-title">Individually Added Photos (${allPhotos.length})</div></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">
-        ${allPhotos.map((ph,i)=>{
-          const m1 = (ph.url||'').match(/\/file\/d\/([^\/\?&]+)/);
-          const fileId = m1 ? m1[1] : null;
-          const imgUrl = fileId ? 'https://drive.google.com/thumbnail?id='+fileId+'&sz=w400' : ph.url;
-          return `<div style="position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/3;background:var(--cream-2);border:0.5px solid var(--border)">
-            <img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">
-            <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:3px 5px">
-              <div style="font-size:9px;color:white">${ph.caption||ph.name||'—'}</div>
-              <div style="font-size:8px;color:rgba(255,255,255,.5)">${ph.date||''}</div>
-            </div>
-            ${ph.id ? `<button onclick="removeAdminPhoto('${p.id}','${ph.id}')" style="position:absolute;top:3px;right:3px;background:rgba(184,50,50,.85);border:none;border-radius:50%;width:20px;height:20px;color:white;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center">×</button>` : ''}
-          </div>`;
-        }).join('')}
-      </div>
-    </div>` : ''}
+    ${photoGridHtml}
   `;
 }
+
 
 async function addPhotoFolder(projectId) {
   const urlVal   = document.getElementById('pf-url')?.value.trim();
