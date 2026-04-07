@@ -1954,14 +1954,14 @@ async function addPhotoFolder(projectId) {
     'apikey': SUPABASE_ANON,
     'Authorization': 'Bearer ' + SUPABASE_ANON,
     'Content-Type': 'application/json',
-    'Prefer': 'resolution=merge-duplicates,return=minimal',
+    'Prefer': 'return=minimal',
   };
 
   try {
-    const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
-      method: 'POST',
+    const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients?id=eq.' + projectId, {
+      method: 'PATCH',
       headers: sbH,
-      body: JSON.stringify({ id: projectId, photo_folders: folders }),
+      body: JSON.stringify({ photo_folders: folders }),
     });
     if (res.ok) {
       // Update in-memory project
@@ -1997,11 +1997,11 @@ async function removePhotoFolder(projectId, idx) {
   updatedFolders.splice(idx, 1);
   p.photoFolders = updatedFolders;
   if (PROJECTS[projectId]) PROJECTS[projectId].photoFolders = updatedFolders;
-  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
   try {
-    const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients', {
-      method: 'POST', headers: sbH,
-      body: JSON.stringify({ id: projectId, photo_folders: updatedFolders }),
+    const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients?id=eq.' + projectId, {
+      method: 'PATCH', headers: sbH,
+      body: JSON.stringify({ photo_folders: updatedFolders }),
     });
     if (!res.ok) console.error('removePhotoFolder error:', res.status, await res.text());
   } catch(e) { console.error('removePhotoFolder error:', e); }
