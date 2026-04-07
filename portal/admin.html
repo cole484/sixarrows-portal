@@ -621,17 +621,28 @@ function saveGbDate(projectId) {
   const val = document.getElementById('gb-date-inp')?.value;
   if (!val) return;
   adminSet(projectId, 'gbDate', val);
-  // Update in-memory project so other views see it immediately
-  const p  = PROJECTS[projectId];
-  p.groundbreakingDate = val;
-  if (PROJECTS[projectId]) PROJECTS[projectId].groundbreakingDate = val;
-  // Also write to tracker state so the portal countdown picks it up
+  // Update in-memory project
+  const p = PROJECTS[projectId];
+  if (p) p.groundbreakingDate = val;
+  // Update tracker state
   const TS = getTrackerState(p);
   TS['groundbreakingDate'] = val;
   setTrackerState(p, TS);
+  // Update localStorage session so client portal countdown picks it up immediately
+  try {
+    const raw = localStorage.getItem('sa_session_v3');
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s.data && s.data.id === projectId) {
+        s.data.groundbreakingDate = val;
+        s.ts = 0; // force Supabase re-fetch on next dashboard load
+        localStorage.setItem('sa_session_v3', JSON.stringify(s));
+      }
+    }
+  } catch(e) {}
   // Persist to Supabase
-  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-  fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients?id=eq.${projectId}`, {
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  fetch(SUPABASE_DIRECT_URL + '/rest/v1/clients?id=eq.' + projectId, {
     method: 'PATCH',
     headers: sbH,
     body: JSON.stringify({ groundbreaking_date: val }),
@@ -639,13 +650,11 @@ function saveGbDate(projectId) {
     if (res.ok) {
       showMsg('gb-date-msg', 'success', 'Saved ✓');
     } else {
-      const err = await res.text();
-      console.error('saveGbDate PATCH failed:', res.status, err);
+      console.error('saveGbDate PATCH failed:', res.status, await res.text());
       showMsg('gb-date-msg', 'success', 'Saved locally ✓');
     }
   }).catch(() => showMsg('gb-date-msg', 'success', 'Saved locally ✓'));
 }
-
 function toggleStepDone(pi, si, projectId) {
   const p    = PROJECTS[projectId];
   const TS   = getTrackerState(p);
@@ -1412,15 +1421,24 @@ function saveProjectInfo(projectId) {
   }
   // Persist to localStorage override
   adminSet(projectId, 'projectOverride', { clientName:p.clientName, projectName:p.projectName, location:p.location, statusType:p.statusType, phaseLabel:p.phaseLabel, constructionPct:p.constructionPct, timelineStart:p.timelineStart, timelineTarget:p.timelineTarget, budgetLink, notionTrackerPageId: p.notionTrackerPageId });
-  // Update the cached session so budget page sees the link immediately
+  // Update the cached session so all pages see changes immediately
   try {
     const raw = localStorage.getItem('sa_session_v3');
     if (raw) {
       const s = JSON.parse(raw);
       if (s.data && s.data.id === projectId) {
         if (!s.data.links) s.data.links = {};
-        s.data.links.budget = budgetLink;
-        s.data.notionTrackerPageId = p.notionTrackerPageId;
+        s.data.links.budget          = budgetLink;
+        s.data.notionTrackerPageId   = p.notionTrackerPageId;
+        s.data.notionTimelineDbId    = p.notionTimelineDbId;
+        s.data.groundbreakingDate    = p.groundbreakingDate || '';
+        s.data.timelineStart         = p.timelineStart;
+        s.data.timelineTarget        = p.timelineTarget;
+        s.data.statusType            = p.statusType;
+        s.data.phaseLabel            = p.phaseLabel;
+        s.data.constructionPct       = p.constructionPct || 0;
+        // Force re-fetch on next load so Supabase is source of truth
+        s.ts = 0;
         localStorage.setItem('sa_session_v3', JSON.stringify(s));
       }
     }
