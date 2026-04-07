@@ -1818,9 +1818,8 @@ async function addAdminPhoto(projectId) {
     ? new Date(dateVal+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
     : new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 
-  // Save to Supabase so all clients see it on their own devices
+  const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
   try {
-    const sbH = { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
     const res = await fetch(SUPABASE_DIRECT_URL + '/rest/v1/documents', {
       method: 'POST',
       headers: sbH,
@@ -1831,28 +1830,29 @@ async function addAdminPhoto(projectId) {
         category:  'photos',
         type:      'image',
         date:      dateLabel,
-        phase,
+        note:      phase || '',
       }),
     });
-    if (res.ok) {
-      showMsg('adm-ph-msg','success','Photo added ✓');
-      if (document.getElementById('adm-ph-caption')) document.getElementById('adm-ph-caption').value = '';
-      if (document.getElementById('adm-ph-url'))     document.getElementById('adm-ph-url').value = '';
-      setTimeout(() => renderAdmin(), 600);
+    if (!res.ok) {
+      const err = await res.text();
+      showMsg('adm-ph-msg','error','Save failed: ' + err);
+      console.error('addAdminPhoto failed:', res.status, err);
       return;
     }
+    // Update PROJECTS in memory so photos appear in admin immediately
+    if (!PROJECTS[projectId].documents) PROJECTS[projectId].documents = [];
+    PROJECTS[projectId].documents.push({
+      id: 'adm'+Date.now(), category:'photos', caption, phase,
+      name: caption || 'Build Photo', url, type:'image', date: dateLabel,
+    });
+    showMsg('adm-ph-msg','success','Photo added \u2713');
+    if (document.getElementById('adm-ph-caption')) document.getElementById('adm-ph-caption').value = '';
+    if (document.getElementById('adm-ph-url'))     document.getElementById('adm-ph-url').value = '';
+    setTimeout(() => renderAdmin(), 600);
   } catch(e) {
-    console.log('Supabase photo save failed, falling back to localStorage:', e);
+    showMsg('adm-ph-msg','error','Error: ' + e.message);
+    console.error('addAdminPhoto exception:', e);
   }
-
-  // Fallback: localStorage (same-browser only)
-  const PHOTO_KEY = 'sa_photos_' + projectId;
-  let photos = [];
-  try { photos = JSON.parse(localStorage.getItem(PHOTO_KEY)||'[]'); } catch(e) {}
-  photos.push({ id: 'adm'+Date.now(), category:'photos', phase, caption, url, date: dateLabel });
-  localStorage.setItem(PHOTO_KEY, JSON.stringify(photos));
-  showMsg('adm-ph-msg','success','Added (local only) ✓');
-  setTimeout(() => renderAdmin(), 600);
 }
 function removeAdminPhoto(projectId, idx) {
   const PHOTO_KEY = `sa_photos_${projectId}`;

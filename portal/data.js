@@ -796,7 +796,7 @@ const AUTH = {
         url:      doc.url,
         type:     doc.type || 'pdf',
         date:     doc.date,
-        phase:    doc.phase || null,
+        phase:    doc.phase || (doc.category === 'photos' ? doc.note : null) || null,
         caption:  doc.caption || doc.name || '',
         note:     doc.note || '',
       })),
