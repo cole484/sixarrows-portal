@@ -257,12 +257,12 @@ const DOC_KEY   = `sa_docs_${p.id}`;
 const PHOTO_KEY = `sa_photos_${p.id}`;
 const INSPO_KEY = `sa_inspo_${p.id}`;
 
-// Refresh from Supabase immediately so newly-added docs/photos appear
-// without requiring the client to log out and back in
+// Refresh from Supabase immediately so newly-added docs/photos/folders appear
 AUTH.refreshSession(p.id).then(fresh => {
   if (fresh) {
     p = fresh;
-    render(); // re-render with up-to-date documents list
+    render(); // re-render with up-to-date data including photoFolders
+    // loadFolderPhotos is called inside render() via the photos section
   }
 }).catch(() => {});
 
@@ -282,42 +282,59 @@ function loadPhotos() {
 
 // Load Drive folder photos async and merge into the photo grid
 async function loadFolderPhotos() {
-  // Photo folders come from Supabase via p.photoFolders (normalized in data.js)
+  // Photo folders come from Supabase via p.photoFolders
+  // p may have been updated by refreshSession — always read current p
   const folders = Array.isArray(p.photoFolders) ? p.photoFolders : [];
-  if (!folders.length) return;
-
-  // Build the folders query string: "URL:Label,URL:Label"
-  const folderParam = folders.map(f => `${f.url}:${encodeURIComponent(f.label)}`).join(',');
+  if (!folders.length) {
+    console.log('loadFolderPhotos: no folders configured for this client');
+    return;
+  }
+  console.log('loadFolderPhotos: loading', folders.length, 'folder(s)');
 
   try {
-    const res = await fetch(`/.netlify/functions/drive-photos?folders=${encodeURIComponent(folderParam)}`);
-    if (!res.ok) return;
+    // Send folder data as JSON in the request body to avoid URL encoding issues
+    const res = await fetch('/.netlify/functions/drive-photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folders }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('drive-photos error:', res.status, err);
+      return;
+    }
     const data = await res.json();
+    console.log('drive-photos response:', data);
 
-    // Convert Drive files to the photo shape documents.html expects
     const drivePhotos = [];
     for (const folder of (data.folders || [])) {
+      if (folder.error) {
+        console.warn('Folder error:', folder.label, folder.error);
+        continue;
+      }
       for (const file of (folder.files || [])) {
         drivePhotos.push({
-          id:       'drive_' + file.id,
-          category: 'photos',
-          name:     file.name,
-          caption:  file.name,
-          url:      `https://drive.google.com/file/d/${file.id}/view`,
-          phase:    folder.label,
-          date:     file.date,
+          id:        'drive_' + file.id,
+          category:  'photos',
+          name:      file.name,
+          caption:   file.name,
+          url:       'https://drive.google.com/file/d/' + file.id + '/view',
+          phase:     folder.label,
+          date:      file.date,
           fromDrive: true,
         });
       }
     }
 
     if (drivePhotos.length > 0) {
-      // Merge drive photos into lightboxPhotos and re-render
+      console.log('loadFolderPhotos: found', drivePhotos.length, 'photos');
       lightboxPhotos = [...loadPhotos(), ...drivePhotos];
       renderPhotos(lightboxPhotos);
+    } else {
+      console.log('loadFolderPhotos: no photos found in folders');
     }
   } catch(e) {
-    console.log('Drive folder photos unavailable:', e.message);
+    console.error('loadFolderPhotos error:', e.message);
   }
 }
 function loadInspo() {
