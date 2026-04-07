@@ -1002,7 +1002,18 @@ function renderBudgetView(p) {
       </div>` : p.projectType === 'remodel' ? `
       <div style="padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px;font-size:12px;color:var(--charcoal-4)">
         Set a Budget Google Sheet URL in Project Info to enable one-click category import.
-      </div>` : ''}
+      </div>` : p.links?.budget && p.links.budget !== '#' ? `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:var(--charcoal);margin-bottom:2px">Import from Budget Sheet</div>
+          <div style="font-size:11px;color:var(--charcoal-4)">Reads the Budget tab — detects main categories by status column. Replaces existing categories.</div>
+        </div>
+        <button class="adm-btn adm-btn-green" onclick="syncSABCategoriesFromSheet('${p.id}')">Sync from Budget Sheet</button>
+        <span id="bcat-sync-msg" class="adm-msg success" style="margin:0;min-width:120px"></span>
+      </div>` : `
+      <div style="padding:10px 12px;background:var(--cream-pale);border-radius:var(--r-md);margin-bottom:12px;font-size:12px;color:var(--charcoal-4)">
+        Set a Budget Google Sheet URL in Project Info to enable one-click category import from the Budget tab.
+      </div>`}
       ${(p.budgetCategories||[]).map((cat, ci) => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
           <div style="flex:1;font-size:13px;font-weight:500;color:var(--charcoal)">${cat.name}</div>
@@ -1118,7 +1129,35 @@ async function deleteBudgetCategory(projectId, catIndex) {
   }
 }
 
-async function syncCategoriesFromSheet(projectId) {
+async function syncSABCategoriesFromSheet(projectId) {
+  const p = PROJECTS[projectId];
+  const sheetUrl = p.links?.budget;
+  if (!sheetUrl || sheetUrl === '#') {
+    showMsg('bcat-sync-msg', 'error', 'No sheet URL set in Project Info');
+    return;
+  }
+  showMsg('bcat-sync-msg', 'neutral', 'Syncing...');
+  try {
+    const res = await fetch(
+      `/.netlify/functions/sheet-sab-budget-sync?clientId=${projectId}&sheetUrl=${encodeURIComponent(sheetUrl)}`
+    );
+    const data = res.ok ? await res.json() : null;
+    if (data && data.synced > 0) {
+      showMsg('bcat-sync-msg', 'success', `Imported ${data.synced} categories ✓`);
+      // Refresh session so budget page sees the new categories
+      const fresh = await AUTH.refreshSession(projectId).catch(() => null);
+      if (fresh && PROJECTS[projectId]) {
+        PROJECTS[projectId].budgetCategories = fresh.budgetCategories || [];
+      }
+      setTimeout(() => renderAdmin(), 800);
+    } else {
+      const msg = data?.message || data?.error || 'No categories detected in Budget tab';
+      showMsg('bcat-sync-msg', 'error', msg);
+    }
+  } catch(e) {
+    showMsg('bcat-sync-msg', 'error', 'Error: ' + e.message);
+  }
+}
   const p        = PROJECTS[projectId];
   const msgEl    = document.getElementById('bcat-sync-msg');
   const sheetUrl = p.links?.budget;
