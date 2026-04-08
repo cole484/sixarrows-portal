@@ -527,7 +527,7 @@ function sabLayout() {
     </div>
 
     <!-- 4. Budget completion (no dollar amounts) -->
-    <div style="background:var(--white);border:0.5px solid var(--border);border-radius:var(--r-xl);padding:1rem 1.375rem;margin-bottom:1rem">
+    <a href="budget.html" style="display:block;background:var(--white);border:0.5px solid var(--border);border-radius:var(--r-xl);padding:1rem 1.375rem;margin-bottom:1rem;text-decoration:none;cursor:pointer">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div>
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal-4);margin-bottom:2px">Budget</div>
@@ -536,7 +536,7 @@ function sabLayout() {
         <div style="font-size:22px;font-weight:700;color:var(--charcoal);line-height:1">${budPctComp}%</div>
       </div>
       <div class="track" style="height:6px;margin-bottom:6px"><div class="bar" style="width:${budPctComp}%"></div></div>
-    </div>
+    </a>
 
     <!-- 5. Groundbreaking countdown — lower priority, compact -->
     <div class="countdown-block" style="margin-bottom:1rem">
