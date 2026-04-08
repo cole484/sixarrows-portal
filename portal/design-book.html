@@ -362,7 +362,7 @@ const ROOM_GROUPS = [
     id: 'interior',
     name: 'Interior',
     subtitle: 'Flooring, Doors, Hardware & Trim',
-    cats: ['flooring','doors','hardware','specialty_trim','paint'],
+    cats: ['flooring','doors','hardware','specialty_trim','lighting','fireplace','paint'],
     roomFilter: null,
   },
   {
@@ -440,7 +440,7 @@ function parseSelections(answers, saved, rooms) {
         label: 'Island Countertop',
         material: a(answers, 'countertops_ct_isl_mat', 'ct_isl_mat'),
         product: a(answers, 'countertops_ct_isl_mat', 'ct_isl_mat'),
-        image: '',
+        image: a(answers, 'countertops_ct_isl_photo', 'ct_isl_photo'),
       });
     }
   }
@@ -456,7 +456,7 @@ function parseSelections(answers, saved, rooms) {
         label: `${rm.name} Countertop`,
         material: mat,
         product: a(answers, `ct_bath_product_${rk}`, `ct_bath_${rk}_product`) || mat,
-        image: '',
+        image: a(answers, `ct_bath_photo_${rk}`, `ct_bath_${rk}_photo`),
       });
     }
   });
@@ -527,7 +527,7 @@ function parseSelections(answers, saved, rooms) {
       finish: a(answers, 'doors_dr_col', 'dr_col'),
       product: trProduct,
       notes: [a(answers, 'doors_dr_spec', 'dr_spec'), a(answers, 'doors_tr_notes', 'tr_notes')].filter(Boolean).join(' — '),
-      image: '',
+      image: a(answers, 'doors_dr_photo', 'dr_photo'),
     });
     items.push({
       cat: 'doors', room: 'Whole Home',
@@ -536,7 +536,7 @@ function parseSelections(answers, saved, rooms) {
       height: a(answers, 'doors_tr_base', 'tr_base'),
       crown: a(answers, 'doors_tr_crown', 'tr_crown'),
       product: trProduct,
-      image: '',
+      image: a(answers, 'doors_tr_photo', 'tr_photo'),
     });
   }
 
@@ -601,10 +601,72 @@ function parseSelections(answers, saved, rooms) {
         style: ti.styleFields.length ? a(answers, ...ti.styleFields) : '',
         finish: ti.finFields.length ? a(answers, ...ti.finFields) : '',
         notes: a(answers, `specialty_trim_${ti.id}_notes`, `${ti.id}_notes`),
-        image: '',
+        image: a(answers, `specialty_trim_${ti.id}_photo`, `${ti.id}_photo`),
       });
     }
   });
+
+  // ── Plumbing fixtures ──
+  // Kitchen sink & faucet
+  if (Array.isArray(rooms)) {
+    rooms.forEach(rm => {
+      const rk = (rm.id || rm.name || '').replace(/\s+/g,'_').toLowerCase();
+      const pfxRoom = answers._pfx?.[rk] || {};
+      // Check all plumbing fixture types for this room
+      const fixtureTypes = [
+        { id: 'kitchen_sink', label: 'Kitchen Sink', roomMatch: /kitchen/i },
+        { id: 'toilet', label: 'Toilet', roomMatch: /bath|powder/i },
+        { id: 'shower', label: 'Shower Fixture', roomMatch: /bath/i },
+        { id: 'tub', label: 'Bathtub', roomMatch: /bath/i },
+      ];
+      fixtureTypes.forEach(ft => {
+        if (!ft.roomMatch.test(rm.name || '')) return;
+        const product = a(answers, `plumbing_${rk}_${ft.id}_product`, `plumbing_${rk}_${ft.id}_sink_product`);
+        const style = a(answers, `plumbing_${rk}_${ft.id}_style`, `plumbing_${rk}_${ft.id}_type`);
+        if (product || style) {
+          items.push({
+            cat: 'plumbing', room: rm.name,
+            label: `${rm.name} ${ft.label}`,
+            style: style,
+            product: product || style,
+            image: a(answers, `plumbing_${rk}_${ft.id}_photo`, `plumbing_${rk}_${ft.id}_sink_photo`),
+          });
+        }
+        // Faucet (paired with sink)
+        const faucet = a(answers, `plumbing_${rk}_${ft.id}_faucet_product`);
+        if (faucet) {
+          items.push({
+            cat: 'plumbing', room: rm.name,
+            label: `${rm.name} ${ft.id === 'kitchen_sink' ? 'Faucet' : ft.label + ' Faucet'}`,
+            style: a(answers, `plumbing_${rk}_${ft.id}_faucet`),
+            product: faucet,
+            image: a(answers, `plumbing_${rk}_${ft.id}_faucet_photo`),
+          });
+        }
+      });
+    });
+  }
+
+  // ── Lighting fixtures ──
+  if (Array.isArray(rooms)) {
+    rooms.forEach(rm => {
+      const rk = (rm.id || rm.name || '').replace(/\s+/g,'_').toLowerCase();
+      // Check known fixture types: recessed, pendant, chandelier, vanity, sconce, under_cabinet
+      const lightTypes = ['recessed','pendant','chandelier','vanity','sconce','under_cabinet'];
+      lightTypes.forEach(lt => {
+        const product = a(answers, `lighting_${rk}_${lt}_product`);
+        if (product) {
+          const ltLabel = lt.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+          items.push({
+            cat: 'lighting', room: rm.name,
+            label: `${rm.name} ${ltLabel}`,
+            product: product,
+            image: a(answers, `lighting_${rk}_${lt}_photo`),
+          });
+        }
+      });
+    });
+  }
 
   // ── Fireplace ──
   if (answers.fireplace_fp_want && answers.fireplace_fp_want !== 'No — no fireplace') {
