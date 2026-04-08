@@ -408,27 +408,38 @@ async function loadSelections(clientKey) {
 }
 
 // ── Parse answers into structured items ───────────────
+// Helper: try key with and without section prefix (handles both formats)
+function a(answers, ...keys) {
+  for (const k of keys) {
+    if (answers[k]) return answers[k];
+  }
+  return '';
+}
+
 function parseSelections(answers, saved, rooms) {
   const items = [];
 
   // ── Countertops ──
-  if (answers.ct_product || answers.ct_kit) {
+  const ctProduct = a(answers, 'countertops_ct_product', 'ct_product');
+  const ctKit     = a(answers, 'countertops_ct_kit', 'ct_kit');
+  if (ctProduct || ctKit) {
     items.push({
       cat: 'countertops', room: 'Kitchen',
       label: 'Kitchen Countertop',
-      material: answers.ct_kit || '',
-      color: answers.ct_color || '',
-      edge: answers.ct_edge || '',
-      product: answers.ct_product || '',
-      notes: answers.ct_notes || '',
-      image: answers.ct_photo || '',
+      material: ctKit,
+      color: a(answers, 'countertops_ct_color', 'ct_color'),
+      edge: a(answers, 'countertops_ct_edge', 'ct_edge'),
+      product: ctProduct,
+      notes: a(answers, 'countertops_ct_notes', 'ct_notes'),
+      image: a(answers, 'countertops_ct_photo', 'ct_photo'),
     });
-    if (answers.ct_isl === 'Yes — contrasting material' || answers.ct_isl === 'Yes — contrasting color') {
+    const ctIsl = a(answers, 'countertops_ct_isl', 'ct_isl');
+    if (ctIsl === 'Yes — contrasting material' || ctIsl === 'Yes — contrasting color') {
       items.push({
         cat: 'countertops', room: 'Kitchen',
         label: 'Island Countertop',
-        material: answers.ct_isl_mat || '',
-        product: answers.ct_isl_mat || '',
+        material: a(answers, 'countertops_ct_isl_mat', 'ct_isl_mat'),
+        product: a(answers, 'countertops_ct_isl_mat', 'ct_isl_mat'),
         image: '',
       });
     }
@@ -438,13 +449,13 @@ function parseSelections(answers, saved, rooms) {
   const bathrooms = Array.isArray(rooms) ? rooms.filter(r => /bath|powder/i.test(r.name||'')) : [];
   bathrooms.forEach(rm => {
     const rk = (rm.id || rm.name || '').replace(/\s+/g,'_').toLowerCase();
-    const mat = answers[`ct_bath_${rk}_mat`] || answers[`ct_bath_${rk}`];
+    const mat = a(answers, `ct_bath_${rk}_mat`, `ct_bath_${rk}`);
     if (mat) {
       items.push({
         cat: 'countertops', room: rm.name || rk,
         label: `${rm.name} Countertop`,
         material: mat,
-        product: answers[`ct_bath_${rk}_product`] || mat,
+        product: a(answers, `ct_bath_product_${rk}`, `ct_bath_${rk}_product`) || mat,
         image: '',
       });
     }
@@ -454,16 +465,16 @@ function parseSelections(answers, saved, rooms) {
   if (Array.isArray(rooms)) {
     rooms.forEach(rm => {
       const rk = (rm.id || rm.name || '').replace(/\s+/g,'_').toLowerCase();
-      const type = answers[`flooring_${rk}_type`];
+      const type = a(answers, `flooring_floor_${rk}`, `flooring_${rk}_type`);
       if (type) {
         items.push({
           cat: 'flooring', room: rm.name || rk,
           label: `${rm.name} Flooring`,
           material: type,
-          color: answers[`flooring_${rk}_color`] || '',
-          product: answers[`flooring_${rk}_product`] || '',
-          notes: answers[`flooring_${rk}_notes`] || '',
-          image: answers[`flooring_${rk}_photo`] || '',
+          color: a(answers, `flooring_color_${rk}`, `flooring_${rk}_color`),
+          product: a(answers, `flooring_product_${rk}`, `flooring_${rk}_product`),
+          notes: a(answers, `flooring_notes_${rk}`, `flooring_${rk}_notes`),
+          image: a(answers, `flooring_photo_${rk}`, `flooring_${rk}_photo`),
         });
       }
     });
@@ -472,8 +483,8 @@ function parseSelections(answers, saved, rooms) {
   // ── Appliances ──
   const appFields = [
     ['app_range','Range / Cooktop'],['app_hood','Range Hood'],
-    ['app_ref','Refrigerator'],['app_dw','Dishwasher'],
-    ['app_mw','Microwave'],['app_oven','Wall Oven'],
+    ['app_fridge','Refrigerator'],['app_dish','Dishwasher'],
+    ['app_micro','Microwave'],['app_oven','Wall Oven'],
   ];
   appFields.forEach(([key, name]) => {
     const val = answers[`${key}_product`] || answers[key];
@@ -489,45 +500,49 @@ function parseSelections(answers, saved, rooms) {
   });
 
   // ── Hardware ──
-  if (answers.hw_finish || answers.hw_product) {
+  const hwFinish  = a(answers, 'hardware_hw_finish', 'hw_finish');
+  const hwProduct = a(answers, 'hardware_hw_product', 'hw_product');
+  if (hwFinish || hwProduct) {
     items.push({
       cat: 'hardware', room: 'Whole Home',
       label: 'Door & Cabinet Hardware',
-      finish: answers.hw_finish || '',
-      style: answers.hw_door_style || '',
-      cabinetStyle: answers.hw_cabinet || '',
-      product: answers.hw_product || '',
-      notes: answers.hw_notes || '',
-      image: answers.hw_photo || '',
+      finish: hwFinish,
+      style: a(answers, 'hardware_hw_door_style', 'hw_door_style'),
+      cabinetStyle: a(answers, 'hardware_hw_cabinet', 'hw_cabinet'),
+      product: hwProduct,
+      notes: a(answers, 'hardware_hw_notes', 'hw_notes'),
+      image: a(answers, 'hardware_hw_photo', 'hw_photo'),
     });
   }
 
   // ── Doors & Trim ──
-  if (answers.dr_sty || answers.tr_product) {
+  const drSty     = a(answers, 'doors_dr_sty', 'dr_sty');
+  const trProduct = a(answers, 'doors_tr_product', 'tr_product');
+  if (drSty || trProduct) {
     items.push({
       cat: 'doors', room: 'Whole Home',
       label: 'Interior Doors',
-      style: answers.dr_sty || '',
-      height: answers.dr_ht || '',
-      finish: answers.dr_col || '',
-      product: answers.tr_product || '',
-      notes: [answers.dr_spec, answers.tr_notes].filter(Boolean).join(' — '),
+      style: drSty,
+      height: a(answers, 'doors_dr_ht', 'dr_ht'),
+      finish: a(answers, 'doors_dr_col', 'dr_col'),
+      product: trProduct,
+      notes: [a(answers, 'doors_dr_spec', 'dr_spec'), a(answers, 'doors_tr_notes', 'tr_notes')].filter(Boolean).join(' — '),
       image: '',
     });
     items.push({
       cat: 'doors', room: 'Whole Home',
       label: 'Trim & Molding',
-      style: answers.tr_prof || '',
-      height: answers.tr_base || '',
-      crown: answers.tr_crown || '',
-      product: answers.tr_product || '',
+      style: a(answers, 'doors_tr_prof', 'tr_prof'),
+      height: a(answers, 'doors_tr_base', 'tr_base'),
+      crown: a(answers, 'doors_tr_crown', 'tr_crown'),
+      product: trProduct,
       image: '',
     });
   }
 
   // ── Exterior Finishes ──
   ['roof','soffit','gutter'].forEach(part => {
-    const mat = answers[`ext_${part}_mat`] || answers[`ext_${part}`];
+    const mat = a(answers, `ext_${part}_type`, `ext_${part}_mat`, `ext_${part}`);
     if (mat) {
       items.push({
         cat: 'exterior_finishes', room: 'Exterior',
@@ -544,26 +559,26 @@ function parseSelections(answers, saved, rooms) {
   if (Array.isArray(rooms)) {
     rooms.filter(r => /bath|shower|powder/i.test(r.name||'')).forEach(rm => {
       const rk = (rm.id || rm.name || '').replace(/\s+/g,'_').toLowerCase();
-      const floor = answers[`tile_${rk}_floor`] || answers[`tile_${rk}_floor_product`];
+      const floor = a(answers, `tile_floor_${rk}`, `tile_${rk}_floor`, `tile_floor_product_${rk}`);
       if (floor) {
         items.push({
           cat: 'tile', room: rm.name,
           label: `${rm.name} Floor Tile`,
           material: floor,
-          product: answers[`tile_${rk}_floor_product`] || floor,
-          grout: answers[`tile_${rk}_floor_grout`] || '',
-          image: answers[`tile_${rk}_floor_photo`] || '',
+          product: a(answers, `tile_floor_product_${rk}`, `tile_${rk}_floor_product`) || floor,
+          grout: a(answers, `tile_floor_grout_${rk}`, `tile_${rk}_floor_grout`),
+          image: a(answers, `tile_floor_photo_${rk}`, `tile_${rk}_floor_photo`),
         });
       }
-      const shower = answers[`tile_${rk}_shower`] || answers[`tile_${rk}_shower_product`];
+      const shower = a(answers, `tile_shower_${rk}`, `tile_${rk}_shower`, `tile_shower_product_${rk}`);
       if (shower) {
         items.push({
           cat: 'tile', room: rm.name,
           label: `${rm.name} Shower Tile`,
           material: shower,
-          product: answers[`tile_${rk}_shower_product`] || shower,
-          grout: answers[`tile_${rk}_shower_grout`] || '',
-          image: answers[`tile_${rk}_shower_photo`] || '',
+          product: a(answers, `tile_shower_product_${rk}`, `tile_${rk}_shower_product`) || shower,
+          grout: a(answers, `tile_shower_grout_${rk}`, `tile_${rk}_shower_grout`),
+          image: a(answers, `tile_shower_photo_${rk}`, `tile_${rk}_shower_photo`),
         });
       }
     });
@@ -571,20 +586,21 @@ function parseSelections(answers, saved, rooms) {
 
   // ── Specialty trim ──
   const trimItems = [
-    {id:'beams',name:'Exposed Beams',fields:['beams_loc','beams_style','beams_fin']},
-    {id:'shelves',name:'Floating Shelves',fields:['shelves_loc','shelves_mat']},
-    {id:'mantle',name:'Fireplace Mantle',fields:['mantle_style','mantle_fin']},
-    {id:'wainscot',name:'Wainscoting / Paneling',fields:['wain_style','wain_ht']},
+    {id:'beams',name:'Exposed Beams',fields:['specialty_trim_beams_loc','beams_loc'],styleFields:['specialty_trim_beams_style','beams_style'],finFields:['specialty_trim_beams_fin','beams_fin']},
+    {id:'shelves',name:'Floating Shelves',fields:['specialty_trim_shelves_loc','shelves_loc'],styleFields:['specialty_trim_shelves_mat','shelves_mat'],finFields:[]},
+    {id:'mantle',name:'Fireplace Mantle',fields:['specialty_trim_mantle_style','mantle_style'],styleFields:[],finFields:['specialty_trim_mantle_fin','mantle_fin']},
+    {id:'wainscot',name:'Wainscoting / Paneling',fields:['specialty_trim_wain_style','wain_style'],styleFields:['specialty_trim_wain_ht','wain_ht'],finFields:[]},
   ];
   trimItems.forEach(ti => {
-    if (answers[ti.fields[0]]) {
+    const primary = a(answers, ...ti.fields);
+    if (primary) {
       items.push({
         cat: 'specialty_trim', room: 'Whole Home',
         label: ti.name,
-        material: answers[ti.fields[0]] || '',
-        style: answers[ti.fields[1]] || '',
-        finish: answers[ti.fields[2]] || '',
-        notes: answers[`${ti.id}_notes`] || '',
+        material: primary,
+        style: ti.styleFields.length ? a(answers, ...ti.styleFields) : '',
+        finish: ti.finFields.length ? a(answers, ...ti.finFields) : '',
+        notes: a(answers, `specialty_trim_${ti.id}_notes`, `${ti.id}_notes`),
         image: '',
       });
     }
