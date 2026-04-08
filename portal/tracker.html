@@ -166,7 +166,10 @@ async function loadState() {
   // Update badges from local TS immediately (before Notion sync)
   updateBadges(null);
 
-  // Restore last active tab
+  // Default to the current active phase (first incomplete), then restore saved tab if user navigated manually
+  for (let pi = 0; pi < p.sabPhases.length; pi++) {
+    if (!isPhaseDone(pi)) { activeTab = pi; break; }
+  }
   try { const t = localStorage.getItem(SK+'tab_'+p.id); if (t !== null) activeTab = parseInt(t); } catch(e) {}
 
   // 2. Fetch live Notion data — Notion is authoritative, always overrides localStorage
@@ -496,13 +499,7 @@ function renderSteps() {
     return;
   }
 
-  if (!prevPhaseDone) {
-    list.innerHTML = `<div class="card surface" style="text-align:center;padding:2rem">
-      <div style="font-size:14px;font-weight:600;color:var(--charcoal-3);margin-bottom:5px">Phase ${pi+1} is locked</div>
-      <div style="font-size:13px;color:var(--charcoal-4)">Complete Phase ${pi} to unlock this phase.</div>
-    </div>`;
-    return;
-  }
+  // Future phases are viewable (not locked) so clients can see what's coming
 
   list.innerHTML = ph.steps.map((step,si) => renderStepCard(pi,si,step,false)).join('');
 
@@ -664,7 +661,7 @@ window.toggleDynStep = function(pi, si) {
 function renderStepCard(pi, si, step, phaseComplete) {
   const done    = isStepDone(pi,si);
   const prevOk  = si===0||isStepDone(pi,si-1)||phaseComplete;
-  const locked  = !prevOk;
+  const locked  = false; // All steps viewable so clients can see what's coming
   const cnt     = stChecked(pi,si);
   const tot     = stTotal(pi,si);
   const pct     = tot ? Math.round(cnt/tot*100) : 100;
