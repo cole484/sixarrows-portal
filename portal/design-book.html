@@ -4,26 +4,29 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Design Selections Book — Six Arrows</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
+/* ── Brand Fonts ── */
+@font-face { font-family: 'Industry'; src: url('assets/Industry-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Work Sans'; src: url('assets/WorkSans-VariableFont_wght.ttf') format('truetype'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Work Sans'; src: url('assets/WorkSans-Italic-VariableFont_wght.ttf') format('truetype'); font-weight: 100 900; font-style: italic; font-display: swap; }
+
 /* ── Reset & Base ── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root {
-  --cream:    #F5F0E8;
-  --cream-dk: #EDE6D6;
-  --stone:    #C9BBA8;
-  --charcoal: #2C2C2A;
-  --charcoal-lt: #4A4845;
-  --sage:     #5C6B5A;
-  --sage-lt:  #8FA08C;
-  --gold:     #B8965A;
-  --gold-lt:  #D4AF7A;
-  --white:    #FAFAF8;
-  --border:   rgba(44,44,42,.12);
+  --cream:    #ebe9de;
+  --cream-dk: #dfdccf;
+  --stone:    #9a9585;
+  --charcoal: #2e2e2e;
+  --charcoal-lt: #4a4a4a;
+  --sage:     #757f69;
+  --sage-lt:  #8d9681;
+  --green:    #757f69;
+  --green-dk: #5c6652;
+  --white:    #f5f4ef;
+  --border:   rgba(46,46,46,.12);
 
-  --serif:    'Cormorant Garamond', Georgia, serif;
-  --sans:     'Jost', sans-serif;
+  --heading:  'Industry', 'Arial Black', sans-serif;
+  --sans:     'Work Sans', 'Jost', sans-serif;
 
   --page-w:   960px;
   --gutter:   48px;
@@ -39,10 +42,10 @@ body { min-height: 100vh; }
   z-index:9999;transition:opacity .6s;
 }
 #loading-screen.fade-out { opacity:0;pointer-events:none; }
-.loading-logo { font-family:var(--serif);font-size:28px;color:var(--cream);letter-spacing:.2em;margin-bottom:16px; }
+.loading-logo { font-family:var(--heading);font-size:28px;color:var(--cream);letter-spacing:.2em;margin-bottom:16px; }
 .loading-sub { font-size:11px;color:var(--stone);letter-spacing:.2em;text-transform:uppercase; }
 .loading-bar { width:120px;height:1px;background:rgba(255,255,255,.15);margin-top:24px;position:relative;overflow:hidden; }
-.loading-bar::after { content:'';position:absolute;inset:0;background:var(--gold);animation:loadbar 1.4s ease-in-out infinite; }
+.loading-bar::after { content:'';position:absolute;inset:0;background:var(--sage);animation:loadbar 1.4s ease-in-out infinite; }
 @keyframes loadbar { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
 
 /* ── Print / Download Bar ── */
@@ -53,7 +56,7 @@ body { min-height: 100vh; }
   padding:12px var(--gutter);
   border-bottom:1px solid rgba(255,255,255,.08);
 }
-.ab-logo { font-family:var(--serif);font-size:15px;color:var(--cream);letter-spacing:.12em; }
+.ab-logo { font-family:var(--heading);font-size:15px;color:var(--cream);letter-spacing:.12em; }
 .ab-title { font-size:11px;color:var(--stone);letter-spacing:.15em;text-transform:uppercase; }
 .ab-actions { display:flex;gap:12px; }
 .ab-btn {
@@ -63,8 +66,8 @@ body { min-height: 100vh; }
 }
 .ab-btn-outline { background:transparent;border:1px solid var(--stone);color:var(--stone); }
 .ab-btn-outline:hover { border-color:var(--cream);color:var(--cream); }
-.ab-btn-primary { background:var(--gold);color:var(--charcoal); }
-.ab-btn-primary:hover { background:var(--gold-lt); }
+.ab-btn-primary { background:var(--sage);color:var(--charcoal); }
+.ab-btn-primary:hover { background:var(--sage-lt); }
 
 /* ── Book Container ── */
 #book { max-width:var(--page-w);margin:0 auto;padding:0 24px 80px; }
@@ -91,7 +94,7 @@ body { min-height: 100vh; }
   border:1px solid rgba(184,150,90,.12);border-radius:50%;position:absolute;
 }
 .cover-ornament-text {
-  font-family:var(--serif);font-size:11px;color:rgba(184,150,90,.5);
+  font-family:var(--heading);font-size:11px;color:rgba(184,150,90,.5);
   letter-spacing:.3em;text-transform:uppercase;
 }
 .cover-eyebrow {
@@ -99,19 +102,19 @@ body { min-height: 100vh; }
   color:var(--sage-lt);margin-bottom:20px;position:relative;
 }
 .cover-title {
-  font-family:var(--serif);font-size:clamp(40px,6vw,72px);
+  font-family:var(--heading);font-size:clamp(40px,6vw,72px);
   font-weight:300;color:var(--cream);line-height:1.05;
   letter-spacing:-.01em;position:relative;margin-bottom:8px;
 }
-.cover-title em { font-style:italic;color:var(--gold-lt); }
+.cover-title em { font-style:italic;color:var(--sage-lt); }
 .cover-subtitle {
-  font-family:var(--serif);font-size:18px;color:var(--stone);
+  font-family:var(--heading);font-size:18px;color:var(--stone);
   font-style:italic;margin-bottom:32px;position:relative;
 }
-.cover-divider { width:60px;height:1px;background:var(--gold);margin-bottom:28px;position:relative; }
+.cover-divider { width:60px;height:1px;background:var(--sage);margin-bottom:28px;position:relative; }
 .cover-meta { display:flex;gap:40px;position:relative; }
 .cover-meta-item label { font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--stone);display:block;margin-bottom:4px; }
-.cover-meta-item span { font-family:var(--serif);font-size:16px;color:var(--cream); }
+.cover-meta-item span { font-family:var(--heading);font-size:16px;color:var(--cream); }
 .cover-sa {
   position:absolute;bottom:40px;right:40px;
   font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.2);
@@ -142,7 +145,7 @@ body { min-height: 100vh; }
   background:linear-gradient(to right,var(--cream),var(--white));
 }
 .room-name {
-  font-family:var(--serif);font-size:36px;font-weight:300;
+  font-family:var(--heading);font-size:36px;font-weight:300;
   color:var(--charcoal);letter-spacing:-.01em;
 }
 .room-name em { font-style:italic;color:var(--sage); }
@@ -189,7 +192,7 @@ body { min-height: 100vh; }
   font-size:28px;margin-bottom:8px;opacity:.4;
 }
 .img-placeholder-label {
-  font-family:var(--serif);font-size:13px;font-style:italic;
+  font-family:var(--heading);font-size:13px;font-style:italic;
   color:var(--stone);text-align:center;padding:0 20px;
   line-height:1.5;
 }
@@ -209,7 +212,7 @@ body { min-height: 100vh; }
   color:rgba(255,255,255,.55);margin-bottom:3px;
 }
 .collage-item-value {
-  font-family:var(--serif);font-size:15px;color:var(--cream);
+  font-family:var(--heading);font-size:15px;color:var(--cream);
   line-height:1.3;
 }
 
@@ -238,7 +241,7 @@ body { min-height: 100vh; }
   color:var(--sage);margin-bottom:6px;
 }
 .catalog-card-name {
-  font-family:var(--serif);font-size:18px;font-weight:400;
+  font-family:var(--heading);font-size:18px;font-weight:400;
   color:var(--charcoal);margin-bottom:8px;line-height:1.2;
 }
 .catalog-card-value {
@@ -261,12 +264,12 @@ body { min-height: 100vh; }
   display:flex;align-items:flex-end;gap:20px;
 }
 .cat-header-num {
-  font-family:var(--serif);font-size:48px;font-weight:300;
+  font-family:var(--heading);font-size:48px;font-weight:300;
   color:var(--border);line-height:1;
 }
 .cat-header-info {}
 .cat-header-name {
-  font-family:var(--serif);font-size:28px;font-weight:300;
+  font-family:var(--heading);font-size:28px;font-weight:300;
   color:var(--charcoal);
 }
 .cat-header-count {
@@ -279,7 +282,7 @@ body { min-height: 100vh; }
   text-align:center;padding:80px 40px;
 }
 .empty-book-title {
-  font-family:var(--serif);font-size:28px;color:var(--charcoal);
+  font-family:var(--heading);font-size:28px;color:var(--charcoal);
   margin-bottom:12px;
 }
 .empty-book-sub { font-size:14px;color:var(--stone);line-height:1.6; }
@@ -303,7 +306,7 @@ body { min-height: 100vh; }
 
 <div id="action-bar">
   <div>
-    <div class="ab-logo">Six Arrows Construction</div>
+    <div class="ab-logo"><img src="assets/logo-light.png" alt="Six Arrows Co." style="height:32px;vertical-align:middle;margin-right:8px"></div>
     <div class="ab-title">Design Selections Book</div>
   </div>
   <div class="ab-actions">
@@ -811,7 +814,7 @@ async function renderBook() {
   let html = `
   <!-- COVER -->
   <div class="cover-page">
-    <div class="cover-ornament"><span class="cover-ornament-text">Six Arrows</span></div>
+    <div style="position:absolute;top:40px;right:40px"><img src="assets/logo-light.png" alt="Six Arrows Co." style="width:140px;opacity:.6"></div>
     <div class="cover-eyebrow">Custom Home Build · Design Selections Package</div>
     <div class="cover-title">${esc(p.clientName || p.projectName)}<br><em>Design Book</em></div>
     <div class="cover-subtitle">${esc(p.projectName || 'Custom Home')}</div>
@@ -821,7 +824,7 @@ async function renderBook() {
       <div class="cover-meta-item"><label>Prepared</label><span>${date}</span></div>
       <div class="cover-meta-item"><label>Selections</label><span>${items.length} Items</span></div>
     </div>
-    <div class="cover-sa">Six Arrows Construction · Bowling Green, KY</div>
+    <div class="cover-sa">Six Arrows Co. · Bowling Green, KY</div>
   </div>
 
   <!-- PART 1: Room Spreads -->
