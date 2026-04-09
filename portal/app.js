@@ -142,6 +142,10 @@ function buildSidebar(p, activeKey, TS) {
         <strong>${p.teamLead}</strong> · ${p.teamPhone}<br>
         ${p.teamEmail}
       </div>
+      <a href="guide-client.html" class="sb-guide-link" style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(235,233,222,.35);text-decoration:none;padding:0 2px;margin-bottom:10px">
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="6"/><line x1="7" y1="6" x2="7" y2="10"/><circle cx="7" cy="4" r=".5" fill="currentColor"/></svg>
+        Portal Guide
+      </a>
       <div class="sb-logout" onclick="AUTH.logout()">
         <svg viewBox="0 0 12 12"><path d="M4 1H2a1 1 0 00-1 1v8a1 1 0 001 1h2M7 8.5L10 6l-3-2.5M4 6h6"/></svg>
         Sign out
