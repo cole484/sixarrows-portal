@@ -1418,16 +1418,6 @@ function renderProjectView(p) {
     </div>
 
     <div class="card" style="margin-top:12px">
-      <div class="sh"><div class="sh-title">Quick Summary (Command Center)</div></div>
-      <div class="adm-field">
-        <label>Your note to the client</label>
-        <textarea class="adm-inp adm-textarea" id="pi-summary">${p.quickSummary}</textarea>
-      </div>
-      <button class="adm-btn adm-btn-green" onclick="saveSummary('${p.id}')">Save</button>
-      <span id="pi-sum-msg" class="adm-msg success" style="margin-left:10px"></span>
-    </div>
-
-    <div class="card" style="margin-top:12px">
       <div class="sh">
         <div class="sh-title">Review Draft <span style="font-size:10px;font-weight:400;color:var(--charcoal-4)">(SAB final step)</span></div>
         ${p.reviewLeft ? `<span class="tag ok" style="font-size:10px">✓ Review left</span>` : `<span class="tag neutral" style="font-size:10px">Pending</span>`}
@@ -1569,13 +1559,6 @@ function saveCredentials(projectId) {
   p.email    = document.getElementById('pi-email')?.value.trim()    || p.email;
   p.password = document.getElementById('pi-password')?.value.trim() || p.password;
   showMsg('pi-cred-msg','success','Updated for this session ✓');
-}
-
-function saveSummary(projectId) {
-  const p = PROJECTS[projectId];
-  p.quickSummary = document.getElementById('pi-summary')?.value.trim() || p.quickSummary;
-  adminSet(projectId, 'quickSummary', p.quickSummary);
-  showMsg('pi-sum-msg','success','Saved ✓');
 }
 
 function saveReviewDraft(projectId) {
