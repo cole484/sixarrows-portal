@@ -533,6 +533,18 @@ async function initTimeline() {
         </div>
       </div>
 
+      ${timelineDbId ? `
+      <a href="https://notion.so/${timelineDbId.replace(/-/g,'')}" target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:white;border:0.5px solid var(--border-2);border-radius:var(--r-md);margin-bottom:1rem;text-decoration:none;transition:box-shadow .15s;box-shadow:var(--sh-sm)"
+         onmouseover="this.style.boxShadow='var(--sh-md)'" onmouseout="this.style.boxShadow='var(--sh-sm)'">
+        <svg width="18" height="18" viewBox="0 0 100 100" fill="none"><path d="M6.017 4.313l55.333-4.087c6.797-.583 8.543-.19 12.817 2.917l17.663 12.443c2.913 2.14 3.883 2.723 3.883 5.053v68.243c0 4.277-1.553 6.807-6.99 7.193L24.467 99.967c-4.08.193-6.023-.39-8.16-3.113L3.3 79.94c-2.333-3.113-3.3-5.443-3.3-8.167V11.113c0-3.497 1.553-6.413 6.017-6.8z" fill="#fff"/><path d="M61.35.227l-55.333 4.087C1.553 4.7 0 7.617 0 11.113v60.66c0 2.723.967 5.053 3.3 8.167l12.993 16.913c2.137 2.723 4.08 3.307 8.16 3.113l64.257-3.89c5.433-.387 6.99-2.917 6.99-7.193V20.64c0-2.21-.82-2.843-3.443-4.733L74.167 3.143C69.893.227 68.147-.357 61.35.227zM25.723 17.163c-5.297.39-6.503.477-9.523-1.94l-6.093-4.86c-.78-.78-.39-1.753 1.163-1.94L63.67 4.7c4.47-.39 6.797 1.167 8.543 2.527l7.023 5.053c.39.193-.193 1.167-1.163 1.363l-50.873 3.327-.007.003-.003-.003.003.003-.003-.003v-.003l-.007.003-.007-.003.003.003-.003-.003v-.003l-.007.003-.003-.003.003.003v-.003l-1.447.193zM19.357 88.163V29.28c0-2.53.777-3.697 3.113-3.89l52.033-3.11c2.14-.193 3.113 1.167 3.113 3.697v58.497c0 2.53-.39 4.667-3.883 4.86l-49.7 2.917c-3.497.197-4.673-1.75-4.677-4.09v.002zM71.707 32.59c.39 1.75 0 3.497-1.75 3.693l-2.333.39v43.47c-2.03 1.167-3.887 1.75-5.443 1.75-2.527 0-3.113-.78-5.053-3.113l-15.45-24.267v23.487l4.86 1.167s0 3.497-4.86 3.497l-13.31.78c-.39-.78 0-2.723 1.357-3.113l3.497-.973V37.45l-4.86-.39c-.39-1.75.583-4.277 3.3-4.473l14.28-.973 16.03 24.463V34.727l-4.083-.39c-.39-2.143 1.163-3.693 3.11-3.887l13.71-.86z" fill="#000"/></svg>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--charcoal)">View Full Build Schedule</div>
+          <div style="font-size:11px;color:var(--charcoal-4)">Open your detailed project timeline in Notion</div>
+        </div>
+        <svg viewBox="0 0 14 14" fill="none" stroke="var(--charcoal-4)" stroke-width="1.5" style="width:14px;height:14px;flex-shrink:0"><path d="M3 11L11 3M5 3h6v6"/></svg>
+      </a>` : ''}
+
       <!-- WHAT'S HAPPENING NOW — first, most immediate -->
       <div class="card" style="margin-bottom:1rem">
         <div class="sh">
