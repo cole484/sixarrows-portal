@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Six Arrows — Admin Guide</title>
+<link rel="stylesheet" href="style.css"/>
+<style>
+/* ── Guide layout ── */
+.guide-shell { display:flex; min-height:100vh; background:var(--cream); }
+
+/* Sidebar TOC */
+.guide-sidebar {
+  width:260px; flex-shrink:0; background:var(--charcoal);
+  padding:1.25rem 1rem; display:flex; flex-direction:column; gap:0;
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+}
+.guide-sidebar::-webkit-scrollbar { width:3px; }
+.guide-sidebar::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:3px; }
+
+.guide-logo { display:flex; align-items:center; gap:9px; padding-bottom:1rem; border-bottom:0.5px solid rgba(255,255,255,.07); margin-bottom:1rem; }
+.guide-logo img { width:28px; height:28px; object-fit:contain; }
+.guide-logo-text { font-size:11px; font-weight:700; color:var(--cream); letter-spacing:.05em; text-transform:uppercase; }
+.guide-logo-sub  { font-size:9px; color:rgba(235,233,222,.3); letter-spacing:.1em; text-transform:uppercase; }
+
+.toc-title {
+  font-size:9px; text-transform:uppercase; letter-spacing:.13em;
+  color:rgba(235,233,222,.25); margin-bottom:6px; padding-left:9px; margin-top:14px;
+}
+.toc-title:first-of-type { margin-top:0; }
+.toc-link {
+  display:block; padding:6px 9px; border-radius:var(--r-md);
+  color:rgba(235,233,222,.5); font-size:12px; font-weight:400;
+  cursor:pointer; transition:all .15s; text-decoration:none; margin-bottom:1px;
+}
+.toc-link:hover { background:rgba(255,255,255,.06); color:rgba(235,233,222,.8); }
+.toc-link.active { background:rgba(117,127,105,.2); color:var(--cream); font-weight:500; }
+.toc-sub { padding-left:14px; }
+.toc-sub .toc-link { font-size:11px; padding:4px 9px; }
+
+.toc-back {
+  margin-top:auto; padding-top:1rem; border-top:0.5px solid rgba(255,255,255,.07);
+}
+.toc-back a {
+  display:flex; align-items:center; gap:6px;
+  padding:7px 9px; border-radius:var(--r-md);
+  color:rgba(235,233,222,.4); font-size:12px; text-decoration:none; transition:all .15s;
+}
+.toc-back a:hover { color:rgba(235,233,222,.8); background:rgba(255,255,255,.06); }
+
+/* Main content */
+.guide-main { flex:1; min-width:0; padding:2.5rem 3rem 4rem; max-width:820px; }
+
+.guide-main h1 {
+  font-size:26px; font-weight:700; color:var(--charcoal);
+  margin-bottom:6px; letter-spacing:-.02em;
+}
+.guide-main .guide-subtitle {
+  font-size:13px; color:var(--charcoal-4); margin-bottom:2.5rem;
+  padding-bottom:1.5rem; border-bottom:0.5px solid var(--border-2);
+}
+
+.guide-main h2 {
+  font-size:18px; font-weight:700; color:var(--charcoal);
+  margin-top:2.5rem; margin-bottom:1rem; padding-top:1.5rem;
+  border-top:0.5px solid var(--border-2); letter-spacing:-.01em;
+}
+.guide-main h2:first-of-type { border-top:none; padding-top:0; margin-top:0; }
+
+.guide-main h3 {
+  font-size:14px; font-weight:600; color:var(--charcoal-2);
+  margin-top:1.5rem; margin-bottom:0.6rem;
+}
+
+.guide-main p {
+  font-size:13px; color:var(--charcoal-2); line-height:1.7; margin-bottom:0.8rem;
+}
+
+.guide-main ul, .guide-main ol {
+  font-size:13px; color:var(--charcoal-2); line-height:1.7;
+  margin-bottom:0.8rem; padding-left:1.5rem;
+}
+.guide-main li { margin-bottom:4px; }
+
+.guide-main code {
+  font-family:'SF Mono','Fira Code',monospace; font-size:12px;
+  background:var(--cream-2); padding:2px 6px; border-radius:var(--r-xs);
+  color:var(--charcoal);
+}
+
+/* Step cards */
+.step-card {
+  background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md);
+  padding:1rem 1.25rem; margin-bottom:0.75rem;
+}
+.step-card .step-num {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; border-radius:50%; background:var(--green);
+  color:white; font-size:11px; font-weight:700; margin-right:8px; flex-shrink:0;
+  vertical-align:middle;
+}
+.step-card .step-title {
+  font-size:13px; font-weight:600; color:var(--charcoal); vertical-align:middle;
+}
+.step-card .step-body {
+  font-size:12.5px; color:var(--charcoal-3); line-height:1.6; margin-top:6px; padding-left:30px;
+}
+
+/* Callout boxes */
+.callout {
+  border-radius:var(--r-md); padding:0.85rem 1rem; margin-bottom:1rem;
+  font-size:12.5px; line-height:1.6;
+}
+.callout-tip { background:var(--green-pale); border-left:3px solid var(--green); color:var(--charcoal-2); }
+.callout-warn { background:var(--warning-lt); border-left:3px solid var(--warning); color:var(--charcoal-2); }
+.callout-danger { background:var(--danger-lt); border-left:3px solid var(--danger); color:var(--charcoal-2); }
+.callout strong { color:var(--charcoal); }
+
+/* Field reference tables */
+.field-table {
+  width:100%; border-collapse:collapse; margin-bottom:1rem;
+  font-size:12.5px; background:white; border-radius:var(--r-md);
+  border:0.5px solid var(--border-2); overflow:hidden;
+}
+.field-table th {
+  text-align:left; padding:8px 12px; font-size:11px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.06em;
+  background:var(--cream-pale); color:var(--charcoal-3); border-bottom:0.5px solid var(--border-2);
+}
+.field-table td {
+  padding:8px 12px; color:var(--charcoal-2); border-bottom:0.5px solid var(--border);
+  vertical-align:top;
+}
+.field-table tr:last-child td { border-bottom:none; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .guide-shell { flex-direction:column; }
+  .guide-sidebar {
+    width:100%; height:auto; position:relative;
+    flex-direction:row; flex-wrap:wrap; gap:0; padding:1rem;
+    overflow-x:auto; overflow-y:hidden;
+  }
+  .guide-logo { width:100%; margin-bottom:.5rem; }
+  .toc-title { display:none; }
+  .toc-link { white-space:nowrap; display:inline-block; padding:6px 12px; font-size:11px; }
+  .toc-sub { padding-left:0; }
+  .toc-back { margin-top:0; border-top:none; padding-top:0; }
+  .guide-main { padding:1.5rem 1.25rem 3rem; }
+  .guide-main h1 { font-size:22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="guide-shell">
+
+<!-- ─── Sidebar TOC ──────────────────────────── -->
+<aside class="guide-sidebar" id="toc-sidebar">
+  <div class="guide-logo">
+    <img src="assets/logo-white.png" alt="Six Arrows" onerror="this.style.display='none'"/>
+    <div>
+      <div class="guide-logo-text">Six Arrows</div>
+      <div class="guide-logo-sub">Admin Guide</div>
+    </div>
+  </div>
+
+  <div class="toc-title">Getting Started</div>
+  <a class="toc-link" href="#logging-in">Logging In</a>
+  <a class="toc-link" href="#navigation">Navigation Overview</a>
+
+  <div class="toc-title">Client Management</div>
+  <a class="toc-link" href="#add-client">Adding a New Client</a>
+  <a class="toc-link" href="#edit-client">Editing Client Info</a>
+  <a class="toc-link" href="#remove-client">Removing a Client</a>
+  <a class="toc-link" href="#client-types">Client Types &amp; Phases</a>
+
+  <div class="toc-title">Project Tracker</div>
+  <a class="toc-link" href="#tracker-overview">Tracker Overview</a>
+  <a class="toc-link" href="#tracker-sab">SAB Blueprint Steps</a>
+  <a class="toc-link" href="#tracker-remodel">Remodel / Dynamic Mode</a>
+  <a class="toc-link" href="#tracker-notion">Notion Sync</a>
+
+  <div class="toc-title">Updates</div>
+  <a class="toc-link" href="#updates-manual">Posting Manual Updates</a>
+  <a class="toc-link" href="#updates-ai">AI-Generated Drafts</a>
+  <a class="toc-link" href="#updates-approve">Approving &amp; Editing</a>
+
+  <div class="toc-title">Budget</div>
+  <a class="toc-link" href="#budget-categories">Managing Categories</a>
+  <a class="toc-link" href="#budget-sheets">Google Sheets Sync</a>
+  <a class="toc-link" href="#budget-change-orders">Change Orders</a>
+
+  <div class="toc-title">Timeline &amp; Milestones</div>
+  <a class="toc-link" href="#milestones">Managing Milestones</a>
+  <a class="toc-link" href="#timeline-notion">Notion Timeline Sync</a>
+
+  <div class="toc-title">Selections</div>
+  <a class="toc-link" href="#selections-overview">Viewing Progress</a>
+  <a class="toc-link" href="#selections-export">Exporting Selections</a>
+  <a class="toc-link" href="#design-book">Design Book</a>
+
+  <div class="toc-title">Decisions</div>
+  <a class="toc-link" href="#decisions">Managing Decisions</a>
+
+  <div class="toc-title">Documents &amp; Photos</div>
+  <a class="toc-link" href="#documents">Uploading Documents</a>
+  <a class="toc-link" href="#photos">Build Photos</a>
+
+  <div class="toc-title">Reference</div>
+  <a class="toc-link" href="#supabase">Supabase Database</a>
+  <a class="toc-link" href="#troubleshooting">Troubleshooting</a>
+
+  <div class="toc-back">
+    <a href="admin.html">
+      <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3L4 7l4 4"/></svg>
+      Back to Admin Panel
+    </a>
+  </div>
+</aside>
+
+<!-- ─── Main Content ─────────────────────────── -->
+<main class="guide-main">
+
+<h1>Admin Guide</h1>
+<p class="guide-subtitle">Everything you need to manage the Six Arrows client portal — from adding clients to syncing budgets.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="logging-in">Logging In</h2>
+
+<p>The admin panel lives at <code>/portal/admin.html</code>. When you visit the page, you'll see a password prompt.</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Go to your portal URL + <code>/portal/admin.html</code></span>
+  <div class="step-body">Example: <code>https://yoursite.netlify.app/portal/admin.html</code></div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Enter the admin password</span>
+  <div class="step-body">Type the admin password and click <strong>Sign In</strong>. The session persists until you close the browser tab.</div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>Tip:</strong> Bookmark the admin page for quick access. Your login session is stored in the browser tab — opening a new tab requires logging in again.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="navigation">Navigation Overview</h2>
+
+<p>Once logged in, you'll see a sidebar with your client list and a set of view tabs across the top for the selected client. Here's the layout:</p>
+
+<ul>
+  <li><strong>Left sidebar</strong> — Lists all clients. Click a client name to select them.</li>
+  <li><strong>Top tabs</strong> — Switch between views for the selected client:
+    <ul>
+      <li><strong>Tracker</strong> — SAB Blueprint progress / remodel milestones</li>
+      <li><strong>Updates</strong> — Post and manage project updates</li>
+      <li><strong>Timeline</strong> — Milestones and build schedule</li>
+      <li><strong>Budget</strong> — Categories, spending, and change orders</li>
+      <li><strong>Project</strong> — Core client and project settings</li>
+      <li><strong>Decisions</strong> — Outstanding client decisions</li>
+      <li><strong>Selections</strong> — Wave selections progress</li>
+      <li><strong>Documents</strong> — Uploaded files and links</li>
+      <li><strong>Photos</strong> — Build photo galleries</li>
+    </ul>
+  </li>
+  <li><strong>+ Add Client</strong> — Button at the bottom of the sidebar to create a new client</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="add-client">Adding a New Client</h2>
+
+<p>To create a new client and give them access to the portal:</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Click "+ Add Client" in the sidebar</span>
+  <div class="step-body">This opens the new client form.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Fill in the required fields</span>
+  <div class="step-body">
+    <table class="field-table">
+      <tr><th>Field</th><th>Description</th></tr>
+      <tr><td><strong>Client Name</strong></td><td>The homeowner's name (e.g., "James & Dana Johnson")</td></tr>
+      <tr><td><strong>Email</strong></td><td>Their login email address</td></tr>
+      <tr><td><strong>Password</strong></td><td>Their portal login password</td></tr>
+      <tr><td><strong>Project Name</strong></td><td>Display name for the project (e.g., "The Johnson Residence")</td></tr>
+      <tr><td><strong>Location</strong></td><td>City/neighborhood (e.g., "Franklin, TN")</td></tr>
+      <tr><td><strong>Status Type</strong></td><td>Choose <code>sab</code> (preconstruction) or <code>construction</code></td></tr>
+      <tr><td><strong>Team Lead</strong></td><td>Primary contact name for the project</td></tr>
+    </table>
+  </div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Click "Create Client"</span>
+  <div class="step-body">The system creates the client record and 8 default budget categories. The client can immediately log in with their email and password.</div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>Tip:</strong> After creating the client, go to the <strong>Project</strong> tab to fill in additional details like Notion IDs, budget sheet URL, photo folders, and selections client key.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="edit-client">Editing Client Info</h2>
+
+<p>To update a client's details:</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Select the client from the sidebar</span>
+  <div class="step-body">Click their name to load their project data.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Go to the "Project" tab</span>
+  <div class="step-body">This shows all editable fields for the client and project.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Edit the fields you need to change</span>
+  <div class="step-body">You can update any field: name, email, password, project details, team info, integration IDs, and more.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">4</span><span class="step-title">Click "Save Changes"</span>
+  <div class="step-body">Changes take effect immediately — the client will see updated info on their next page load.</div>
+</div>
+
+<h3>Key Project Fields</h3>
+
+<table class="field-table">
+  <tr><th>Field</th><th>What It Controls</th></tr>
+  <tr><td><strong>Status Type</strong></td><td>Determines portal layout: <code>sab</code> shows the SAB Blueprint tracker; <code>construction</code> shows the build timeline</td></tr>
+  <tr><td><strong>Phase Label</strong></td><td>Displayed on the client's dashboard (e.g., "Design Phase", "Under Construction")</td></tr>
+  <tr><td><strong>Construction %</strong></td><td>The overall progress percentage shown on the construction dashboard</td></tr>
+  <tr><td><strong>Quick Summary</strong></td><td>Short status message on the command center (e.g., "Framing is 80% complete")</td></tr>
+  <tr><td><strong>Notion Tracker Page ID</strong></td><td>Links the SAB tracker to a Notion page for auto-sync</td></tr>
+  <tr><td><strong>Notion Timeline DB ID</strong></td><td>Links the build timeline to a Notion database</td></tr>
+  <tr><td><strong>Budget Sheet URL</strong></td><td>Google Sheet used for budget sync</td></tr>
+  <tr><td><strong>Selections Client Key</strong></td><td>Key used to store/retrieve Wave selections (e.g., <code>johnson</code>)</td></tr>
+  <tr><td><strong>Photo Folders</strong></td><td>Google Drive folder URLs for build photos</td></tr>
+  <tr><td><strong>Project Type</strong></td><td><code>new_build</code> or <code>remodel</code> — affects tracker behavior</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="remove-client">Removing a Client</h2>
+
+<p>To remove a client from the portal:</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Select the client from the sidebar</span>
+  <div class="step-body">Click their name to load their data.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Go to the "Project" tab</span>
+  <div class="step-body">Scroll to the bottom of the page.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Click "Delete Client"</span>
+  <div class="step-body">You'll be asked to confirm. This permanently removes the client and all their associated data (budget categories, updates, milestones, decisions, documents).</div>
+</div>
+
+<div class="callout callout-danger">
+  <strong>Warning:</strong> Deleting a client is permanent and cannot be undone. All their data — budget, updates, milestones, decisions, and documents — will be permanently deleted.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="client-types">Client Types &amp; Phases</h2>
+
+<p>The portal supports two client types, each with a different experience:</p>
+
+<table class="field-table">
+  <tr><th>Type</th><th>Status Type</th><th>Portal Experience</th></tr>
+  <tr>
+    <td><strong>Preconstruction (SAB)</strong></td>
+    <td><code>sab</code></td>
+    <td>Shows SAB Blueprint tracker with 3 phases (Design, Selections, Build-Ready). Dashboard shows progress cards, decisions, and selections. Budget syncs from Google Sheets.</td>
+  </tr>
+  <tr>
+    <td><strong>Construction</strong></td>
+    <td><code>construction</code></td>
+    <td>Shows build timeline from Notion, budget breakdown, photo galleries, milestone tracking. Dashboard shows construction progress percentage.</td>
+  </tr>
+</table>
+
+<p>To switch a client from preconstruction to construction (e.g., when they break ground), update the <strong>Status Type</strong> field in the Project tab from <code>sab</code> to <code>construction</code>.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="tracker-overview">Tracker Overview</h2>
+
+<p>The Tracker view lets you manage a client's progress through the SAB Blueprint process or a remodel project. What you see depends on the project type:</p>
+
+<ul>
+  <li><strong>New builds</strong> — Uses the pattern-based SAB Blueprint with 3 fixed phases and predefined steps</li>
+  <li><strong>Remodels</strong> — Uses dynamic mode, pulling phases and steps from a Notion page</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="tracker-sab">SAB Blueprint Steps</h2>
+
+<p>For new build clients, the SAB Blueprint has 3 phases:</p>
+
+<ol>
+  <li><strong>Phase 1: Design</strong> — Architectural plans, engineering, HOA review, permitting</li>
+  <li><strong>Phase 2: Selections</strong> — Material and fixture selections (Wave 1, 2, 3)</li>
+  <li><strong>Phase 3: Build-Ready</strong> — Final budget, pre-construction meeting, groundbreaking</li>
+</ol>
+
+<p>Each phase contains multiple steps with checkbox items. To manage progress:</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Select the client and go to the Tracker tab</span>
+  <div class="step-body">You'll see the phase tabs at the top and steps listed below.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Check off completed items within each step</span>
+  <div class="step-body">Click the circle next to each item to mark it complete. The step's progress bar updates automatically.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Set the groundbreaking / demo start date (optional)</span>
+  <div class="step-body">Use the date picker at the top of the tracker to set a target date. This displays as a countdown on the client's dashboard.</div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>Tip:</strong> Clients can view all phases and steps (they're not locked out of future phases), but only the admin can check/uncheck items. The client's portal auto-scrolls to their current active phase.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="tracker-remodel">Remodel / Dynamic Mode</h2>
+
+<p>For remodel clients, the tracker pulls its structure directly from a Notion page. The Notion page should be formatted as:</p>
+
+<ul>
+  <li><strong>H2 headings</strong> = Phase names</li>
+  <li><strong>H3 headings</strong> = Step names within each phase</li>
+  <li><strong>To-do checkboxes</strong> = Individual items within each step</li>
+</ul>
+
+<p>When you check/uncheck items in Notion, the portal syncs automatically on page load. You can also manage items directly in the admin panel.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="tracker-notion">Notion Sync</h2>
+
+<p>The tracker can sync with Notion for both new builds and remodels:</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Get the Notion page ID</span>
+  <div class="step-body">Open the Notion page, copy the URL. The page ID is the long string of characters at the end (after the last dash). Example: <code>https://notion.so/My-Page-<strong>abc123def456</strong></code></div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Paste into "Notion Tracker Page ID" in the Project tab</span>
+  <div class="step-body">Save the project settings. The tracker will now sync from this Notion page.</div>
+</div>
+
+<div class="callout callout-warn">
+  <strong>Note:</strong> Notion is authoritative — when sync runs, it overwrites local tracker state. If you make changes in the admin panel, they may be overridden by the next Notion sync. For the most consistent experience, manage steps in Notion and let the portal sync.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="updates-manual">Posting Manual Updates</h2>
+
+<p>Updates appear on the client's Updates page and are summarized on their command center.</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Go to the Updates tab for the client</span>
+  <div class="step-body">You'll see existing updates and a form to create new ones.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Fill in the update title and body</span>
+  <div class="step-body">Write a clear, concise update. The title shows in the update list; the body shows when the client clicks to read more.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Click "Post Update"</span>
+  <div class="step-body">The update is immediately visible to the client on their portal.</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="updates-ai">AI-Generated Drafts</h2>
+
+<p>The system can automatically generate project updates using AI (powered by Claude). These run on a schedule:</p>
+
+<ul>
+  <li><strong>Monday mornings</strong> — Weekly kickoff update summarizing the week ahead</li>
+  <li><strong>Friday afternoons</strong> — Weekly wrap-up summarizing progress made</li>
+  <li><strong>Midweek</strong> — Optional midweek check-in</li>
+</ul>
+
+<p>AI drafts are <strong>not</strong> automatically published — they go into a pending queue for you to review, edit, and approve before the client sees them.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="updates-approve">Approving &amp; Editing Drafts</h2>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Go to the Updates tab — look for "Pending Drafts"</span>
+  <div class="step-body">Pending AI-generated drafts appear in a separate section at the top.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Review the draft content</span>
+  <div class="step-body">Read through the generated text. The AI uses project data (milestones, tracker progress, recent updates) to craft the message.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Edit if needed, then Approve or Reject</span>
+  <div class="step-body">
+    <ul>
+      <li><strong>Approve</strong> — Publishes the update to the client immediately</li>
+      <li><strong>Reject</strong> — Discards the draft permanently</li>
+      <li><strong>Edit</strong> — Modify the text before approving</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>Tip:</strong> Always review AI drafts before approving. The AI does a good job summarizing project data, but it's best to verify accuracy and add any personal touches.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="budget-categories">Managing Budget Categories</h2>
+
+<p>The Budget tab shows all budget categories for a client, with totals, spent amounts, and status tracking.</p>
+
+<h3>Adding a Category</h3>
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Click "Add Category" in the Budget tab</span>
+  <div class="step-body">Fill in the category name, total budget amount, and initial spent amount.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Set the status</span>
+  <div class="step-body">Choose: <code>pending</code> (not started), <code>in_progress</code> (actively tracking), or <code>complete</code> (finalized).</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Add sub-categories (optional)</span>
+  <div class="step-body">Break down a category into line items. For example, "Flooring" might have sub-categories for "Hardwood", "Tile", and "Carpet" with individual amounts.</div>
+</div>
+
+<h3>Editing &amp; Deleting</h3>
+<p>Click on any existing category to edit its details, or use the delete button to remove it. Changes are saved immediately to the database.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="budget-sheets">Google Sheets Sync</h2>
+
+<p>Budget categories can be synced from a Google Sheet for more complex budget tracking.</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Set up the Google Sheet</span>
+  <div class="step-body">
+    In your budget spreadsheet, use <strong>Column Z</strong> to tag rows with their main category name. The sync function reads Column Z to group line items into categories.
+  </div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Add the Sheet URL to the client's Project tab</span>
+  <div class="step-body">Paste the full Google Sheets URL into the "Budget Sheet URL" field and save.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Sync runs automatically</span>
+  <div class="step-body">For SAB clients, the budget syncs from the sheet every time the budget page loads. For remodel clients, it syncs when you open the admin Budget tab.</div>
+</div>
+
+<div class="callout callout-warn">
+  <strong>Note:</strong> When Google Sheets sync is active, sheet data is authoritative. Manual edits in the admin panel may be overwritten on the next sync. Make budget changes in the sheet, not the admin panel.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="budget-change-orders">Change Orders</h2>
+
+<p>Change orders track budget modifications during the project. They appear as a separate section on the client's budget page.</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Go to the Budget tab and scroll to "Change Orders"</span>
+  <div class="step-body">You'll see existing change orders and a form to add new ones.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Add description and amount</span>
+  <div class="step-body">Describe the change (e.g., "Upgraded kitchen countertops to quartz") and enter the dollar amount (positive for additions, negative for credits).</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="milestones">Managing Milestones</h2>
+
+<p>Milestones appear on the client's timeline and command center. They mark key project dates and events.</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Go to the Timeline tab</span>
+  <div class="step-body">You'll see existing milestones and can add new ones.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Add a milestone</span>
+  <div class="step-body">Set the date, title (e.g., "Foundation Poured"), and optional note. Check "Done" if the milestone is already completed.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Reorder milestones</span>
+  <div class="step-body">Use the sort order field to control the display order. Lower numbers appear first.</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="timeline-notion">Notion Timeline Sync</h2>
+
+<p>For construction-phase clients, the build timeline can sync from a Notion database:</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Create a Notion database with task entries</span>
+  <div class="step-body">
+    Each entry should have:
+    <ul>
+      <li><strong>Task</strong> (or "Task Description") — The task name</li>
+      <li><strong>Sequence #</strong> — Order number for sorting</li>
+      <li><strong>Status</strong> — Completion status (checkbox or select)</li>
+    </ul>
+  </div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Copy the database ID and add it to the client</span>
+  <div class="step-body">In the Project tab, paste the ID into "Notion Timeline DB ID" and save.</div>
+</div>
+
+<p>The timeline shows 3 completed tasks, the current active task, and 8 upcoming tasks — giving the client a focused view of where things stand.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="selections-overview">Viewing Selections Progress</h2>
+
+<p>The Selections tab shows how far a client has progressed through their material and fixture selections, organized into three waves:</p>
+
+<table class="field-table">
+  <tr><th>Wave</th><th>Categories</th></tr>
+  <tr><td><strong>Wave 1: Structure</strong></td><td>Fireplace, Appliances, Exterior</td></tr>
+  <tr><td><strong>Wave 2: Shell</strong></td><td>Specialty Trim, Flooring, Tile</td></tr>
+  <tr><td><strong>Wave 3: Jewelry</strong></td><td>Plumbing, Lighting, Countertops, Hardware, Paint, Doors &amp; Trim</td></tr>
+</table>
+
+<p>Each category shows a completion percentage. Clients fill in their selections through the Selections App (<code>selections-app.html</code>), and the data syncs to Supabase.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="selections-export">Exporting Selections</h2>
+
+<p>To export a client's selections as a CSV spreadsheet:</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Go to the Selections tab</span>
+  <div class="step-body">Click the "Export CSV" button.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Download the file</span>
+  <div class="step-body">The CSV includes a per-room breakdown of all selections with product names, colors, quantities, and notes.</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="design-book">Design Book</h2>
+
+<p>The Design Book is a visual reference that compiles a client's selections into a room-by-room lookbook. It's automatically generated from the client's selections data.</p>
+
+<p>To access it: the client can reach it from their command center via the "View Design Book" link on the selections card. The URL is <code>design-book.html</code>.</p>
+
+<p>The Design Book includes:</p>
+<ul>
+  <li>Cover page with project name and date</li>
+  <li>Room-by-room spreads for Kitchen, Bathrooms, Living areas, and more</li>
+  <li>Product images, names, colors, and specifications for each selection</li>
+  <li>Categories: flooring, tile, countertops, paint, doors/trim, plumbing, lighting, appliances, and more</li>
+</ul>
+
+<div class="callout callout-tip">
+  <strong>Tip:</strong> Product images in the Design Book are loaded from the <code>portal/assets/products/</code> directory. If a product image shows as blank, you may need to add the image file locally — many retailer websites block external image loading (hotlink protection).
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="decisions">Managing Decisions</h2>
+
+<p>Decisions are action items that require client input. They appear prominently on the client's command center with an alert badge.</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Go to the Project tab (Decisions section)</span>
+  <div class="step-body">Scroll down to find the Decisions section, or look for a dedicated Decisions tab.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Add a decision</span>
+  <div class="step-body">Enter a title (e.g., "Confirm kitchen backsplash tile"), set status to <code>pending</code>, and add an optional note with details.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Update status when resolved</span>
+  <div class="step-body">Change status to <code>resolved</code> once the client makes their decision. The alert badge will clear from their dashboard.</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="documents">Uploading Documents</h2>
+
+<p>Documents are organized by category and appear on the client's Documents page.</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Go to the Documents tab</span>
+  <div class="step-body">You'll see existing documents grouped by category.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Click "Add Document"</span>
+  <div class="step-body">
+    Fill in:
+    <ul>
+      <li><strong>Name</strong> — Display name (e.g., "Floor Plan Rev 3")</li>
+      <li><strong>Category</strong> — Plans, Budget, Selections, Photos, Contracts, or Other</li>
+      <li><strong>URL</strong> — Link to the file (Google Drive, Dropbox, etc.)</li>
+      <li><strong>Type</strong> — PDF, Sheet, Image, or Link</li>
+      <li><strong>Note</strong> — Optional description</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>Tip:</strong> For Google Drive files, make sure the sharing settings are set to "Anyone with the link can view" so clients can access them.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="photos">Build Photos</h2>
+
+<p>Build photos are pulled from Google Drive folders and displayed in a gallery on the client's portal.</p>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Create Google Drive folders for each build phase</span>
+  <div class="step-body">Example folders: "Foundation", "Framing", "Mechanical", "Drywall", "Finishes"</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Upload photos to the appropriate folders</span>
+  <div class="step-body">Drop photos into the Google Drive folders as the build progresses.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Add folder URLs in the Project tab</span>
+  <div class="step-body">In the "Photo Folders" field, paste the Google Drive folder URLs. The system extracts folder IDs automatically.</div>
+</div>
+
+<p>Photos appear on the client's Photos page, grouped by folder (build phase). New photos are available as soon as they're uploaded to Drive — no manual sync needed.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="supabase">Supabase Database</h2>
+
+<p>All portal data is stored in a Supabase (PostgreSQL) database. Here's a quick reference of the main tables:</p>
+
+<table class="field-table">
+  <tr><th>Table</th><th>Purpose</th><th>Key Fields</th></tr>
+  <tr><td><strong>clients</strong></td><td>Master client records</td><td>id, email, password, client_name, project_name, status_type</td></tr>
+  <tr><td><strong>budget_categories</strong></td><td>Budget line items</td><td>client_id, name, total, spent, status, sub_categories</td></tr>
+  <tr><td><strong>change_orders</strong></td><td>Budget modifications</td><td>client_id, description, amount</td></tr>
+  <tr><td><strong>updates</strong></td><td>Project status updates</td><td>client_id, title, body, date, approved</td></tr>
+  <tr><td><strong>milestones</strong></td><td>Timeline events</td><td>client_id, date, title, note, done</td></tr>
+  <tr><td><strong>decisions</strong></td><td>Pending client decisions</td><td>client_id, title, status, note</td></tr>
+  <tr><td><strong>documents</strong></td><td>Uploaded files &amp; links</td><td>client_id, name, category, url, type</td></tr>
+  <tr><td><strong>selections</strong></td><td>Wave selections data</td><td>client_id, suffix, data</td></tr>
+</table>
+
+<p>You can access the Supabase dashboard directly to view or edit data in emergencies, but the admin panel is the recommended way to manage everything.</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3>Client can't log in</h3>
+<ul>
+  <li>Verify their email and password in the admin Project tab</li>
+  <li>Make sure they're using the correct portal URL</li>
+  <li>Check that the client record exists in Supabase</li>
+</ul>
+
+<h3>Budget shows wrong numbers</h3>
+<ul>
+  <li>If using Google Sheets sync, check that Column Z tags are correct in the sheet</li>
+  <li>Try reloading the admin Budget tab to trigger a fresh sync</li>
+  <li>For SAB clients, the budget dashboard card and budget page both pull from the sheet — verify the sheet data is accurate</li>
+</ul>
+
+<h3>Tracker not syncing from Notion</h3>
+<ul>
+  <li>Verify the Notion Tracker Page ID is correct in the Project tab</li>
+  <li>Check that the Notion page is shared with the integration</li>
+  <li>For remodels, make sure the page uses H2 (phases), H3 (steps), and checkbox formatting</li>
+</ul>
+
+<h3>Photos not showing</h3>
+<ul>
+  <li>Verify Google Drive folder URLs are correct in the Project tab</li>
+  <li>Make sure folders are shared (at least "Anyone with the link can view")</li>
+  <li>Check that folders contain image files (JPG, PNG, etc.)</li>
+</ul>
+
+<h3>Design Book shows "No selections"</h3>
+<ul>
+  <li>Verify the Selections Client Key is set correctly in the Project tab</li>
+  <li>Check that the client has actually completed selections in the Selections App</li>
+  <li>Try viewing the selections data directly: open the Selections tab in admin to see completion status</li>
+</ul>
+
+<h3>Updates not appearing for client</h3>
+<ul>
+  <li>AI-generated drafts must be <strong>approved</strong> before they're visible — check the pending drafts queue</li>
+  <li>Manually posted updates appear immediately — if missing, check the Updates tab for errors</li>
+</ul>
+
+</main>
+</div>
+
+<!-- ─── Active TOC highlighting ──────────────── -->
+<script>
+(function() {
+  const links = document.querySelectorAll('.toc-link');
+  const sections = [];
+
+  links.forEach(link => {
+    const id = link.getAttribute('href')?.replace('#','');
+    if (id) {
+      const el = document.getElementById(id);
+      if (el) sections.push({ id, el, link });
+    }
+  });
+
+  function updateActive() {
+    let current = sections[0];
+    const scrollY = window.scrollY + 120;
+    for (const s of sections) {
+      if (s.el.offsetTop <= scrollY) current = s;
+    }
+    links.forEach(l => l.classList.remove('active'));
+    if (current) current.link.classList.add('active');
+  }
+
+  window.addEventListener('scroll', updateActive, { passive:true });
+  updateActive();
+})();
+</script>
+
+</body>
+</html>
