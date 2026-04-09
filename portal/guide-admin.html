@@ -133,20 +133,46 @@
 }
 .field-table tr:last-child td { border-bottom:none; }
 
+/* Floating TOC button (mobile only) */
+.toc-fab {
+  display:none; position:fixed; bottom:20px; right:20px; z-index:100;
+  width:48px; height:48px; border-radius:50%; border:none;
+  background:var(--charcoal); color:var(--cream); cursor:pointer;
+  box-shadow:0 4px 16px rgba(46,46,46,.25);
+  align-items:center; justify-content:center; transition:transform .15s;
+}
+.toc-fab:active { transform:scale(.92); }
+.toc-fab svg { width:20px; height:20px; }
+
+/* Slide-out TOC overlay (mobile only) */
+.toc-overlay {
+  display:none; position:fixed; inset:0; z-index:200; pointer-events:none;
+}
+.toc-overlay.open { pointer-events:auto; }
+.toc-overlay-bg {
+  position:absolute; inset:0; background:rgba(46,46,46,.45);
+  opacity:0; transition:opacity .25s;
+}
+.toc-overlay.open .toc-overlay-bg { opacity:1; }
+.toc-overlay-panel {
+  position:absolute; top:0; right:0; bottom:0; width:280px; max-width:85vw;
+  background:var(--charcoal); padding:1.25rem 1rem; overflow-y:auto;
+  transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1);
+  display:flex; flex-direction:column;
+}
+.toc-overlay.open .toc-overlay-panel { transform:translateX(0); }
+.toc-overlay-close {
+  align-self:flex-end; background:none; border:none; cursor:pointer;
+  color:rgba(235,233,222,.5); padding:4px; margin-bottom:8px;
+}
+.toc-overlay-close:hover { color:var(--cream); }
+
 /* Mobile */
 @media (max-width: 768px) {
-  .guide-shell { flex-direction:column; }
-  .guide-sidebar {
-    width:100%; height:auto; position:relative;
-    flex-direction:row; flex-wrap:wrap; gap:0; padding:1rem;
-    overflow-x:auto; overflow-y:hidden;
-  }
-  .guide-logo { width:100%; margin-bottom:.5rem; }
-  .toc-title { display:none; }
-  .toc-link { white-space:nowrap; display:inline-block; padding:6px 12px; font-size:11px; }
-  .toc-sub { padding-left:0; }
-  .toc-back { margin-top:0; border-top:none; padding-top:0; }
-  .guide-main { padding:1.5rem 1.25rem 3rem; }
+  .guide-sidebar { display:none; }
+  .toc-fab { display:flex; }
+  .toc-overlay { display:block; }
+  .guide-main { padding:1.5rem 1.25rem 5rem; }
   .guide-main h1 { font-size:22px; }
 }
 </style>
@@ -787,10 +813,74 @@
 </main>
 </div>
 
-<!-- ─── Active TOC highlighting ──────────────── -->
+<!-- ─── Floating TOC button (mobile) ──────────── -->
+<button class="toc-fab" id="toc-fab" aria-label="Table of contents">
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
+</button>
+
+<!-- ─── Slide-out TOC overlay (mobile) ───────── -->
+<div class="toc-overlay" id="toc-overlay">
+  <div class="toc-overlay-bg" id="toc-overlay-bg"></div>
+  <div class="toc-overlay-panel">
+    <button class="toc-overlay-close" id="toc-close" aria-label="Close menu">
+      <svg width="20" height="20" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+    <div class="guide-logo" style="margin-bottom:1rem">
+      <img src="assets/logo-white.png" alt="Six Arrows" onerror="this.style.display='none'" style="width:24px;height:24px;object-fit:contain"/>
+      <div>
+        <div class="guide-logo-text" style="font-size:10px">Six Arrows</div>
+        <div class="guide-logo-sub">Admin Guide</div>
+      </div>
+    </div>
+    <div class="toc-title">Getting Started</div>
+    <a class="toc-link mob-toc-link" href="#logging-in">Logging In</a>
+    <a class="toc-link mob-toc-link" href="#navigation">Navigation Overview</a>
+    <div class="toc-title">Client Management</div>
+    <a class="toc-link mob-toc-link" href="#add-client">Adding a New Client</a>
+    <a class="toc-link mob-toc-link" href="#edit-client">Editing Client Info</a>
+    <a class="toc-link mob-toc-link" href="#remove-client">Removing a Client</a>
+    <a class="toc-link mob-toc-link" href="#client-types">Client Types &amp; Phases</a>
+    <div class="toc-title">Project Tracker</div>
+    <a class="toc-link mob-toc-link" href="#tracker-overview">Tracker Overview</a>
+    <a class="toc-link mob-toc-link" href="#tracker-sab">SAB Blueprint Steps</a>
+    <a class="toc-link mob-toc-link" href="#tracker-remodel">Remodel / Dynamic Mode</a>
+    <a class="toc-link mob-toc-link" href="#tracker-notion">Notion Sync</a>
+    <div class="toc-title">Updates</div>
+    <a class="toc-link mob-toc-link" href="#updates-manual">Posting Manual Updates</a>
+    <a class="toc-link mob-toc-link" href="#updates-ai">AI-Generated Drafts</a>
+    <a class="toc-link mob-toc-link" href="#updates-approve">Approving &amp; Editing</a>
+    <div class="toc-title">Budget</div>
+    <a class="toc-link mob-toc-link" href="#budget-categories">Managing Categories</a>
+    <a class="toc-link mob-toc-link" href="#budget-sheets">Google Sheets Sync</a>
+    <a class="toc-link mob-toc-link" href="#budget-change-orders">Change Orders</a>
+    <div class="toc-title">Timeline &amp; Milestones</div>
+    <a class="toc-link mob-toc-link" href="#milestones">Managing Milestones</a>
+    <a class="toc-link mob-toc-link" href="#timeline-notion">Notion Timeline Sync</a>
+    <div class="toc-title">Selections</div>
+    <a class="toc-link mob-toc-link" href="#selections-overview">Viewing Progress</a>
+    <a class="toc-link mob-toc-link" href="#selections-export">Exporting Selections</a>
+    <a class="toc-link mob-toc-link" href="#design-book">Design Book</a>
+    <div class="toc-title">Decisions</div>
+    <a class="toc-link mob-toc-link" href="#decisions">Managing Decisions</a>
+    <div class="toc-title">Documents &amp; Photos</div>
+    <a class="toc-link mob-toc-link" href="#documents">Uploading Documents</a>
+    <a class="toc-link mob-toc-link" href="#photos">Build Photos</a>
+    <div class="toc-title">Reference</div>
+    <a class="toc-link mob-toc-link" href="#supabase">Supabase Database</a>
+    <a class="toc-link mob-toc-link" href="#troubleshooting">Troubleshooting</a>
+    <div class="toc-back">
+      <a href="admin.html">
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3L4 7l4 4"/></svg>
+        Back to Admin Panel
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Active TOC highlighting + mobile overlay ── -->
 <script>
 (function() {
-  const links = document.querySelectorAll('.toc-link');
+  const links = document.querySelectorAll('.guide-sidebar .toc-link');
   const sections = [];
 
   links.forEach(link => {
@@ -809,10 +899,33 @@
     }
     links.forEach(l => l.classList.remove('active'));
     if (current) current.link.classList.add('active');
+
+    const mobLinks = document.querySelectorAll('.mob-toc-link');
+    mobLinks.forEach(l => l.classList.remove('active'));
+    if (current) {
+      const match = document.querySelector(`.mob-toc-link[href="#${current.id}"]`);
+      if (match) match.classList.add('active');
+    }
   }
 
   window.addEventListener('scroll', updateActive, { passive:true });
   updateActive();
+
+  const overlay = document.getElementById('toc-overlay');
+  const fab = document.getElementById('toc-fab');
+  const bg = document.getElementById('toc-overlay-bg');
+  const closeBtn = document.getElementById('toc-close');
+
+  function openToc() { overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  function closeToc() { overlay.classList.remove('open'); document.body.style.overflow = ''; }
+
+  fab.addEventListener('click', openToc);
+  bg.addEventListener('click', closeToc);
+  closeBtn.addEventListener('click', closeToc);
+
+  document.querySelectorAll('.mob-toc-link').forEach(link => {
+    link.addEventListener('click', () => { closeToc(); });
+  });
 })();
 </script>
 

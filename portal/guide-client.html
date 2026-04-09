@@ -130,18 +130,46 @@
 .page-preview-card .ppc-title { font-size:13px; font-weight:600; color:var(--charcoal); margin-bottom:3px; }
 .page-preview-card .ppc-desc { font-size:11.5px; color:var(--charcoal-4); line-height:1.5; }
 
+/* Floating TOC button (mobile only) */
+.toc-fab {
+  display:none; position:fixed; bottom:20px; right:20px; z-index:100;
+  width:48px; height:48px; border-radius:50%; border:none;
+  background:var(--charcoal); color:var(--cream); cursor:pointer;
+  box-shadow:0 4px 16px rgba(46,46,46,.25);
+  align-items:center; justify-content:center; transition:transform .15s;
+}
+.toc-fab:active { transform:scale(.92); }
+.toc-fab svg { width:20px; height:20px; }
+
+/* Slide-out TOC overlay (mobile only) */
+.toc-overlay {
+  display:none; position:fixed; inset:0; z-index:200; pointer-events:none;
+}
+.toc-overlay.open { pointer-events:auto; }
+.toc-overlay-bg {
+  position:absolute; inset:0; background:rgba(46,46,46,.45);
+  opacity:0; transition:opacity .25s;
+}
+.toc-overlay.open .toc-overlay-bg { opacity:1; }
+.toc-overlay-panel {
+  position:absolute; top:0; right:0; bottom:0; width:280px; max-width:85vw;
+  background:var(--charcoal); padding:1.25rem 1rem; overflow-y:auto;
+  transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1);
+  display:flex; flex-direction:column;
+}
+.toc-overlay.open .toc-overlay-panel { transform:translateX(0); }
+.toc-overlay-close {
+  align-self:flex-end; background:none; border:none; cursor:pointer;
+  color:rgba(235,233,222,.5); padding:4px; margin-bottom:8px;
+}
+.toc-overlay-close:hover { color:var(--cream); }
+
 /* Mobile */
 @media (max-width: 768px) {
-  .guide-shell { flex-direction:column; }
-  .guide-sidebar {
-    width:100%; height:auto; position:relative;
-    flex-direction:row; flex-wrap:wrap; gap:0; padding:1rem;
-    overflow-x:auto; overflow-y:hidden;
-  }
-  .guide-logo { width:100%; margin-bottom:.5rem; }
-  .toc-title { display:none; }
-  .toc-link { white-space:nowrap; display:inline-block; padding:6px 12px; font-size:11px; }
-  .guide-main { padding:1.5rem 1.25rem 3rem; }
+  .guide-sidebar { display:none; }
+  .toc-fab { display:flex; }
+  .toc-overlay { display:block; }
+  .guide-main { padding:1.5rem 1.25rem 5rem; }
   .guide-main h1 { font-size:22px; }
   .page-preview { grid-template-columns:1fr; }
 }
@@ -588,10 +616,60 @@
 </main>
 </div>
 
-<!-- ─── Active TOC highlighting ──────────────── -->
+<!-- ─── Floating TOC button (mobile) ──────────── -->
+<button class="toc-fab" id="toc-fab" aria-label="Table of contents">
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
+</button>
+
+<!-- ─── Slide-out TOC overlay (mobile) ───────── -->
+<div class="toc-overlay" id="toc-overlay">
+  <div class="toc-overlay-bg" id="toc-overlay-bg"></div>
+  <div class="toc-overlay-panel">
+    <button class="toc-overlay-close" id="toc-close" aria-label="Close menu">
+      <svg width="20" height="20" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+    <div class="guide-logo" style="margin-bottom:1rem">
+      <img src="assets/logo-white.png" alt="Six Arrows" onerror="this.style.display='none'" style="width:24px;height:24px;object-fit:contain"/>
+      <div>
+        <div class="guide-logo-text" style="font-size:10px">Six Arrows</div>
+        <div class="guide-logo-sub">Portal Guide</div>
+      </div>
+    </div>
+    <div class="toc-title">Getting Started</div>
+    <a class="toc-link mob-toc-link" href="#logging-in">Logging In</a>
+    <a class="toc-link mob-toc-link" href="#command-center">Your Command Center</a>
+    <a class="toc-link mob-toc-link" href="#navigation">Navigating the Portal</a>
+    <div class="toc-title">Your Project</div>
+    <a class="toc-link mob-toc-link" href="#tracker">SAB Tracker</a>
+    <a class="toc-link mob-toc-link" href="#selections">Making Selections</a>
+    <a class="toc-link mob-toc-link" href="#design-book">Design Book</a>
+    <div class="toc-title">Budget &amp; Timeline</div>
+    <a class="toc-link mob-toc-link" href="#budget">Viewing Your Budget</a>
+    <a class="toc-link mob-toc-link" href="#timeline">Project Timeline</a>
+    <div class="toc-title">Communication</div>
+    <a class="toc-link mob-toc-link" href="#updates">Project Updates</a>
+    <a class="toc-link mob-toc-link" href="#decisions">Decisions</a>
+    <a class="toc-link mob-toc-link" href="#team">Your Project Team</a>
+    <div class="toc-title">Files &amp; Photos</div>
+    <a class="toc-link mob-toc-link" href="#documents">Documents</a>
+    <a class="toc-link mob-toc-link" href="#photos">Build Photos</a>
+    <div class="toc-title">Help</div>
+    <a class="toc-link mob-toc-link" href="#faq">Frequently Asked Questions</a>
+    <a class="toc-link mob-toc-link" href="#support">Getting Support</a>
+    <div class="toc-back">
+      <a href="dashboard.html">
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3L4 7l4 4"/></svg>
+        Back to Portal
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Active TOC highlighting + mobile overlay ── -->
 <script>
 (function() {
-  const links = document.querySelectorAll('.toc-link');
+  // Active section highlighting (desktop sidebar)
+  const links = document.querySelectorAll('.guide-sidebar .toc-link');
   const sections = [];
 
   links.forEach(link => {
@@ -610,10 +688,36 @@
     }
     links.forEach(l => l.classList.remove('active'));
     if (current) current.link.classList.add('active');
+
+    // Also highlight in mobile overlay
+    const mobLinks = document.querySelectorAll('.mob-toc-link');
+    mobLinks.forEach(l => l.classList.remove('active'));
+    if (current) {
+      const match = document.querySelector(`.mob-toc-link[href="#${current.id}"]`);
+      if (match) match.classList.add('active');
+    }
   }
 
   window.addEventListener('scroll', updateActive, { passive:true });
   updateActive();
+
+  // Mobile overlay open/close
+  const overlay = document.getElementById('toc-overlay');
+  const fab = document.getElementById('toc-fab');
+  const bg = document.getElementById('toc-overlay-bg');
+  const closeBtn = document.getElementById('toc-close');
+
+  function openToc() { overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  function closeToc() { overlay.classList.remove('open'); document.body.style.overflow = ''; }
+
+  fab.addEventListener('click', openToc);
+  bg.addEventListener('click', closeToc);
+  closeBtn.addEventListener('click', closeToc);
+
+  // Close on link click (navigate to section)
+  document.querySelectorAll('.mob-toc-link').forEach(link => {
+    link.addEventListener('click', () => { closeToc(); });
+  });
 })();
 </script>
 
