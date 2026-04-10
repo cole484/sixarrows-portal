@@ -700,6 +700,136 @@ body { background: var(--cream); padding: 0; }
   .board-card-body { flex: 1; padding: 12px 14px; }
 }
 
+/* ── Phase: package (auto-generated design review) ── */
+.package-shell { display: block; }
+.package-hd { text-align: center; margin-bottom: 32px; }
+.package-eyebrow {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--charcoal-3); margin-bottom: 8px;
+}
+.package-title {
+  font-size: 24px; font-weight: 700; color: var(--charcoal);
+  margin-bottom: 8px; line-height: 1.25;
+}
+.package-sub {
+  font-size: 14px; color: var(--charcoal-3); max-width: 560px;
+  margin: 0 auto; line-height: 1.55;
+}
+
+.package-room { margin-bottom: 36px; }
+.package-room-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--cream-2);
+}
+.package-room-name { font-size: 18px; font-weight: 700; color: var(--charcoal); }
+.package-room-tier {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--green-deep); background: var(--green-pale, rgba(66,108,74,.08));
+  padding: 4px 10px; border-radius: 12px; font-weight: 600;
+}
+
+.package-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.product-card {
+  background: #fff; border-radius: 12px; overflow: hidden;
+  border: 2px solid transparent;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  cursor: pointer; transition: border-color .15s, box-shadow .15s;
+  display: flex; flex-direction: column;
+}
+.product-card:hover {
+  border-color: var(--green);
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+}
+.product-card-img {
+  width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+  background: var(--cream-2);
+}
+.product-card-img-fallback {
+  width: 100%; aspect-ratio: 1 / 1;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--cream-2), var(--cream));
+  color: var(--charcoal-3); font-size: 13px; font-weight: 600;
+}
+.product-card-body { padding: 12px 14px; flex: 1; }
+.product-card-cat {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--charcoal-3); margin-bottom: 4px;
+}
+.product-card-name {
+  font-size: 14px; font-weight: 600; color: var(--charcoal);
+  line-height: 1.3; margin-bottom: 6px;
+}
+.product-card-tier-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 8px; margin-bottom: 6px;
+}
+.tier-essential  { background: #e8f0e8; color: #3a6b3a; }
+.tier-elevated   { background: #e8ecf4; color: #3a4f7a; }
+.tier-showpiece  { background: #f4ece4; color: #7a5a3a; }
+.product-card-note {
+  font-size: 12px; color: var(--charcoal-3); line-height: 1.45;
+}
+
+/* Swap panel (expanded under card) */
+.swap-panel {
+  border-top: 1px solid var(--cream-2);
+  padding: 12px 14px;
+  background: var(--cream);
+}
+.swap-panel-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--charcoal-3); margin-bottom: 10px; font-weight: 600;
+}
+.swap-options { display: flex; flex-direction: column; gap: 8px; }
+.swap-option {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--cream-2);
+  background: #fff; cursor: pointer; transition: border-color .15s;
+}
+.swap-option:hover { border-color: var(--green); }
+.swap-option-img {
+  width: 48px; height: 48px; border-radius: 6px; object-fit: cover;
+  background: var(--cream-2); flex-shrink: 0;
+}
+.swap-option-body { flex: 1; min-width: 0; }
+.swap-option-name { font-size: 13px; font-weight: 600; color: var(--charcoal); }
+.swap-option-tier {
+  font-size: 10px; color: var(--charcoal-3); text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.package-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 24px; margin-top: 12px;
+  border-top: 1px solid var(--cream-2);
+  gap: 12px;
+}
+
+.package-refine-hint {
+  text-align: center; margin-top: 16px; padding: 14px;
+  font-size: 13px; color: var(--charcoal-3); line-height: 1.5;
+}
+.package-refine-hint a {
+  color: var(--green-deep); text-decoration: underline; cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .package-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .product-card-name { font-size: 13px; }
+  .product-card-note { font-size: 11px; }
+  .swap-option { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 400px) {
+  .package-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Phase: home (room/category grid) ────────── */
 .home-header {
   display: flex;
@@ -1253,6 +1383,10 @@ const ST = {
   // Shape: { 'kitchen': 'elevated', 'master_bath': 'showpiece', ... }
   // This records which design board the client picked for each room.
   boardPicks: {},
+  // Auto-generated design package — all selections pre-filled.
+  // Shape: { 'kitchen': { 'countertops': { selected: {...}, alternatives: [...] }, ... }, ... }
+  designPackage: null,
+  expandedSwap: null,  // which product card has its swap panel open
   // Catalog
   catalog: null,
   // Chat
@@ -1311,10 +1445,12 @@ function render() {
   if (ST.phase === 'quiz')      stage.innerHTML = renderQuiz();
   if (ST.phase === 'analyzing') stage.innerHTML = renderAnalyzing();
   if (ST.phase === 'reveal')    stage.innerHTML = renderReveal();
-  if (ST.phase === 'budget')    stage.innerHTML = renderBudget();
-  if (ST.phase === 'boards')    stage.innerHTML = renderBoards();
-  if (ST.phase === 'home')      stage.innerHTML = renderHome();
-  if (ST.phase === 'chat')      stage.innerHTML = renderChat();
+  if (ST.phase === 'budget')     stage.innerHTML = renderBudget();
+  if (ST.phase === 'boards')     stage.innerHTML = renderBoards();
+  if (ST.phase === 'generating') stage.innerHTML = renderLoading('Fox is building your design package…');
+  if (ST.phase === 'package')    stage.innerHTML = renderPackageReview();
+  if (ST.phase === 'home')       stage.innerHTML = renderHome();
+  if (ST.phase === 'chat')       stage.innerHTML = renderChat();
   if (ST.phase === 'error')     stage.innerHTML = renderError(ST.errorMessage);
   // Post-render hooks
   if (ST.phase === 'chat') scrollChatToBottom();
@@ -1348,6 +1484,7 @@ async function loadAll() {
   try { ST.picks       = JSON.parse(ST.ans._v2_picks        || '{}'); } catch(e) { ST.picks = {}; }
   try { ST.budgetTiers = JSON.parse(ST.ans._v2_budget_tiers || '{}'); } catch(e) { ST.budgetTiers = {}; }
   try { ST.boardPicks  = JSON.parse(ST.ans._v2_board_picks  || '{}'); } catch(e) { ST.boardPicks = {}; }
+  try { ST.designPackage = JSON.parse(ST.ans._v2_design_package || 'null'); } catch(e) { ST.designPackage = null; }
 }
 
 // Debounced batch save — coalesces rapid mutations into one network write.
@@ -1366,6 +1503,7 @@ async function saveAllNow() {
   ST.ans._v2_picks          = JSON.stringify(ST.picks);
   ST.ans._v2_budget_tiers   = JSON.stringify(ST.budgetTiers);
   ST.ans._v2_board_picks    = JSON.stringify(ST.boardPicks);
+  ST.ans._v2_design_package = JSON.stringify(ST.designPackage);
 
   // Batch endpoint expects { batch: { ans, sav, rms, ... } } — same shape v1 uses.
   const body = {
@@ -1551,15 +1689,17 @@ function renderReveal() {
     </div>`;
 }
 
-// Route from reveal through budget → boards → home.
+// Route from reveal through budget → package → home.
 // Skip phases that are already completed.
 function enterHome() {
   if (!allBudgetTiersSet()) {
     ST.phase = 'budget';
-  } else if (!allBoardPicksSet()) {
-    ST.phase = 'boards';
+  } else if (!ST.designPackage) {
+    // Budget done but no package yet — generate it
+    completeBudget();
+    return;
   } else {
-    ST.phase = 'home';
+    ST.phase = 'package';
   }
   scheduleSave();
   render();
@@ -1570,6 +1710,9 @@ function restartQuiz() {
   ST.style = ''; ST.styleSummary = ''; ST.styleGreeting = '';
   ST.budgetTiers = {};
   ST.boardPicks = {};
+  ST.designPackage = null;
+  ST.expandedSwap = null;
+  ST.picks = {};
   ST.phase = 'quiz';
   scheduleSave();
   render();
@@ -1709,12 +1852,48 @@ function backToReveal() {
   render();
 }
 
-function completeBudget() {
+async function completeBudget() {
   if (!allBudgetTiersSet()) {
     showToast('Pick a tier for every room first');
     return;
   }
-  ST.phase = 'boards';
+  // Generate the auto-populated design package
+  ST.phase = 'generating';
+  render();
+  try {
+    const res = await fetch('/.netlify/functions/generate-package', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        style: ST.style,
+        budgetTiers: ST.budgetTiers,
+        rooms: ST.rms.map(r => ({ id: r.id, name: r.name })),
+      }),
+    });
+    if (!res.ok) throw new Error(`generate-package ${res.status}`);
+    const data = await res.json();
+    ST.designPackage = data.package;
+    // Auto-populate picks from the package
+    for (const [roomId, categories] of Object.entries(ST.designPackage)) {
+      for (const [cat, sel] of Object.entries(categories)) {
+        const k = cellKey(roomId, cat);
+        if (!ST.picks[k]) {
+          ST.picks[k] = {
+            tier: sel.selected.tier,
+            name: sel.selected.name,
+            note: sel.selected.note,
+            imageUrl: sel.selected.imageUrl,
+            autoGenerated: true,
+          };
+        }
+      }
+    }
+    ST.phase = 'package';
+  } catch (err) {
+    console.error('Package generation failed:', err);
+    showToast('Could not generate package — falling back to manual');
+    ST.phase = 'home';
+  }
   scheduleSave();
   render();
 }
@@ -1843,6 +2022,134 @@ function completeBoards() {
     showToast('Pick a design for every room first');
     return;
   }
+  ST.phase = 'home';
+  scheduleSave();
+  render();
+}
+
+// ── Package Review ────────────────────────────
+// Shows all selections auto-populated from the design package.
+// Each product is a visual card with image. Tap to expand swap options.
+
+function productImageUrl(styleName, category, tier) {
+  if (!styleName) return null;
+  const slug = styleName.toLowerCase().replace(/\s+/g, '-');
+  return `/images/products/${slug}/${category}/${tier.toLowerCase()}.png`;
+}
+
+function renderPackageReview() {
+  if (!ST.designPackage) return renderLoading('Loading package…');
+  const rooms = ST.rms || [];
+
+  return `
+    <div class="package-shell">
+      <div class="package-hd">
+        <div class="package-eyebrow">Your ${esc(ST.style)} Design Package</div>
+        <div class="package-title">Every selection, picked for you.</div>
+        <div class="package-sub">
+          Based on your style and budget preferences, here's your fully designed home.
+          Tap any card to see alternatives and swap. When you're happy, finalize below.
+        </div>
+      </div>
+
+      ${rooms.map(rm => {
+        const pkgRoom = ST.designPackage[rm.id];
+        if (!pkgRoom || !Object.keys(pkgRoom).length) return '';
+        const tierLabel = ST.budgetTiers[rm.id] || '';
+        return `
+          <div class="package-room">
+            <div class="package-room-hd">
+              <div class="package-room-name">${esc(rm.name)}</div>
+              ${tierLabel ? `<div class="package-room-tier">${esc(tierLabel)}</div>` : ''}
+            </div>
+            <div class="package-grid">
+              ${Object.entries(pkgRoom).map(([cat, sel]) => {
+                const pick = ST.picks[cellKey(rm.id, cat)];
+                const current = pick || sel.selected;
+                const swapId = rm.id + '::' + cat;
+                const isOpen = ST.expandedSwap === swapId;
+                const imgUrl = current.imageUrl || productImageUrl(ST.style, cat, current.tier);
+                return `
+                  <div class="product-card" onclick="toggleSwapPanel('${esc(swapId)}')">
+                    ${imgUrl
+                      ? `<img class="product-card-img" src="${esc(imgUrl)}" alt="" referrerpolicy="no-referrer"
+                              onerror="this.outerHTML='<div class=\\'product-card-img-fallback\\'>${esc(CAT_LABELS[cat] || cat)}</div>'">`
+                      : `<div class="product-card-img-fallback">${esc(CAT_LABELS[cat] || cat)}</div>`}
+                    <div class="product-card-body">
+                      <div class="product-card-cat">${esc(CAT_LABELS[cat] || cat)}</div>
+                      <div class="product-card-name">${esc(current.name)}</div>
+                      <span class="product-card-tier-badge tier-${(current.tier || '').toLowerCase()}">${esc(current.tier)}</span>
+                      <div class="product-card-note">${esc(current.note || '')}</div>
+                    </div>
+                    ${isOpen ? renderSwapPanel(rm.id, cat, sel) : ''}
+                  </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }).join('')}
+
+      <div class="package-footer">
+        <button class="btn-secondary" onclick="backToBudgetFromPackage()">Back to budget</button>
+        <button class="btn-primary" onclick="finalizePackage()">Looks great — let's go</button>
+      </div>
+
+      <div class="package-refine-hint">
+        Want to fine-tune a specific selection? Finalize first, then
+        <a onclick="finalizePackage()">chat with Fox</a> about any room.
+      </div>
+    </div>`;
+}
+
+function renderSwapPanel(roomId, cat, sel) {
+  const currentTier = (ST.picks[cellKey(roomId, cat)] || sel.selected).tier;
+  const allOptions = [sel.selected, ...sel.alternatives].filter(o => o.tier !== currentTier);
+  return `
+    <div class="swap-panel" onclick="event.stopPropagation()">
+      <div class="swap-panel-title">Swap to:</div>
+      <div class="swap-options">
+        ${allOptions.map(opt => {
+          const img = opt.imageUrl || productImageUrl(ST.style, cat, opt.tier);
+          return `
+            <div class="swap-option" onclick="swapSelection('${esc(roomId)}','${esc(cat)}',${JSON.stringify(opt).replace(/'/g, '\\\'')})">
+              ${img
+                ? `<img class="swap-option-img" src="${esc(img)}" alt=""
+                        onerror="this.style.display='none'">`
+                : ''}
+              <div class="swap-option-body">
+                <div class="swap-option-name">${esc(opt.name)}</div>
+                <div class="swap-option-tier">${esc(opt.tier)}</div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function toggleSwapPanel(swapId) {
+  ST.expandedSwap = (ST.expandedSwap === swapId) ? null : swapId;
+  render();
+}
+
+function swapSelection(roomId, cat, newPick) {
+  ST.picks[cellKey(roomId, cat)] = {
+    tier: newPick.tier,
+    name: newPick.name,
+    note: newPick.note || '',
+    imageUrl: newPick.imageUrl || productImageUrl(ST.style, cat, newPick.tier),
+    autoGenerated: false,
+  };
+  ST.expandedSwap = null;
+  scheduleSave();
+  render();
+  showToast(`Swapped to ${newPick.name}`);
+}
+
+function backToBudgetFromPackage() {
+  ST.phase = 'budget';
+  render();
+}
+
+function finalizePackage() {
   ST.phase = 'home';
   scheduleSave();
   render();
@@ -2217,16 +2524,17 @@ async function boot() {
   }
 
   // 3) Decide which phase to start in based on what's saved.
-  //    Full flow: quiz → analyzing → reveal → budget → boards → home → chat
+  //    Full flow: quiz → analyzing → reveal → budget → package → home → chat
   //    On reload we drop the user at the furthest completed step.
   if (ST.style && ST.styleGreeting) {
     // Style identified — figure out which post-reveal step they're at.
     if (!allBudgetTiersSet()) {
       ST.phase = 'budget';
-    } else if (!allBoardPicksSet()) {
-      ST.phase = 'boards';
+    } else if (!ST.designPackage) {
+      // Budget done, no package yet — show budget so they can re-trigger
+      ST.phase = 'budget';
     } else {
-      ST.phase = 'home';
+      ST.phase = 'package';
     }
   } else {
     ST.phase = 'quiz';
