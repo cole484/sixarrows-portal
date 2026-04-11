@@ -1,0 +1,12 @@
+# Local Netlify folder
+.netlify
+
+# Local environment variables (Supabase / Anthropic / Google keys) — never commit
+.env
+.env.*
+
+# Claude Code local config (launch.json, worktrees, etc.) — never commit
+.claude
+
+# FLUX-generated images (regenerate from prompts; too big for git)
+scripts/flux/output/
