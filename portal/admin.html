@@ -125,6 +125,78 @@
 .adm-msg { font-size:12px; padding:8px 12px; border-radius:var(--r-md); margin-top:8px; display:none; }
 .adm-msg.success { background:var(--green-lt); color:var(--green-deep); }
 .adm-msg.error   { background:var(--danger-lt); color:var(--danger); }
+
+/* ── Schedule Dashboard & Gantt ──────────────────────── */
+.sch-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:1rem; }
+.sch-kpi-card { background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); padding:14px 16px; }
+.sch-action-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:1rem; padding:10px 14px; background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); }
+.sch-toast { font-size:12px; padding:6px 12px; border-radius:var(--r-md); margin-left:auto; transition:opacity .3s; }
+.sch-toast.success { background:var(--green-lt); color:var(--green-deep); }
+.sch-toast.error { background:var(--danger-lt); color:var(--danger); }
+
+.gantt-wrap { background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); overflow:hidden; margin-bottom:1rem; }
+.gantt-scroll { overflow-x:auto; overflow-y:visible; position:relative; }
+.gantt-header { display:flex; position:sticky; top:0; z-index:3; background:var(--cream-pale); border-bottom:0.5px solid var(--border-2); height:28px; align-items:center; }
+.gantt-week-mark { flex-shrink:0; font-size:8px; font-weight:600; color:var(--charcoal-4); text-transform:uppercase; letter-spacing:.04em; text-align:center; border-right:0.5px solid var(--border); height:100%; display:flex; align-items:center; justify-content:center; }
+.gantt-phase { border-bottom:0.5px solid var(--border); }
+.gantt-phase-hd { display:flex; align-items:center; gap:6px; padding:5px 12px; background:var(--cream-2); cursor:pointer; user-select:none; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--charcoal-3); }
+.gantt-phase-hd svg { width:10px; height:10px; transition:transform .15s; }
+.gantt-phase.collapsed .gantt-phase-hd svg { transform:rotate(-90deg); }
+.gantt-phase.collapsed .gantt-phase-body { display:none; }
+.gantt-phase-count { font-weight:400; color:var(--charcoal-4); margin-left:auto; font-size:9px; }
+.gantt-row { position:relative; height:26px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; }
+.gantt-row:hover { background:var(--cream-pale); }
+.gantt-row-label { width:180px; flex-shrink:0; padding:0 8px; font-size:11px; color:var(--charcoal-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-right:0.5px solid var(--border); position:sticky; left:0; z-index:2; background:inherit; }
+.gantt-row:hover .gantt-row-label { background:var(--cream-pale); }
+.gantt-row-track { flex:1; position:relative; min-width:0; height:100%; }
+.gantt-bar { position:absolute; top:4px; height:18px; border-radius:3px; cursor:pointer; font-size:8px; color:white; font-weight:600; display:flex; align-items:center; padding:0 5px; white-space:nowrap; overflow:hidden; transition:opacity .15s; min-width:4px; z-index:2; }
+.gantt-bar:hover { opacity:.82; }
+.gantt-bar.complete { background:var(--green); }
+.gantt-bar.in_progress { background:#4a7fb5; }
+.gantt-bar.not_started { background:#b0b0b0; }
+.gantt-bar.skipped { background:#ddd; color:#999; }
+.gantt-bar.critical { box-shadow:0 0 0 1.5px var(--charcoal); }
+.gantt-bar.alert-red { box-shadow:0 0 0 2px var(--danger); }
+.gantt-bar.alert-yellow { box-shadow:0 0 0 2px #c89200; }
+.gantt-today { position:absolute; top:0; bottom:0; width:1.5px; background:var(--danger); z-index:1; pointer-events:none; }
+.gantt-today::before { content:'Today'; position:absolute; top:2px; left:3px; font-size:7px; color:var(--danger); font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+
+.sch-edit-panel { background:white; border:1px solid var(--border-2); border-radius:var(--r-md); padding:16px; margin:0 0 4px; box-shadow:var(--sh-md); }
+.sch-edit-hd { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.sch-edit-title { font-size:14px; font-weight:700; color:var(--charcoal); }
+.sch-edit-meta { font-size:11px; color:var(--charcoal-4); margin-top:2px; }
+
+.sch-alert-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:0.5px solid var(--border); font-size:12px; }
+.sch-alert-row:last-child { border-bottom:none; }
+.sch-gate-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:6px; margin-top:8px; }
+.sch-gate-item { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--cream-pale); border:0.5px solid var(--border); border-radius:var(--r-md); font-size:11px; }
+
+/* ── View toggle (Gantt / Table) ──────────────────────── */
+.sch-view-toggle { display:inline-flex; border:0.5px solid var(--border-2); border-radius:var(--r-md); overflow:hidden; margin-left:auto; }
+.sch-view-btn { padding:6px 14px; font-size:11px; font-weight:600; cursor:pointer; background:white; color:var(--charcoal-3); border:none; font-family:'Work Sans',sans-serif; transition:all .15s; }
+.sch-view-btn.active { background:var(--charcoal); color:var(--cream); }
+
+/* ── Task table view ─────────────────────────────────── */
+.sch-table { width:100%; border-collapse:collapse; font-size:12px; }
+.sch-table th { text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:var(--charcoal-4); font-weight:600; padding:8px 6px; border-bottom:1px solid var(--border-2); white-space:nowrap; }
+.sch-table td { padding:7px 6px; border-bottom:0.5px solid var(--border); vertical-align:middle; }
+.sch-table tr:hover td { background:var(--cream-pale); }
+.sch-table .sch-tbl-name { font-weight:600; color:var(--charcoal); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sch-table .sch-tbl-phase { color:var(--charcoal-3); font-size:11px; }
+.sch-table .sch-tbl-date { font-size:11px; color:var(--charcoal-3); white-space:nowrap; }
+.sch-table select.sch-tbl-status { font-size:11px; padding:3px 6px; border:0.5px solid var(--border-2); border-radius:var(--r-sm); background:white; font-family:'Work Sans',sans-serif; cursor:pointer; }
+
+/* ── Bulk selection ──────────────────────────────────── */
+.sch-bulk-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; background:var(--charcoal); color:var(--cream); border-radius:var(--r-md); margin-bottom:8px; font-size:12px; }
+.sch-bulk-bar .adm-btn { font-size:11px; padding:5px 12px; }
+.sch-chk { width:15px; height:15px; cursor:pointer; accent-color:var(--green); }
+
+@media(max-width:768px) {
+  .sch-kpi-row { grid-template-columns:repeat(2,1fr); }
+  .gantt-row-label { width:120px; font-size:10px; }
+  .sch-edit-panel { padding:12px; }
+  .sch-table { font-size:11px; }
+}
 </style>
 </head>
 <body>
@@ -257,6 +329,10 @@ async function loadAllClientsFromSupabase() {
         projectType:         client.project_type || 'new_build',
         notionTimelineDbId:  client.notion_timeline_db_id || null,
         photoFolders:        Array.isArray(client.photo_folders) ? client.photo_folders : [],
+        buildStartDate:      client.build_start_date || null,
+        targetEndDate:       client.target_end_date || null,
+        computedEndDate:     client.computed_end_date || null,
+        activeWorkstreams:   client.active_workstreams || ['exterior','interior'],
         budgetCategories:    budgetCats,
         updates:             updates.length ? updates : (existing.updates || []),
         timeline:            timeline.length ? timeline : (existing.timeline || []),
@@ -358,6 +434,7 @@ function renderAdmin() {
     { key:'selections',icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3.5l2 2 2.5-2.5"/><line x1="7" y1="4.5" x2="13" y2="4.5"/><path d="M1 9l2 2 2.5-2.5"/><line x1="7" y1="10" x2="13" y2="10"/></svg>`, label:'Selections'       },
     { key:'documents', icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1h5.5L11 3.5V13H3V1z"/><polyline points="8.5,1 8.5,4 11,4"/></svg>`, label:'Documents'       },
     { key:'photos',    icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="1"/><circle cx="5" cy="6" r="1.5"/><path d="M1 11l3-3 2.5 2.5L10 7l3 4"/></svg>`, label:'Build Photos'    },
+    { key:'schedule',  icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="1"/><line x1="1" y1="5.5" x2="13" y2="5.5"/><line x1="4" y1="5.5" x2="4" y2="12"/><line x1="4" y1="7.5" x2="9" y2="7.5"/><line x1="4" y1="9.5" x2="7" y2="9.5"/></svg>`, label:'Build Schedule' },
   ].map(n => `<div class="admin-nav-link ${activeView===n.key?'active':''}" onclick="activeView='${n.key}';sessionStorage.setItem('sa_admin_view','${n.key}');renderAdmin()">${n.icon}${n.label}</div>`).join('');
 
   const projectSelect = `
@@ -419,6 +496,12 @@ function renderAdmin() {
   // ── PHOTOS VIEW ───────────────────────────────────────
   else if (activeView === 'photos') {
     mainContent = renderPhotosView(p);
+  }
+
+  // ── SCHEDULE VIEW ─────────────────────────────────────
+  else if (activeView === 'schedule') {
+    mainContent = renderScheduleView(p);
+    setTimeout(() => { if (!scheduleCache[p.id]) loadSchedule(p.id); }, 100);
   }
 
   // ── ADD CLIENT VIEW ───────────────────────────────────
@@ -2284,6 +2367,515 @@ async function createClientDirect() {
   } catch(e) {
     if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'Error: ' + e.message; }
   }
+}
+
+// ════════════════════════════════════════════════════════
+//  BUILD SCHEDULE VIEW
+// ════════════════════════════════════════════════════════
+
+let scheduleCache = {};
+let schViewMode = 'gantt'; // 'gantt' or 'table'
+let schCollapsed = {}; // phaseIndex → boolean, persisted per session
+let schBulkSelected = new Set();
+
+const SCH_DAY_WIDTH = 18;
+const PHASE_ORDER = [
+  'Preconstruction','Sitework','Foundation','Framing & Dry-in',
+  'MEP Rough-ins','Insulation & Drywall','Interior Finishes',
+  'Exterior Finishes','Closeout'
+];
+
+function schDaysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+function schBarLeft(taskStart, tlStart) { return schDaysBetween(tlStart, taskStart) * SCH_DAY_WIDTH; }
+function schBarWidth(dur) { return Math.max(dur * SCH_DAY_WIDTH, SCH_DAY_WIDTH); }
+function schFmtDate(d) { if (!d) return '—'; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+function schFmtDateFull(d) { if (!d) return '—'; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+
+async function scheduleAPI(projectId, action, method='GET', body=null) {
+  const url = `/.netlify/functions/schedule-engine?projectId=${encodeURIComponent(projectId)}&action=${action}`;
+  const opts = { method, headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `API error ${res.status}`);
+  if (data.tasks) scheduleCache[projectId] = data;
+  return data;
+}
+
+async function loadSchedule(projectId) {
+  const el = document.getElementById('sch-loading');
+  if (el) el.textContent = 'Loading schedule…';
+  try {
+    const sched = await scheduleAPI(projectId, 'schedule');
+    if (sched.tasks && sched.tasks.length > 0) {
+      await scheduleAPI(projectId, 'calculate');
+    } else {
+      scheduleCache[projectId] = sched;
+    }
+    renderAdmin();
+  } catch(e) {
+    if (el) { el.textContent = 'Error: ' + e.message; el.style.color = 'var(--danger)'; }
+  }
+}
+
+async function instantiateSchedule(projectId) {
+  schShowToast('Creating schedule from templates…','');
+  try {
+    await scheduleAPI(projectId, 'instantiate', 'POST');
+    schShowToast('Schedule created!','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+async function recalculateSchedule(projectId) {
+  schShowToast('Recalculating CPM…','');
+  try {
+    await scheduleAPI(projectId, 'calculate');
+    schShowToast('CPM updated','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+async function validateSchedule(projectId) {
+  try {
+    const r = await scheduleAPI(projectId, 'validate', 'POST');
+    if (r.valid) schShowToast(`All ${r.ruleCount} sequencing rules pass`,'success');
+    else schShowToast(`${r.violationCount} sequencing violation(s) found`,'error');
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+async function saveTaskUpdate(projectId, taskId) {
+  const g = id => document.getElementById(id);
+  const body = {
+    taskId,
+    status: g(`sch-e-status-${taskId}`)?.value || 'not_started',
+    duration_days: parseInt(g(`sch-e-dur-${taskId}`)?.value) || 1,
+    actual_start: g(`sch-e-astart-${taskId}`)?.value || null,
+    actual_finish: g(`sch-e-afin-${taskId}`)?.value || null,
+    assigned_contractor: g(`sch-e-contr-${taskId}`)?.value || null,
+    contractor_confirmed: g(`sch-e-conf-${taskId}`)?.checked || false,
+    notes: g(`sch-e-notes-${taskId}`)?.value || null,
+  };
+  try {
+    await scheduleAPI(projectId, 'update-task', 'PATCH', body);
+    schShowToast('Saved & recalculated','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+function schShowToast(msg, type) {
+  const el = document.getElementById('sch-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'sch-toast' + (type ? ' '+type : '');
+  if (type) setTimeout(() => { el.className = 'sch-toast'; el.textContent = ''; }, 4000);
+}
+
+function generateWeekMarkers(start, end) {
+  const markers = [];
+  const d = new Date(start + 'T00:00:00');
+  // Align to Monday
+  const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
+  const endD = new Date(end + 'T00:00:00');
+  while (d <= endD) {
+    markers.push({
+      label: d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}),
+      width: 7 * SCH_DAY_WIDTH
+    });
+    d.setUTCDate(d.getUTCDate() + 7);
+  }
+  return markers;
+}
+
+function groupTasksByPhase(tasks) {
+  const map = new Map();
+  PHASE_ORDER.forEach(p => map.set(p, []));
+  tasks.forEach(t => {
+    const phase = t.phase || t.taskPhase || 'Other';
+    if (!map.has(phase)) map.set(phase, []);
+    map.get(phase).push(t);
+  });
+  return map;
+}
+
+// ── View toggle ──
+function schSetView(mode) { schViewMode = mode; renderAdmin(); }
+
+// ── Phase collapse memory ──
+function schTogglePhase(pi) {
+  schCollapsed[pi] = !schCollapsed[pi];
+  const el = document.getElementById('sch-phase-' + pi);
+  if (el) el.classList.toggle('collapsed', schCollapsed[pi]);
+}
+
+// ── Bulk selection ──
+function schToggleBulk(taskId) {
+  if (schBulkSelected.has(taskId)) schBulkSelected.delete(taskId);
+  else schBulkSelected.add(taskId);
+  const countEl = document.getElementById('sch-bulk-count');
+  if (countEl) countEl.textContent = schBulkSelected.size + ' selected';
+  const bar = document.getElementById('sch-bulk-bar');
+  if (bar) bar.style.display = schBulkSelected.size > 0 ? 'flex' : 'none';
+}
+
+function schSelectAll() {
+  const cache = scheduleCache[activeProject];
+  if (!cache) return;
+  cache.tasks.forEach(t => { if (t.status !== 'complete' && t.status !== 'skipped') schBulkSelected.add(t.id); });
+  renderAdmin();
+}
+
+function schSelectNone() { schBulkSelected.clear(); renderAdmin(); }
+
+async function schBulkSetStatus(projectId, status) {
+  if (schBulkSelected.size === 0) return;
+  schShowToast(`Updating ${schBulkSelected.size} tasks…`, '');
+  try {
+    for (const taskId of schBulkSelected) {
+      const body = { taskId, status };
+      if (status === 'in_progress') body.actual_start = new Date().toISOString().split('T')[0];
+      if (status === 'complete') {
+        body.actual_start = body.actual_start || new Date().toISOString().split('T')[0];
+        body.actual_finish = new Date().toISOString().split('T')[0];
+      }
+      await scheduleAPI(projectId, 'update-task', 'PATCH', body);
+    }
+    schBulkSelected.clear();
+    schShowToast('Bulk update complete', 'success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message, 'error'); }
+}
+
+// ── Inline status change (table view) ──
+async function schQuickStatus(projectId, taskId, newStatus) {
+  const body = { taskId, status: newStatus };
+  if (newStatus === 'in_progress') body.actual_start = new Date().toISOString().split('T')[0];
+  if (newStatus === 'complete') body.actual_finish = new Date().toISOString().split('T')[0];
+  try {
+    await scheduleAPI(projectId, 'update-task', 'PATCH', body);
+    schShowToast('Updated', 'success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message, 'error'); }
+}
+
+// ── Auto-scroll to today ──
+function schAutoScrollToday() {
+  const scroll = document.querySelector('.gantt-scroll');
+  const today = document.querySelector('.gantt-today');
+  if (scroll && today) {
+    const todayLeft = parseInt(today.style.left) || 0;
+    scroll.scrollLeft = Math.max(0, todayLeft - 300);
+  }
+}
+
+// ── Table view renderer ──
+function renderScheduleTable(tasks, projectId) {
+  const statusOpts = (cur) => ['not_started','in_progress','complete','skipped'].map(s =>
+    `<option value="${s}" ${s===cur?'selected':''}>${s==='not_started'?'Not Started':s==='in_progress'?'In Progress':s.charAt(0).toUpperCase()+s.slice(1)}</option>`
+  ).join('');
+
+  const phaseMap = groupTasksByPhase(tasks);
+  let html = '';
+
+  for (const [phaseName, phaseTasks] of phaseMap) {
+    if (phaseTasks.length === 0) continue;
+    const pi = PHASE_ORDER.indexOf(phaseName);
+    const isCollapsed = schCollapsed[pi];
+    const done = phaseTasks.filter(t => t.status === 'complete').length;
+
+    html += `<tr><td colspan="8" style="padding:0">
+      <div class="gantt-phase-hd" onclick="schTogglePhase(${pi})" id="sch-tbl-phase-${pi}">
+        <svg viewBox="0 0 10 10" style="width:10px;height:10px;transition:transform .15s;${isCollapsed?'transform:rotate(-90deg)':''}"><path d="M3 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        ${phaseName} <span class="gantt-phase-count">${done}/${phaseTasks.length}</span>
+      </div>
+    </td></tr>`;
+
+    if (!isCollapsed) {
+      phaseTasks.forEach(t => {
+        const id = t.id;
+        const name = t.taskName || t.task_name;
+        const status = t.status || 'not_started';
+        const start = t.plannedStart || t.planned_start;
+        const finish = t.plannedFinish || t.planned_finish;
+        const contractor = t.assignedContractor || t.assigned_contractor || '';
+        const alert = t.alertLevel || t.alert_level || 'none';
+        const crit = t.isCritical;
+        const fl = t.float;
+        const checked = schBulkSelected.has(id);
+
+        html += `<tr>
+          <td style="width:30px;text-align:center"><input type="checkbox" class="sch-chk" ${checked?'checked':''} onchange="schToggleBulk('${id}')"></td>
+          <td class="sch-tbl-name" title="${name}" onclick="toggleTaskEdit('${id}','${projectId}')" style="cursor:pointer">${name}</td>
+          <td><select class="sch-tbl-status" onchange="schQuickStatus('${projectId}','${id}',this.value)">${statusOpts(status)}</select></td>
+          <td class="sch-tbl-date">${schFmtDate(start)}</td>
+          <td class="sch-tbl-date">${schFmtDate(finish)}</td>
+          <td style="font-size:11px;color:var(--charcoal-3)">${contractor || '—'}</td>
+          <td style="text-align:center">${alert==='red'?'<span class="tag danger" style="font-size:8px">RED</span>':alert==='yellow'?'<span class="tag warn" style="font-size:8px">YLW</span>':crit?'<span class="tag dark" style="font-size:8px">CRIT</span>':''}</td>
+          <td style="font-size:10px;color:var(--charcoal-4);text-align:right">${fl!=null?fl+'d':''}</td>
+        </tr>
+        <tr id="sch-edit-${id}" style="display:none"><td colspan="8" style="padding:0"></td></tr>`;
+      });
+    }
+  }
+
+  return `<div class="card" style="overflow-x:auto;margin-bottom:1rem">
+    <table class="sch-table">
+      <thead><tr>
+        <th style="width:30px"><input type="checkbox" class="sch-chk" onchange="this.checked?schSelectAll():schSelectNone()"></th>
+        <th>Task</th><th>Status</th><th>Start</th><th>Finish</th><th>Contractor</th><th>Alert</th><th style="text-align:right">Float</th>
+      </tr></thead>
+      <tbody>${html}</tbody>
+    </table>
+  </div>`;
+}
+
+let schEditOpen = null;
+
+function toggleTaskEdit(taskId, projectId) {
+  const el = document.getElementById('sch-edit-' + taskId);
+  if (!el) return;
+  if (schEditOpen === taskId) {
+    el.style.display = 'none';
+    schEditOpen = null;
+    return;
+  }
+  // Close any open panel
+  if (schEditOpen) {
+    const prev = document.getElementById('sch-edit-' + schEditOpen);
+    if (prev) prev.style.display = 'none';
+  }
+  // Find task in cache
+  const cache = scheduleCache[activeProject];
+  if (!cache) return;
+  const task = cache.tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const sel = (v) => (f) => f === v ? 'selected' : '';
+  const s = sel(task.status);
+
+  el.innerHTML = `<div class="sch-edit-panel">
+    <div class="sch-edit-hd">
+      <div>
+        <div class="sch-edit-title">${task.taskName}</div>
+        <div class="sch-edit-meta">${task.phase} · ${task.trade||'GC'} · Float: ${task.float??'—'}d${task.isCritical?' · CRITICAL PATH':''}</div>
+        <div class="sch-edit-meta">${schFmtDate(task.plannedStart)} → ${schFmtDate(task.plannedFinish)}${task.selectionsGate?' · Gate: '+task.selectionsGate:''}</div>
+      </div>
+      <span class="tag ${task.status==='complete'?'ok':task.status==='in_progress'?'neutral':task.alertLevel==='red'?'danger':task.alertLevel==='yellow'?'warn':'neutral'}">${task.status}</span>
+    </div>
+    <div class="adm-grid2">
+      <div class="adm-field"><label>Status</label>
+        <select class="adm-inp adm-sel" id="sch-e-status-${taskId}">
+          <option value="not_started" ${s('not_started')}>Not Started</option>
+          <option value="in_progress" ${s('in_progress')}>In Progress</option>
+          <option value="complete" ${s('complete')}>Complete</option>
+          <option value="skipped" ${s('skipped')}>Skipped</option>
+        </select>
+      </div>
+      <div class="adm-field"><label>Duration (days)</label>
+        <input class="adm-inp" type="number" id="sch-e-dur-${taskId}" value="${task.durationDays}" min="1">
+      </div>
+      <div class="adm-field"><label>Actual Start</label>
+        <input class="adm-inp" type="date" id="sch-e-astart-${taskId}" value="${task.actualStart||''}">
+      </div>
+      <div class="adm-field"><label>Actual Finish</label>
+        <input class="adm-inp" type="date" id="sch-e-afin-${taskId}" value="${task.actualFinish||''}">
+      </div>
+      <div class="adm-field"><label>Assigned Contractor</label>
+        <input class="adm-inp" type="text" id="sch-e-contr-${taskId}" value="${task.assignedContractor||''}" placeholder="Contractor name">
+      </div>
+      <div class="adm-field" style="display:flex;align-items:center;gap:8px;padding-top:22px">
+        <input type="checkbox" id="sch-e-conf-${taskId}" ${task.contractorConfirmed?'checked':''}>
+        <label for="sch-e-conf-${taskId}" style="margin:0;text-transform:none;letter-spacing:0;font-size:12px">Contractor confirmed</label>
+      </div>
+    </div>
+    <div class="adm-field"><label>Notes</label>
+      <textarea class="adm-inp" id="sch-e-notes-${taskId}" rows="2" style="resize:vertical">${task.notes||''}</textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="adm-btn adm-btn-green" onclick="saveTaskUpdate('${projectId}','${taskId}')">Save & Recalculate</button>
+      <button class="adm-btn adm-btn-ghost" onclick="toggleTaskEdit('${taskId}','${projectId}')">Cancel</button>
+    </div>
+  </div>`;
+  el.style.display = 'block';
+  schEditOpen = taskId;
+}
+
+function renderGanttRow(task, tlStart, tlWidth) {
+  const barL = schBarLeft(task.plannedStart || task.planned_start, tlStart);
+  const barW = schBarWidth(task.durationDays || task.duration_days || 1);
+  const status = task.status || 'not_started';
+  const crit = task.isCritical ? 'critical' : '';
+  const alert = (task.alertLevel||task.alert_level)==='red' ? 'alert-red' : (task.alertLevel||task.alert_level)==='yellow' ? 'alert-yellow' : '';
+  const name = task.taskName || task.task_name;
+  const id = task.id;
+  return `<div class="gantt-row">
+    <div class="gantt-row-label" title="${name}">${name}</div>
+    <div class="gantt-row-track" style="width:${tlWidth}px">
+      <div class="gantt-bar ${status} ${crit} ${alert}" style="left:${barL}px;width:${barW}px"
+           onclick="toggleTaskEdit('${id}','${activeProject}')"
+           title="${name} (${task.durationDays||task.duration_days}d) ${task.trade||''}&#10;${schFmtDate(task.plannedStart||task.planned_start)} → ${schFmtDate(task.plannedFinish||task.planned_finish)}">
+        ${barW > 70 ? name : ''}
+      </div>
+    </div>
+  </div>
+  <div id="sch-edit-${id}" style="display:none"></div>`;
+}
+
+function renderScheduleView(p) {
+  const cache = scheduleCache[p.id];
+
+  // No cache yet — loading state
+  if (!cache) {
+    return `<div class="card" style="text-align:center;padding:2rem">
+      <div id="sch-loading" style="font-size:13px;color:var(--charcoal-3)">Loading schedule…</div>
+    </div>`;
+  }
+
+  const tasks = cache.tasks || [];
+
+  // No schedule yet — offer to instantiate
+  if (tasks.length === 0) {
+    const hasBSD = p.buildStartDate || (cache.client && cache.client.build_start_date);
+    return `<div class="card" style="text-align:center;padding:2rem">
+      <div style="font-size:13px;color:var(--charcoal-3);margin-bottom:12px">
+        No build schedule exists for this project yet.
+      </div>
+      ${!hasBSD ? `<div style="font-size:12px;color:var(--danger);margin-bottom:12px">Set build_start_date on this client first (Project Info tab).</div>` : ''}
+      <button class="adm-btn adm-btn-green" onclick="instantiateSchedule('${p.id}')" ${!hasBSD?'disabled':''}>
+        Instantiate Schedule from Templates
+      </button>
+      <div id="sch-toast" class="sch-toast" style="margin-top:8px"></div>
+    </div>`;
+  }
+
+  // ── Compute stats ──
+  const total = tasks.length;
+  const complete = tasks.filter(t => (t.status) === 'complete').length;
+  const inProg = tasks.filter(t => (t.status) === 'in_progress').length;
+  const notStarted = tasks.filter(t => (t.status) === 'not_started').length;
+  const skipped = tasks.filter(t => (t.status) === 'skipped').length;
+  const pct = total ? Math.round(complete / total * 100) : 0;
+  const critCount = cache.criticalPathLength || (cache.criticalPath||[]).length;
+  const alerts = cache.alerts || { red:[], yellow:[] };
+  const gates = cache.gateStatus || {};
+  const buildStart = cache.buildStart || p.buildStartDate || '';
+  const targetEnd = cache.targetEnd || p.targetEndDate || '';
+  const computedEnd = cache.computedEnd || p.computedEndDate || '';
+
+  // ── A: KPI row ──
+  const kpiHTML = `<div class="sch-kpi-row">
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Tasks</div><div class="kpi-val">${total}</div><div class="kpi-sub">${complete} done · ${inProg} active · ${skipped} skipped</div></div></div>
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Complete</div><div class="kpi-val">${pct}%</div></div><div class="track" style="margin-top:6px"><div class="bar" style="width:${pct}%"></div></div></div>
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Timeline</div><div class="kpi-val" style="font-size:13px">${schFmtDate(buildStart)} → ${schFmtDate(computedEnd)}</div><div class="kpi-sub">Target: ${schFmtDateFull(targetEnd)}</div></div></div>
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Critical Path</div><div class="kpi-val">${critCount}</div><div class="kpi-sub">Zero-float tasks</div></div></div>
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Alerts</div><div style="display:flex;gap:6px;margin-top:4px">${alerts.red.length?`<span class="tag danger">${alerts.red.length} Red</span>`:''}<span class="tag ${alerts.yellow.length?'warn':'neutral'}">${alerts.yellow.length} Yellow</span></div></div></div>
+  </div>`;
+
+  // ── B: Action bar + view toggle + bulk bar ──
+  const actionHTML = `<div class="sch-action-bar">
+    <button class="adm-btn adm-btn-green" onclick="recalculateSchedule('${p.id}')">Recalculate CPM</button>
+    <button class="adm-btn adm-btn-ghost" onclick="validateSchedule('${p.id}')">Validate Sequencing</button>
+    <div id="sch-toast" class="sch-toast"></div>
+    <div class="sch-view-toggle">
+      <button class="sch-view-btn ${schViewMode==='gantt'?'active':''}" onclick="schSetView('gantt')">Gantt</button>
+      <button class="sch-view-btn ${schViewMode==='table'?'active':''}" onclick="schSetView('table')">Table</button>
+    </div>
+  </div>
+  <div id="sch-bulk-bar" class="sch-bulk-bar" style="display:${schBulkSelected.size>0?'flex':'none'}">
+    <span id="sch-bulk-count">${schBulkSelected.size} selected</span>
+    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','in_progress')">Mark In Progress</button>
+    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','complete')">Mark Complete</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schBulkSetStatus('${p.id}','skipped')">Skip</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schSelectNone()" style="margin-left:auto">Clear</button>
+  </div>`;
+
+  // ── C: Gantt chart ──
+  const tlStart = tasks.reduce((m,t) => {
+    const s = t.plannedStart || t.planned_start;
+    return s && (!m || s < m) ? s : m;
+  }, null) || buildStart;
+  const tlEnd = tasks.reduce((m,t) => {
+    const f = t.plannedFinish || t.planned_finish;
+    return f && (!m || f > m) ? f : m;
+  }, null) || computedEnd;
+
+  // Add padding
+  const tlEndPad = new Date(tlEnd + 'T00:00:00');
+  tlEndPad.setUTCDate(tlEndPad.getUTCDate() + 14);
+  const tlEndStr = tlEndPad.toISOString().split('T')[0];
+
+  const tlWidth = schDaysBetween(tlStart, tlEndStr) * SCH_DAY_WIDTH;
+  const weeks = generateWeekMarkers(tlStart, tlEndStr);
+
+  const headerHTML = `<div class="gantt-header" style="width:${180 + tlWidth}px">
+    <div style="width:180px;flex-shrink:0;font-size:9px;font-weight:700;color:var(--charcoal-3);padding:0 8px">Task</div>
+    ${weeks.map(w => `<div class="gantt-week-mark" style="width:${w.width}px">${w.label}</div>`).join('')}
+  </div>`;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayInRange = todayStr >= tlStart && todayStr <= tlEndStr;
+  const todayLeft = 180 + schBarLeft(todayStr, tlStart);
+  const todayHTML = todayInRange ? `<div class="gantt-today" style="left:${todayLeft}px"></div>` : '';
+
+  const phaseMap = groupTasksByPhase(tasks);
+  let phaseHTML = '';
+  let pi = 0;
+  for (const [phaseName, phaseTasks] of phaseMap) {
+    if (phaseTasks.length === 0) { pi++; continue; }
+    const done = phaseTasks.filter(t => t.status === 'complete').length;
+    const isCollapsed = schCollapsed[pi];
+    phaseHTML += `<div class="gantt-phase ${isCollapsed?'collapsed':''}" id="sch-phase-${pi}">
+      <div class="gantt-phase-hd" onclick="schTogglePhase(${pi})">
+        <svg viewBox="0 0 10 10"><path d="M3 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        ${phaseName}
+        <span class="gantt-phase-count">${done}/${phaseTasks.length} complete</span>
+      </div>
+      <div class="gantt-phase-body">
+        ${phaseTasks.map(t => renderGanttRow(t, tlStart, tlWidth)).join('')}
+      </div>
+    </div>`;
+    pi++;
+  }
+
+  const ganttHTML = `<div class="gantt-wrap">
+    <div class="gantt-scroll">
+      <div style="min-width:${180+tlWidth}px;position:relative">
+        ${headerHTML}
+        ${todayHTML}
+        ${phaseHTML}
+      </div>
+    </div>
+  </div>`;
+
+  // ── D: Alerts & gates ──
+  let alertsHTML = '';
+  if (alerts.red.length || alerts.yellow.length || Object.keys(gates).length) {
+    alertsHTML = `<div class="card">
+      <div class="sh"><div class="sh-title">Alerts & Selection Gates</div></div>
+      ${alerts.red.length ? `<div style="font-size:10px;font-weight:700;color:var(--danger);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Red Alerts (${alerts.red.length})</div>
+        ${alerts.red.map(a => `<div class="sch-alert-row"><span class="tag danger" style="font-size:9px">RED</span><strong style="font-size:12px">${a.taskName}</strong><span style="color:var(--charcoal-4);font-size:11px">— ${a.reason}</span></div>`).join('')}` : ''}
+      ${alerts.yellow.length ? `<div style="font-size:10px;font-weight:700;color:var(--warning);margin:${alerts.red.length?'12px':'0'} 0 4px;text-transform:uppercase;letter-spacing:.05em">Yellow Alerts (${alerts.yellow.length})</div>
+        ${alerts.yellow.map(a => `<div class="sch-alert-row"><span class="tag warn" style="font-size:9px">YELLOW</span><strong style="font-size:12px">${a.taskName}</strong><span style="color:var(--charcoal-4);font-size:11px">— ${a.reason}</span></div>`).join('')}` : ''}
+      ${Object.keys(gates).length ? `<div style="font-size:10px;font-weight:700;color:var(--charcoal-4);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.05em">Selection Gates</div>
+        <div class="sch-gate-grid">
+          ${Object.entries(gates).map(([g,v]) => `<div class="sch-gate-item"><span style="text-transform:capitalize">${g.replace(/_/g,' ')}</span><span class="tag ${v?'ok':'danger'}" style="font-size:9px">${v?'Resolved':'Unresolved'}</span></div>`).join('')}
+        </div>` : ''}
+    </div>`;
+  }
+
+  // ── E: Table view ──
+  const tableHTML = renderScheduleTable(tasks, p.id);
+
+  // Choose view
+  const mainView = schViewMode === 'table' ? tableHTML : ganttHTML;
+
+  // Auto-scroll Gantt to today after render
+  if (schViewMode === 'gantt') {
+    setTimeout(schAutoScrollToday, 150);
+  }
+
+  return kpiHTML + actionHTML + mainView + alertsHTML;
 }
 
 // ════════════════════════════════════════════════════════

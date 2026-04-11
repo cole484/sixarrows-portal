@@ -752,9 +752,9 @@ if (isConstruction && p.links?.budget && p.links.budget !== '#') {
     .catch(() => {});
 }
 
-// ── Live Notion timeline data — timeline card + next milestone card ──
-if (isConstruction && p.notionTimelineDbId) {
-  fetch(`/.netlify/functions/notion-timeline?dbId=${p.notionTimelineDbId}`)
+// ── Live schedule data — timeline card + next milestone card ──
+if (isConstruction) {
+  fetch(`/.netlify/functions/client-schedule?projectId=${p.id}`)
     .then(r => r.ok ? r.json() : null)
     .then(data => {
       if (!data) return;
