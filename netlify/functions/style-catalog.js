@@ -3,8 +3,8 @@
 //  Style Catalog — single source of truth for Selections v2 / Fox
 //
 //  Holds:
-//    • The 8-question visual style quiz (prompts, Drive folder URLs, A/B/C/D
-//      → style mappings). The admin panel edits this.
+//    • The 8-question visual style quiz (big-picture style direction).
+//      Material/finish prefs are captured by the swipe taste board instead.
 //    • The six style profiles — keywords / palette / signature notes. These
 //      are used by the front end to show style reveals and by Fox as
 //      supplemental context.
@@ -94,15 +94,17 @@ const STYLE_PROFILES = {
 const STYLE_NAMES = Object.keys(STYLE_PROFILES);
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Default quiz — 12 questions. Each option's `styles` array is the profile(s)
-//  the answer points toward; the tally across 12 questions picks the winner.
-//  Q1–Q6 use existing ChatGPT-generated photos in Google Drive.
-//  Q7–Q12 use OpenAI gpt-image-1 generated photos (uploaded to Drive after
-//  batch generation — see scripts/flux/). Placeholder folder URLs are filled
-//  in once the images are uploaded.
+//  Default quiz — 8 questions. Each option's `styles` array is the profile(s)
+//  the answer points toward; the tally across 8 questions picks the winner.
+//  Material & finish preferences (countertops, hardware, backsplash, wood
+//  tone) are now handled by the swipe taste board phase instead of quiz
+//  questions — keeps the quiz fast and focused on big-picture style.
 //
-//  folderUrl is the Drive folder containing the 4 visual option images for
-//  that question. The admin panel overrides these URLs per deployment.
+//  Q1–Q4 use existing ChatGPT-generated photos in Google Drive.
+//  Q5–Q8 use OpenAI gpt-image-1 generated photos served as static assets.
+//
+//  folderUrl is the Drive folder (or static:slug) containing the 4 visual
+//  option images for that question.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Drive folder IDs for each quiz question. Each folder contains exactly 4 images
@@ -110,20 +112,15 @@ const STYLE_NAMES = Object.keys(STYLE_PROFILES);
 // The admin panel can override folderUrl per question, but these defaults give
 // a working photo-backed quiz out of the box.
 const Q_FOLDERS = {
-  // Q1–Q6: existing ChatGPT-generated photos in Drive
+  // Q1–Q4: existing ChatGPT-generated photos in Drive
   kitchen_style:      'https://drive.google.com/drive/folders/1b6w9ewHk8978ryrc88z_W4oJPf8Wdh1P',
-  countertop_feel:    'https://drive.google.com/drive/folders/1lLny_0xHbtQ3hSusvRwIqPZqbm9vaofI',
-  hardware_finish:    'https://drive.google.com/drive/folders/1OHbm-D6nOYFWCSgCWqO23vq1jdJAOoLd',
   primary_bathroom:   'https://drive.google.com/drive/folders/1jWscfEJ8xM0f6UuQPnh7WvBgUoLKa2kR',
   flooring:           'https://drive.google.com/drive/folders/1oMpz4XrYf9ETSQ0tJ_BpzKZKmGRYZ5My',
   exterior:           'https://drive.google.com/drive/folders/1bSbgYNUq3u1weXhZrEj_oMefa8NFLu7l',
-  // Q7–Q12: OpenAI gpt-image-1 generated photos served as static assets
-  // from portal/images/quiz/. These use 'staticDir' instead of Drive folders.
-  // The resolveQuizPhotos() function handles both Drive folders and static dirs.
+  // Q5–Q8: OpenAI gpt-image-1 generated photos served as static assets
+  // from portal/images/quiz/. resolveQuizPhotos() handles both Drive and static.
   cabinet_style:      'static:q7-cabinet-style',
-  backsplash_feel:    'static:q8-backsplash-feel',
   color_mood:         'static:q9-color-mood',
-  wood_tone:          'static:q10-wood-tone',
   lighting_signature: 'static:q11-lighting-signature',
   signature_move:     'static:q12-signature-move',
 };
@@ -151,14 +148,15 @@ const BOARD_ROOM_MAP = {
 const BOARD_TIERS = ['Essential', 'Elevated', 'Showpiece'];
 
 const DEFAULT_QUIZ = [
+  // ── Streamlined 8-question quiz ───────────────────────────────────────────
+  // Covers big-picture style direction. Material & finish preferences (countertops,
+  // hardware, backsplash, wood tone) are now extracted by the swipe taste board.
   {
     id: 'q1_kitchen',
     prompt: 'Which kitchen feels most like yours?',
     note: 'Pick the one you could step into tomorrow.',
     folderUrl: Q_FOLDERS.kitchen_style,
     options: [
-      // Alphabetical order matches Drive folder listing:
-      // Clean Modern → Modern Farmhouse → Organic Modern → Transitional
       { letter: 'A', label: 'Clean Modern — crisp lines, flat fronts, minimal hardware',   styles: ['Clean Modern'] },
       { letter: 'B', label: 'Modern Farmhouse — warm whites, shaker, a big apron sink',    styles: ['Modern Farmhouse'] },
       { letter: 'C', label: 'Organic Modern — white oak, plaster, natural textures',       styles: ['Organic Modern'] },
@@ -166,35 +164,10 @@ const DEFAULT_QUIZ = [
     ],
   },
   {
-    id: 'q2_counters',
-    prompt: 'Pick a countertop you want your coffee cup on every morning.',
-    folderUrl: Q_FOLDERS.countertop_feel,
-    options: [
-      // Butcher block → Clean white quartz → Natural marble/quartzite → Soapstone
-      { letter: 'A', label: 'Butcher block / warm wood — lived-in and tactile',             styles: ['Modern Farmhouse', 'Organic Modern'] },
-      { letter: 'B', label: 'Clean white quartz — bright, crisp, low maintenance',          styles: ['Transitional', 'Modern Farmhouse', 'Clean Modern'] },
-      { letter: 'C', label: 'Natural marble or quartzite — real stone with movement',       styles: ['Modern Traditional', 'Warm Luxury'] },
-      { letter: 'D', label: 'Soapstone or leathered dark stone — moody and rich',           styles: ['Modern Traditional', 'Warm Luxury'] },
-    ],
-  },
-  {
-    id: 'q3_hardware',
-    prompt: 'Which finish do you want to touch every day?',
-    folderUrl: Q_FOLDERS.hardware_finish,
-    options: [
-      // Brushed brass → Brushed nickel → Matte black → Oil-rubbed bronze
-      { letter: 'A', label: 'Brushed brass / warm gold — warm, polished, a little glam',    styles: ['Transitional', 'Warm Luxury'] },
-      { letter: 'B', label: 'Brushed nickel / satin nickel — cool, clean, understated',     styles: ['Transitional', 'Clean Modern'] },
-      { letter: 'C', label: 'Matte black — grounded and quiet',                             styles: ['Modern Farmhouse', 'Clean Modern'] },
-      { letter: 'D', label: 'Oil-rubbed bronze — traditional, warm, with patina',           styles: ['Modern Farmhouse', 'Modern Traditional'] },
-    ],
-  },
-  {
-    id: 'q4_primary_bath',
+    id: 'q2_primary_bath',
     prompt: 'Which primary bathroom feels like your morning?',
     folderUrl: Q_FOLDERS.primary_bathroom,
     options: [
-      // Clean Modern → Modern Farmhouse Bath → Organic Warm → Warm Luxury
       { letter: 'A', label: 'Clean Modern — large format tile, quiet palette, precision',   styles: ['Clean Modern'] },
       { letter: 'B', label: 'Modern Farmhouse — soft whites, shaker vanity, classic fixtures', styles: ['Modern Farmhouse', 'Transitional'] },
       { letter: 'C', label: 'Organic Warm — natural stone, oak vanity, soft curves',        styles: ['Organic Modern'] },
@@ -202,11 +175,10 @@ const DEFAULT_QUIZ = [
     ],
   },
   {
-    id: 'q5_floors',
+    id: 'q3_floors',
     prompt: 'Which floor do you picture underfoot?',
     folderUrl: Q_FOLDERS.flooring,
     options: [
-      // Dark rich hardwood → Large-format tile → Medium-tone aged wood → Wide-plank white oak
       { letter: 'A', label: 'Dark rich hardwood — walnut, mahogany, heritage feel',         styles: ['Modern Traditional', 'Warm Luxury'] },
       { letter: 'B', label: 'Large-format tile — seamless, architectural, clean',           styles: ['Clean Modern'] },
       { letter: 'C', label: 'Medium-tone aged wood — warm character, lived-in',             styles: ['Modern Farmhouse', 'Transitional'] },
@@ -214,24 +186,18 @@ const DEFAULT_QUIZ = [
     ],
   },
   {
-    id: 'q6_exterior',
+    id: 'q4_exterior',
     prompt: 'Which exterior makes you say "that\u2019s the one"?',
     folderUrl: Q_FOLDERS.exterior,
     options: [
-      // Clean Modern → Modern Farmhouse → Traditional → Warm organic
       { letter: 'A', label: 'Clean Modern — flat roof, long horizontal lines, dark cladding', styles: ['Clean Modern'] },
       { letter: 'B', label: 'Modern Farmhouse — board-and-batten, gables, black windows',     styles: ['Modern Farmhouse'] },
       { letter: 'C', label: 'Traditional — brick or limestone, symmetry, classical trim',     styles: ['Modern Traditional'] },
       { letter: 'D', label: 'Warm organic — stucco or natural stone, soft curves, wood tones', styles: ['Organic Modern', 'Warm Luxury'] },
     ],
   },
-
-  // ── Q7–Q12 · Extended style fingerprinting ────────────────────────────────
-  // These six deeper questions give Fox enough data to design full rooms.
-  // Photos generated via OpenAI gpt-image-1 (see scripts/flux/).
-
   {
-    id: 'q7_cabinets',
+    id: 'q5_cabinets',
     prompt: 'Which cabinet style speaks to you?',
     note: 'Think about what you want to see every morning.',
     folderUrl: Q_FOLDERS.cabinet_style,
@@ -243,19 +209,7 @@ const DEFAULT_QUIZ = [
     ],
   },
   {
-    id: 'q8_backsplash',
-    prompt: 'Which backsplash catches your eye?',
-    note: 'This sets the tone for the whole kitchen wall.',
-    folderUrl: Q_FOLDERS.backsplash_feel,
-    options: [
-      { letter: 'A', label: 'Handmade zellige — artisanal, organic, textured',                 styles: ['Organic Modern'] },
-      { letter: 'B', label: 'Marble mosaic — classic pattern, heritage elegance',               styles: ['Modern Traditional', 'Warm Luxury'] },
-      { letter: 'C', label: 'Slab stone — dramatic, seamless, architectural',                   styles: ['Clean Modern', 'Warm Luxury'] },
-      { letter: 'D', label: 'Subway tile — clean, honest, never goes wrong',                   styles: ['Modern Farmhouse', 'Transitional'] },
-    ],
-  },
-  {
-    id: 'q9_color_mood',
+    id: 'q6_color_mood',
     prompt: 'What color mood do you want to live in?',
     note: 'Close your eyes — which room do you walk into?',
     folderUrl: Q_FOLDERS.color_mood,
@@ -267,19 +221,7 @@ const DEFAULT_QUIZ = [
     ],
   },
   {
-    id: 'q10_wood_tone',
-    prompt: 'Which wood tone feels like home?',
-    note: 'Picture it on your floors, your island, your shelves.',
-    folderUrl: Q_FOLDERS.wood_tone,
-    options: [
-      { letter: 'A', label: 'Dark espresso walnut — dramatic, grounded, heritage',             styles: ['Modern Traditional', 'Warm Luxury'] },
-      { letter: 'B', label: 'Light white oak — soft, modern, natural',                         styles: ['Organic Modern', 'Modern Farmhouse'] },
-      { letter: 'C', label: 'Medium natural oak — warm, versatile, easygoing',                 styles: ['Transitional', 'Modern Farmhouse'] },
-      { letter: 'D', label: 'Warm walnut honey — rich amber tones, figured grain',             styles: ['Warm Luxury', 'Modern Traditional'] },
-    ],
-  },
-  {
-    id: 'q11_lighting',
+    id: 'q7_lighting',
     prompt: 'Which light fixture would you hang over your island?',
     note: 'Lighting is jewelry for the room.',
     folderUrl: Q_FOLDERS.lighting_signature,
@@ -291,7 +233,7 @@ const DEFAULT_QUIZ = [
     ],
   },
   {
-    id: 'q12_signature',
+    id: 'q8_signature',
     prompt: 'Which design move makes your heart skip?',
     note: 'This is the detail that makes a house yours.',
     folderUrl: Q_FOLDERS.signature_move,
@@ -828,23 +770,11 @@ const STATIC_QUIZ_IMAGES = {
     'Inset beaded deep green.png',
     'Shaker white.png',
   ],
-  'q8-backsplash-feel': [
-    'Handmade zellige.png',
-    'Marble mosaic.png',
-    'Slab stone.png',
-    'Subway tile.png',
-  ],
   'q9-color-mood': [
     'Bright and airy.png',
     'Crisp neutral.png',
     'Moody and rich.png',
     'Warm and earthy.png',
-  ],
-  'q10-wood-tone': [
-    'Dark espresso walnut.png',
-    'Light white oak.png',
-    'Medium natural oak.png',
-    'Warm walnut honey.png',
   ],
   'q11-lighting-signature': [
     'Barn lantern pendant.png',
@@ -946,6 +876,53 @@ function resolveStaticBoardPhotos(slug) {
   return byRoom;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Swipe taste-board images — 30 curated design photos for Pinterest-style
+//  swiping. Each has boolean tags used to compute the client's taste profile.
+//  Served statically from portal/images/swipe/.
+// ─────────────────────────────────────────────────────────────────────────────
+const SWIPE_IMAGES = [
+  // ── Materials (8) ──
+  { id: 'swipe_01', label: 'Honed Carrara marble countertop',         imageUrl: '/images/swipe/swipe-01.png', tags: { naturalStone: true, quietSurface: true, brightAiry: true, lowContrast: true } },
+  { id: 'swipe_02', label: 'Rich walnut wood grain',                  imageUrl: '/images/swipe/swipe-02.png', tags: { naturalWood: true, warmEarthy: true, lowContrast: true } },
+  { id: 'swipe_03', label: 'Sage green zellige tile',                 imageUrl: '/images/swipe/swipe-03.png', tags: { handmadeTexture: true, warmEarthy: true, busyPattern: true } },
+  { id: 'swipe_04', label: 'White quartz countertop',                 imageUrl: '/images/swipe/swipe-04.png', tags: { polishedSurface: true, quietSurface: true, brightAiry: true, crispNeutral: true } },
+  { id: 'swipe_05', label: 'Soapstone countertop',                    imageUrl: '/images/swipe/swipe-05.png', tags: { naturalStone: true, moodyDark: true, quietSurface: true } },
+  { id: 'swipe_06', label: 'Reclaimed wood ceiling beam',             imageUrl: '/images/swipe/swipe-06.png', tags: { naturalWood: true, handmadeTexture: true, warmEarthy: true } },
+  { id: 'swipe_07', label: 'Book-matched marble slab',                imageUrl: '/images/swipe/swipe-07.png', tags: { naturalStone: true, busyPattern: true, highContrast: true } },
+  { id: 'swipe_08', label: 'Hand-applied plaster wall',               imageUrl: '/images/swipe/swipe-08.png', tags: { handmadeTexture: true, quietSurface: true, warmEarthy: true, lowContrast: true } },
+
+  // ── Metals & Hardware (6) ──
+  { id: 'swipe_09', label: 'Unlacquered brass cup pulls',             imageUrl: '/images/swipe/swipe-09.png', tags: { warmMetal: true, quietSurface: true, brightAiry: true } },
+  { id: 'swipe_10', label: 'Brushed nickel faucet',                   imageUrl: '/images/swipe/swipe-10.png', tags: { coolMetal: true, polishedSurface: true, crispNeutral: true } },
+  { id: 'swipe_11', label: 'Matte black iron pendant',                imageUrl: '/images/swipe/swipe-11.png', tags: { blackMetal: true, highContrast: true } },
+  { id: 'swipe_12', label: 'Polished chrome fixtures',                imageUrl: '/images/swipe/swipe-12.png', tags: { coolMetal: true, polishedSurface: true, crispNeutral: true } },
+  { id: 'swipe_13', label: 'Oil-rubbed bronze hardware',              imageUrl: '/images/swipe/swipe-13.png', tags: { warmMetal: true, naturalWood: true, warmEarthy: true } },
+  { id: 'swipe_14', label: 'Brushed gold rain shower head',           imageUrl: '/images/swipe/swipe-14.png', tags: { warmMetal: true, polishedSurface: true } },
+
+  // ── Color Palettes / Room Moods (6) ──
+  { id: 'swipe_15', label: 'Bright white kitchen',                    imageUrl: '/images/swipe/swipe-15.png', tags: { brightAiry: true, lowContrast: true, quietSurface: true } },
+  { id: 'swipe_16', label: 'Deep green library',                      imageUrl: '/images/swipe/swipe-16.png', tags: { moodyDark: true, warmMetal: true, highContrast: true } },
+  { id: 'swipe_17', label: 'Warm earthy living room',                 imageUrl: '/images/swipe/swipe-17.png', tags: { warmEarthy: true, naturalWood: true, lowContrast: true, handmadeTexture: true } },
+  { id: 'swipe_18', label: 'Cool grey bathroom',                      imageUrl: '/images/swipe/swipe-18.png', tags: { crispNeutral: true, polishedSurface: true, lowContrast: true, quietSurface: true } },
+  { id: 'swipe_19', label: 'Navy blue dining room',                   imageUrl: '/images/swipe/swipe-19.png', tags: { moodyDark: true, highContrast: true } },
+  { id: 'swipe_20', label: 'Cream and warm wood kitchen',             imageUrl: '/images/swipe/swipe-20.png', tags: { brightAiry: true, warmEarthy: true, naturalWood: true, lowContrast: true } },
+
+  // ── Patterns & Details (5) ──
+  { id: 'swipe_21', label: 'Herringbone marble floor',                imageUrl: '/images/swipe/swipe-21.png', tags: { naturalStone: true, busyPattern: true, highContrast: true } },
+  { id: 'swipe_22', label: 'White subway tile',                       imageUrl: '/images/swipe/swipe-22.png', tags: { quietSurface: true, brightAiry: true, lowContrast: true } },
+  { id: 'swipe_23', label: 'Bold encaustic cement tile',              imageUrl: '/images/swipe/swipe-23.png', tags: { busyPattern: true, highContrast: true, handmadeTexture: true } },
+  { id: 'swipe_24', label: 'Full-slab stone backsplash',              imageUrl: '/images/swipe/swipe-24.png', tags: { naturalStone: true, quietSurface: true, lowContrast: true } },
+  { id: 'swipe_25', label: 'Waterjet marble mosaic',                  imageUrl: '/images/swipe/swipe-25.png', tags: { naturalStone: true, busyPattern: true, highContrast: true, polishedSurface: true } },
+
+  // ── Architectural Details (5) ──
+  { id: 'swipe_26', label: 'Sculptural plaster range hood',           imageUrl: '/images/swipe/swipe-26.png', tags: { handmadeTexture: true, quietSurface: true, warmEarthy: true } },
+  { id: 'swipe_27', label: 'Coffered ceiling',                        imageUrl: '/images/swipe/swipe-27.png', tags: { highContrast: true, polishedSurface: true } },
+  { id: 'swipe_28', label: 'Fluted stone fireplace',                  imageUrl: '/images/swipe/swipe-28.png', tags: { naturalStone: true, quietSurface: true, highContrast: true } },
+  { id: 'swipe_29', label: 'Brass globe pendant cluster',             imageUrl: '/images/swipe/swipe-29.png', tags: { warmMetal: true, warmEarthy: true, lowContrast: true } },
+  { id: 'swipe_30', label: 'Modern linear LED pendant',               imageUrl: '/images/swipe/swipe-30.png', tags: { coolMetal: true, crispNeutral: true, quietSurface: true, lowContrast: true } },
+];
+
 // Resolve board images for all styles.
 // Returns: { 'Modern Farmhouse': { kitchen: { essential: url, ... }, ... }, ... }
 // Supports both static files (static:slug) and Drive folders.
@@ -996,7 +973,7 @@ function mergeCatalog(overrides) {
   const products = (overrides.products && typeof overrides.products === 'object')
     ? mergeProducts(DEFAULT_PRODUCTS, overrides.products)
     : DEFAULT_PRODUCTS;
-  return { quiz, styles: STYLE_PROFILES, styleNames: STYLE_NAMES, products };
+  return { quiz, styles: STYLE_PROFILES, styleNames: STYLE_NAMES, products, swipeImages: SWIPE_IMAGES };
 }
 
 function mergeProducts(defaults, override) {

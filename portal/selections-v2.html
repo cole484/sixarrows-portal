@@ -536,6 +536,170 @@ body { background: var(--cream); padding: 0; }
   .budget-tier-body { flex: 1; padding: 12px 14px; }
 }
 
+/* ── Phase: taste board (swipe) ─────────────── */
+.tasteboard-shell {
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 60vh;
+}
+.tasteboard-hd { text-align: center; margin-bottom: 20px; }
+.tasteboard-eyebrow {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--charcoal-3); margin-bottom: 6px;
+}
+.tasteboard-title {
+  font-size: 22px; font-weight: 700; color: var(--charcoal);
+  margin-bottom: 6px;
+}
+.tasteboard-sub {
+  font-size: 14px; color: var(--charcoal-3); max-width: 420px;
+  margin: 0 auto; line-height: 1.5;
+}
+
+.tasteboard-card-wrap {
+  position: relative; width: 100%; max-width: 400px;
+  margin: 0 auto; perspective: 800px;
+}
+.tasteboard-card {
+  border-radius: 14px; overflow: hidden; background: #fff;
+  box-shadow: 0 4px 20px rgba(0,0,0,.1);
+  transition: transform 0.35s ease, opacity 0.35s ease;
+  will-change: transform;
+}
+.tasteboard-card.swiping-left {
+  transform: translateX(-120%) rotate(-8deg); opacity: 0;
+}
+.tasteboard-card.swiping-right {
+  transform: translateX(120%) rotate(8deg); opacity: 0;
+}
+.tasteboard-card-img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
+  display: block; background: var(--cream-2);
+}
+.tasteboard-card-label {
+  padding: 12px 16px; font-size: 13px; color: var(--charcoal-3);
+  line-height: 1.4; border-top: 1px solid var(--cream-2);
+}
+
+.tasteboard-actions {
+  display: flex; gap: 16px; margin-top: 20px; justify-content: center;
+}
+.tasteboard-btn {
+  width: 64px; height: 64px; border-radius: 50%;
+  border: 2px solid var(--cream-2); background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; cursor: pointer;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.tasteboard-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,.1);
+}
+.tasteboard-btn-skip { color: var(--charcoal-3); }
+.tasteboard-btn-skip:hover { border-color: #e74c3c; color: #e74c3c; }
+.tasteboard-btn-love { color: var(--green); }
+.tasteboard-btn-love:hover { border-color: var(--green); }
+
+.tasteboard-progress {
+  margin-top: 20px; text-align: center;
+  font-size: 12px; color: var(--charcoal-3);
+}
+.tasteboard-progress-bar {
+  width: 200px; height: 3px; background: var(--cream-2);
+  border-radius: 2px; margin: 8px auto 0; overflow: hidden;
+}
+.tasteboard-progress-fill {
+  height: 100%; background: var(--green);
+  transition: width .3s ease;
+}
+
+.tasteboard-skip-all {
+  margin-top: 16px; font-size: 12px; color: var(--charcoal-3);
+  text-decoration: underline; cursor: pointer; border: none;
+  background: none; padding: 4px;
+}
+
+@media (max-width: 600px) {
+  .tasteboard-card-wrap { max-width: 100%; }
+  .tasteboard-btn { width: 56px; height: 56px; font-size: 20px; }
+}
+
+/* ── Phase: lifestyle ───────────────────────── */
+.lifestyle-shell { max-width: 600px; margin: 0 auto; }
+.lifestyle-hd { text-align: center; margin-bottom: 28px; }
+.lifestyle-eyebrow {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--charcoal-3); margin-bottom: 6px;
+}
+.lifestyle-title {
+  font-size: 22px; font-weight: 700; color: var(--charcoal);
+  margin-bottom: 6px;
+}
+.lifestyle-sub {
+  font-size: 14px; color: var(--charcoal-3); line-height: 1.5;
+}
+
+.lifestyle-section { margin-bottom: 28px; }
+.lifestyle-q {
+  font-size: 15px; font-weight: 600; color: var(--charcoal);
+  margin-bottom: 12px;
+}
+.lifestyle-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.lifestyle-opt {
+  flex: 1; min-width: 140px; padding: 14px 16px;
+  border: 2px solid var(--cream-2); border-radius: 10px;
+  background: #fff; cursor: pointer; text-align: center;
+  transition: border-color .15s, background .15s;
+  font-size: 14px; color: var(--charcoal);
+}
+.lifestyle-opt:hover { border-color: var(--green); }
+.lifestyle-opt.selected {
+  border-color: var(--green); background: rgba(66,108,74,.06);
+  font-weight: 600;
+}
+
+.lifestyle-rank-list { display: flex; flex-direction: column; gap: 8px; }
+.lifestyle-rank-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border: 2px solid var(--cream-2);
+  border-radius: 10px; background: #fff; cursor: grab;
+  transition: border-color .15s, box-shadow .15s;
+  user-select: none;
+}
+.lifestyle-rank-item:active { cursor: grabbing; }
+.lifestyle-rank-item.dragging {
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  border-color: var(--green);
+}
+.lifestyle-rank-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+}
+.lifestyle-rank-num.top { background: rgba(201,165,102,.15); color: #8a6d2b; }
+.lifestyle-rank-num.mid { background: rgba(66,108,74,.1); color: var(--green-deep); }
+.lifestyle-rank-num.low { background: var(--cream-2); color: var(--charcoal-3); }
+.lifestyle-rank-name { font-size: 14px; color: var(--charcoal); flex: 1; }
+.lifestyle-rank-grip {
+  color: var(--charcoal-3); font-size: 16px; flex-shrink: 0; opacity: .4;
+}
+.lifestyle-rank-tier {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 8px; font-weight: 600;
+}
+.lifestyle-rank-tier.showpiece { background: rgba(201,165,102,.15); color: #8a6d2b; }
+.lifestyle-rank-tier.elevated { background: rgba(66,108,74,.1); color: var(--green-deep); }
+.lifestyle-rank-tier.essential { background: var(--cream-2); color: var(--charcoal-3); }
+
+.lifestyle-note {
+  font-size: 12px; color: var(--charcoal-3); text-align: center;
+  margin-top: 8px; line-height: 1.4;
+}
+
+.lifestyle-footer {
+  display: flex; justify-content: center; padding-top: 20px;
+  border-top: 1px solid var(--cream-2); margin-top: 12px;
+}
+
 /* ── Phase: boards (design board selection) ───── */
 /* Client sees 3 design board options per room (one per tier) and picks the
    one closest to their vision. The board matching their budget tier is
@@ -1296,7 +1460,7 @@ body { background: var(--cream); padding: 0; }
 //  SELECTIONS V2 — FOX
 //  AI design consultant for David Adler Group / Six Arrows
 //
-//  Phases: loading → quiz → analyzing → reveal → home → chat
+//  Phases: loading → quiz → tasteboard → lifestyle → analyzing → reveal → home → chat
 //
 //  Persistence: writes to /selections-storage using v1 key format
 //  (sab8_{clientKey}_{suffix}) so the existing design book reads it.
@@ -1369,6 +1533,13 @@ const ST = {
   quiz: [],          // array of question objects from style-catalog
   qIdx: 0,
   quizAnswers: {},   // { q1_vibe: 'A', ... }
+  // Taste board (swipe)
+  swipeImages: [],
+  swipeIndex: 0,
+  swipeResults: {},    // { imageId: 'love' | 'skip' }
+  tasteProfile: null,  // computed from swipe results
+  // Lifestyle
+  lifestyle: null,     // { kitchenUse, durability, investmentRanking }
   // Style identification
   style: '',
   styleSummary: '',
@@ -1445,6 +1616,8 @@ function render() {
   if (ST.phase === 'quiz')      stage.innerHTML = renderQuiz();
   if (ST.phase === 'analyzing') stage.innerHTML = renderAnalyzing();
   if (ST.phase === 'reveal')    stage.innerHTML = renderReveal();
+  if (ST.phase === 'tasteboard') stage.innerHTML = renderTasteBoard();
+  if (ST.phase === 'lifestyle')  stage.innerHTML = renderLifestyle();
   if (ST.phase === 'budget')     stage.innerHTML = renderBudget();
   if (ST.phase === 'boards')     stage.innerHTML = renderBoards();
   if (ST.phase === 'generating') stage.innerHTML = renderLoading('Fox is building your design package…');
@@ -1485,6 +1658,9 @@ async function loadAll() {
   try { ST.budgetTiers = JSON.parse(ST.ans._v2_budget_tiers || '{}'); } catch(e) { ST.budgetTiers = {}; }
   try { ST.boardPicks  = JSON.parse(ST.ans._v2_board_picks  || '{}'); } catch(e) { ST.boardPicks = {}; }
   try { ST.designPackage = JSON.parse(ST.ans._v2_design_package || 'null'); } catch(e) { ST.designPackage = null; }
+  try { ST.swipeResults = JSON.parse(ST.ans._v2_swipe_results || '{}'); } catch(e) { ST.swipeResults = {}; }
+  try { ST.tasteProfile = JSON.parse(ST.ans._v2_taste_profile || 'null'); } catch(e) { ST.tasteProfile = null; }
+  try { ST.lifestyle = JSON.parse(ST.ans._v2_lifestyle || 'null'); } catch(e) { ST.lifestyle = null; }
 }
 
 // Debounced batch save — coalesces rapid mutations into one network write.
@@ -1504,6 +1680,9 @@ async function saveAllNow() {
   ST.ans._v2_budget_tiers   = JSON.stringify(ST.budgetTiers);
   ST.ans._v2_board_picks    = JSON.stringify(ST.boardPicks);
   ST.ans._v2_design_package = JSON.stringify(ST.designPackage);
+  ST.ans._v2_swipe_results  = JSON.stringify(ST.swipeResults);
+  ST.ans._v2_taste_profile  = JSON.stringify(ST.tasteProfile);
+  ST.ans._v2_lifestyle      = JSON.stringify(ST.lifestyle);
 
   // Batch endpoint expects { batch: { ans, sav, rms, ... } } — same shape v1 uses.
   const body = {
@@ -1602,7 +1781,405 @@ function onQuizNext() {
     ST.qIdx++;
     render();
   } else {
-    analyzeQuiz();
+    // Quiz complete — move to taste board swipe phase
+    ST.swipeImages = Array.isArray(ST.catalog && ST.catalog.swipeImages) ? ST.catalog.swipeImages : [];
+    ST.swipeIndex = 0;
+    ST.phase = 'tasteboard';
+    scheduleSave();
+    render();
+  }
+}
+
+// ── Taste Board (swipe) ──────────────────────
+function renderTasteBoard() {
+  const images = ST.swipeImages || [];
+  if (!images.length) return renderLoading('Loading taste board\u2026');
+
+  const idx = ST.swipeIndex;
+  const total = images.length;
+
+  if (idx >= total) {
+    // All swiped — compute profile and move on
+    computeTasteProfile();
+    ST.phase = 'lifestyle';
+    scheduleSave();
+    setTimeout(() => render(), 0);
+    return renderLoading('Computing your taste profile\u2026');
+  }
+
+  const img = images[idx];
+  const pct = Math.round((idx / total) * 100);
+
+  return `
+    <div class="tasteboard-shell">
+      <div class="tasteboard-hd">
+        <div class="tasteboard-eyebrow">Step 2 \u00b7 Your taste</div>
+        <div class="tasteboard-title">Love it or skip it?</div>
+        <div class="tasteboard-sub">Quick gut reactions \u2014 don\u2019t overthink it.</div>
+      </div>
+
+      <div class="tasteboard-card-wrap" id="swipe-wrap">
+        <div class="tasteboard-card" id="swipe-card"
+             ontouchstart="swipeTouchStart(event)"
+             ontouchmove="swipeTouchMove(event)"
+             ontouchend="swipeTouchEnd(event)">
+          <img class="tasteboard-card-img" src="${esc(img.imageUrl)}" alt=""
+               onerror="this.style.background='var(--cream-2)'">
+          <div class="tasteboard-card-label">${esc(img.label)}</div>
+        </div>
+      </div>
+
+      <div class="tasteboard-actions">
+        <button class="tasteboard-btn tasteboard-btn-skip" onclick="swipeSkip()" title="Skip">\u2715</button>
+        <button class="tasteboard-btn tasteboard-btn-love" onclick="swipeLove()" title="Love">\u2665</button>
+      </div>
+
+      <div class="tasteboard-progress">
+        ${idx + 1} of ${total}
+        <div class="tasteboard-progress-bar">
+          <div class="tasteboard-progress-fill" style="width:${pct}%"></div>
+        </div>
+      </div>
+
+      ${idx >= 15 ? `<button class="tasteboard-skip-all" onclick="skipRemainingSwipes()">I\u2019ve seen enough \u2014 continue</button>` : ''}
+    </div>`;
+}
+
+// Swipe touch gesture state
+let _swipeStartX = 0;
+let _swipeDeltaX = 0;
+
+function swipeTouchStart(e) {
+  _swipeStartX = e.touches[0].clientX;
+  _swipeDeltaX = 0;
+}
+
+function swipeTouchMove(e) {
+  _swipeDeltaX = e.touches[0].clientX - _swipeStartX;
+  const card = document.getElementById('swipe-card');
+  if (card) {
+    const rotation = _swipeDeltaX * 0.05;
+    card.style.transform = `translateX(${_swipeDeltaX}px) rotate(${rotation}deg)`;
+    card.style.transition = 'none';
+  }
+}
+
+function swipeTouchEnd(e) {
+  const card = document.getElementById('swipe-card');
+  if (Math.abs(_swipeDeltaX) > 80) {
+    // Swipe committed
+    if (_swipeDeltaX > 0) swipeLove();
+    else swipeSkip();
+  } else if (card) {
+    // Snap back
+    card.style.transition = 'transform 0.3s ease';
+    card.style.transform = '';
+  }
+  _swipeDeltaX = 0;
+}
+
+function animateSwipe(direction) {
+  const card = document.getElementById('swipe-card');
+  if (card) {
+    card.classList.add(direction === 'right' ? 'swiping-right' : 'swiping-left');
+  }
+  setTimeout(() => {
+    ST.swipeIndex++;
+    render();
+  }, 350);
+}
+
+function swipeLove() {
+  const img = ST.swipeImages[ST.swipeIndex];
+  if (img) ST.swipeResults[img.id] = 'love';
+  scheduleSave();
+  animateSwipe('right');
+}
+
+function swipeSkip() {
+  const img = ST.swipeImages[ST.swipeIndex];
+  if (img) ST.swipeResults[img.id] = 'skip';
+  scheduleSave();
+  animateSwipe('left');
+}
+
+function skipRemainingSwipes() {
+  // Mark remaining as skip and move on
+  const images = ST.swipeImages || [];
+  for (let i = ST.swipeIndex; i < images.length; i++) {
+    if (!ST.swipeResults[images[i].id]) {
+      ST.swipeResults[images[i].id] = 'skip';
+    }
+  }
+  computeTasteProfile();
+  ST.phase = 'lifestyle';
+  scheduleSave();
+  render();
+}
+
+function computeTasteProfile() {
+  const images = ST.swipeImages || [];
+  const tagCounts = {};
+  const tagLoves = {};
+
+  for (const img of images) {
+    const result = ST.swipeResults[img.id];
+    if (!result) continue;
+    const isLove = result === 'love';
+    for (const [tag, val] of Object.entries(img.tags || {})) {
+      if (!val) continue;
+      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      if (isLove) tagLoves[tag] = (tagLoves[tag] || 0) + 1;
+    }
+  }
+
+  function score(tag) {
+    if (!tagCounts[tag]) return 0.5;
+    return (tagLoves[tag] || 0) / tagCounts[tag];
+  }
+
+  // Metal preference
+  const metalScores = { warm: score('warmMetal'), cool: score('coolMetal'), black: score('blackMetal') };
+  const topMetal = Object.entries(metalScores).sort((a,b) => b[1] - a[1])[0];
+
+  // Color mood
+  const colorScores = { brightAiry: score('brightAiry'), warmEarthy: score('warmEarthy'), moodyDark: score('moodyDark'), crispNeutral: score('crispNeutral') };
+  const topColor = Object.entries(colorScores).sort((a,b) => b[1] - a[1])[0];
+
+  ST.tasteProfile = {
+    metalPreference: topMetal[0],
+    metalScore: metalScores,
+    patternTolerance: score('busyPattern'),
+    colorMood: topColor[0],
+    colorMoodScore: colorScores,
+    textureAffinity: {
+      naturalStone: score('naturalStone'),
+      naturalWood: score('naturalWood'),
+      handmade: score('handmadeTexture'),
+      polished: score('polishedSurface'),
+    },
+    contrastPreference: score('highContrast'),
+  };
+}
+
+// ── Lifestyle & Investment ───────────────────
+function renderLifestyle() {
+  const ls = ST.lifestyle || {};
+  const rooms = ST.rms || [];
+  const ranking = ls.investmentRanking || rooms.map(r => r.id);
+
+  function tierForRank(i) {
+    if (i < 2) return 'showpiece';
+    if (i < 4) return 'elevated';
+    return 'essential';
+  }
+
+  function tierLabel(t) {
+    return { showpiece: 'Showpiece', elevated: 'Elevated', essential: 'Essential' }[t] || '';
+  }
+
+  const allDone = ls.kitchenUse && ls.durability && ranking.length > 0;
+
+  return `
+    <div class="lifestyle-shell">
+      <div class="lifestyle-hd">
+        <div class="lifestyle-eyebrow">Step 3 \u00b7 Your lifestyle</div>
+        <div class="lifestyle-title">A few quick questions so Fox gets it right.</div>
+        <div class="lifestyle-sub">This helps us recommend materials that work for how you actually live.</div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">How do you use your kitchen?</div>
+        <div class="lifestyle-options">
+          ${['quickMeals', 'seriousCooking', 'entertaining'].map(opt => {
+            const labels = { quickMeals: 'Quick meals & coffee', seriousCooking: 'Serious cooking', entertaining: 'The entertaining hub' };
+            return `<button class="lifestyle-opt ${ls.kitchenUse === opt ? 'selected' : ''}"
+                            onclick="setLifestyle('kitchenUse','${opt}')">${labels[opt]}</button>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">Who\u2019s in the house?</div>
+        <div class="lifestyle-options">
+          ${['justUs', 'kids', 'kidsPets'].map(opt => {
+            const labels = { justUs: 'Just us', kids: 'Kids', kidsPets: 'Pets (or kids + pets)' };
+            return `<button class="lifestyle-opt ${ls.durability === opt ? 'selected' : ''}"
+                            onclick="setLifestyle('durability','${opt}')">${labels[opt]}</button>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">Where should we invest the most?</div>
+        <div class="lifestyle-sub" style="margin-bottom:12px;font-size:13px;">
+          Drag to rank \u2014 rooms at the top get the premium treatment, rooms at the bottom stay smart and simple.
+        </div>
+        <div class="lifestyle-rank-list" id="rank-list">
+          ${ranking.map((roomId, i) => {
+            const room = rooms.find(r => r.id === roomId);
+            if (!room) return '';
+            const tier = tierForRank(i);
+            const numClass = i < 2 ? 'top' : i < 4 ? 'mid' : 'low';
+            return `
+              <div class="lifestyle-rank-item" draggable="true" data-room-id="${esc(roomId)}"
+                   ondragstart="rankDragStart(event)" ondragover="rankDragOver(event)"
+                   ondrop="rankDrop(event)" ondragend="rankDragEnd(event)"
+                   ontouchstart="rankTouchStart(event)" ontouchmove="rankTouchMove(event)" ontouchend="rankTouchEnd(event)">
+                <div class="lifestyle-rank-num ${numClass}">${i + 1}</div>
+                <div class="lifestyle-rank-name">${esc(room.name)}</div>
+                <span class="lifestyle-rank-tier ${tier}">${tierLabel(tier)}</span>
+                <div class="lifestyle-rank-grip">\u2807</div>
+              </div>`;
+          }).join('')}
+        </div>
+        <div class="lifestyle-note">
+          Top 2 rooms \u2192 <strong>Showpiece</strong> finishes &nbsp;\u00b7&nbsp;
+          Next 2 \u2192 <strong>Elevated</strong> &nbsp;\u00b7&nbsp;
+          Rest \u2192 <strong>Essential</strong> (still great \u2014 just smarter)
+        </div>
+      </div>
+
+      <div class="lifestyle-footer">
+        <button class="btn-primary" onclick="completeLifestyle()" ${allDone ? '' : 'disabled'}>
+          Build my design package \u2192
+        </button>
+      </div>
+    </div>`;
+}
+
+function setLifestyle(key, value) {
+  if (!ST.lifestyle) ST.lifestyle = { investmentRanking: ST.rms.map(r => r.id) };
+  ST.lifestyle[key] = value;
+  scheduleSave();
+  render();
+}
+
+// Drag-to-rank handlers
+let _dragRoomId = null;
+
+function rankDragStart(e) {
+  _dragRoomId = e.target.closest('[data-room-id]').dataset.roomId;
+  e.target.closest('.lifestyle-rank-item').classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function rankDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function rankDrop(e) {
+  e.preventDefault();
+  const targetId = e.target.closest('[data-room-id]')?.dataset.roomId;
+  if (!targetId || !_dragRoomId || targetId === _dragRoomId) return;
+
+  if (!ST.lifestyle) ST.lifestyle = { investmentRanking: ST.rms.map(r => r.id) };
+  const ranking = ST.lifestyle.investmentRanking;
+  const fromIdx = ranking.indexOf(_dragRoomId);
+  const toIdx = ranking.indexOf(targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  ranking.splice(fromIdx, 1);
+  ranking.splice(toIdx, 0, _dragRoomId);
+  scheduleSave();
+  render();
+}
+
+function rankDragEnd(e) {
+  _dragRoomId = null;
+  document.querySelectorAll('.lifestyle-rank-item').forEach(el => el.classList.remove('dragging'));
+}
+
+// Touch-based drag for mobile
+let _rankTouchItem = null;
+let _rankTouchStartY = 0;
+let _rankTouchClone = null;
+
+function rankTouchStart(e) {
+  const item = e.target.closest('[data-room-id]');
+  if (!item) return;
+  _rankTouchItem = item;
+  _rankTouchStartY = e.touches[0].clientY;
+  item.classList.add('dragging');
+}
+
+function rankTouchMove(e) {
+  if (!_rankTouchItem) return;
+  e.preventDefault();
+  const y = e.touches[0].clientY;
+  const list = document.getElementById('rank-list');
+  if (!list) return;
+
+  const items = Array.from(list.querySelectorAll('.lifestyle-rank-item'));
+  const currentIdx = items.indexOf(_rankTouchItem);
+
+  // Find which item we're hovering over
+  for (let i = 0; i < items.length; i++) {
+    if (i === currentIdx) continue;
+    const rect = items[i].getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    if (y < mid && i < currentIdx) {
+      list.insertBefore(_rankTouchItem, items[i]);
+      updateRankingFromDOM();
+      break;
+    } else if (y > mid && i > currentIdx) {
+      list.insertBefore(_rankTouchItem, items[i].nextSibling);
+      updateRankingFromDOM();
+      break;
+    }
+  }
+}
+
+function rankTouchEnd(e) {
+  if (_rankTouchItem) {
+    _rankTouchItem.classList.remove('dragging');
+    _rankTouchItem = null;
+    render(); // re-render to update tier badges
+  }
+}
+
+function updateRankingFromDOM() {
+  const list = document.getElementById('rank-list');
+  if (!list) return;
+  const items = Array.from(list.querySelectorAll('[data-room-id]'));
+  if (!ST.lifestyle) ST.lifestyle = { investmentRanking: ST.rms.map(r => r.id) };
+  ST.lifestyle.investmentRanking = items.map(el => el.dataset.roomId);
+  scheduleSave();
+}
+
+function deriveBudgetTiers(ranking) {
+  const tiers = {};
+  ranking.forEach((roomId, i) => {
+    if (i < 2) tiers[roomId] = 'showpiece';
+    else if (i < 4) tiers[roomId] = 'elevated';
+    else tiers[roomId] = 'essential';
+  });
+  return tiers;
+}
+
+async function completeLifestyle() {
+  if (!ST.lifestyle || !ST.lifestyle.kitchenUse || !ST.lifestyle.durability) {
+    showToast('Answer all questions first');
+    return;
+  }
+  // Derive budget tiers from investment ranking
+  const ranking = ST.lifestyle.investmentRanking || ST.rms.map(r => r.id);
+  ST.budgetTiers = deriveBudgetTiers(ranking);
+  scheduleSave();
+
+  // Now analyze the quiz + taste profile + lifestyle to identify style
+  ST.phase = 'analyzing';
+  render();
+
+  // Call the style analysis endpoint (same as before)
+  try {
+    await analyzeQuiz();
+  } catch (err) {
+    console.error('Style analysis failed:', err);
+    ST.phase = 'error';
+    ST.errorMessage = 'Style analysis failed: ' + err.message;
+    render();
   }
 }
 
@@ -1713,6 +2290,10 @@ function restartQuiz() {
   ST.designPackage = null;
   ST.expandedSwap = null;
   ST.picks = {};
+  ST.swipeResults = {};
+  ST.swipeIndex = 0;
+  ST.tasteProfile = null;
+  ST.lifestyle = null;
   ST.phase = 'quiz';
   scheduleSave();
   render();
@@ -2089,7 +2670,7 @@ function renderPackageReview() {
       }).join('')}
 
       <div class="package-footer">
-        <button class="btn-secondary" onclick="backToBudgetFromPackage()">Back to budget</button>
+        <button class="btn-secondary" onclick="backToBudgetFromPackage()">Back to priorities</button>
         <button class="btn-primary" onclick="finalizePackage()">Looks great — let's go</button>
       </div>
 
@@ -2145,7 +2726,8 @@ function swapSelection(roomId, cat, newPick) {
 }
 
 function backToBudgetFromPackage() {
-  ST.phase = 'budget';
+  ST.phase = 'lifestyle';
+  ST.designPackage = null; // regenerate after re-ranking
   render();
 }
 
@@ -2516,6 +3098,7 @@ async function boot() {
     if (ST.style && cat.styles && cat.styles[ST.style]) {
       ST.styleProfile = cat.styles[ST.style];
     }
+    ST.swipeImages = Array.isArray(cat.swipeImages) ? cat.swipeImages : [];
   } catch (err) {
     ST.phase = 'error';
     ST.errorMessage = 'Could not load style catalog: ' + err.message;
@@ -2524,23 +3107,39 @@ async function boot() {
   }
 
   // 3) Decide which phase to start in based on what's saved.
-  //    Full flow: quiz → analyzing → reveal → budget → package → home → chat
+  //    Full flow: quiz → tasteboard → lifestyle → analyzing → reveal → budget → package → home → chat
   //    On reload we drop the user at the furthest completed step.
   if (ST.style && ST.styleGreeting) {
-    // Style identified — figure out which post-reveal step they're at.
-    if (!allBudgetTiersSet()) {
-      ST.phase = 'budget';
-    } else if (!ST.designPackage) {
-      // Budget done, no package yet — show budget so they can re-trigger
-      ST.phase = 'budget';
-    } else {
+    if (ST.designPackage) {
       ST.phase = 'package';
+    } else if (ST.budgetTiers && Object.keys(ST.budgetTiers).length) {
+      // Has tiers but no package — auto-generate it
+      completeBudget();
+      return; // completeBudget() handles phase transitions
+    } else {
+      // Has style but no budget tiers — show reveal so user can proceed
+      ST.phase = 'reveal';
+    }
+  } else if (ST.lifestyle && ST.tasteProfile) {
+    // Ready to analyze — auto-trigger
+    completeLifestyle();
+    return;
+  } else if (ST.tasteProfile || Object.keys(ST.swipeResults).length > 0) {
+    if (ST.swipeImages.length && Object.keys(ST.swipeResults).length >= ST.swipeImages.length) {
+      ST.phase = 'lifestyle';
+    } else {
+      ST.phase = 'tasteboard';
+      ST.swipeIndex = Object.keys(ST.swipeResults).length;
     }
   } else {
-    ST.phase = 'quiz';
-    // Restore in-progress quiz position to first unanswered question
-    const firstUnanswered = ST.quiz.findIndex(q => !ST.quizAnswers[q.id]);
-    ST.qIdx = firstUnanswered === -1 ? 0 : firstUnanswered;
+    const quizDone = ST.quiz.length > 0 && ST.quiz.every(q => ST.quizAnswers[q.id]);
+    if (quizDone) {
+      ST.phase = 'tasteboard';
+    } else {
+      ST.phase = 'quiz';
+      const firstUnanswered = ST.quiz.findIndex(q => !ST.quizAnswers[q.id]);
+      ST.qIdx = firstUnanswered === -1 ? 0 : firstUnanswered;
+    }
   }
   render();
 }
