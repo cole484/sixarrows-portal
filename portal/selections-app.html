@@ -227,7 +227,7 @@ const DEFAULT_ROOMS=[
   {id:"garage",       name:"Garage",            plumbing:"none"}
 ];
 
-const FLOOR_OPTS=["Hardwood","LVP / LVT","Carpet","Tile","Concrete","Epoxy (garage)","Undecided"];
+const FLOOR_OPTS=["Hardwood","Engineered Hardwood","LVP / LVT","Carpet","Tile","Concrete","Epoxy (garage)","Undecided"];
 const WAVES=[
   {label:"Wave 1",name:"Structure",cats:["fireplace","appliances","exterior_finishes"]},
   {label:"Wave 2",name:"The Shell",cats:["specialty_trim","flooring","tile"]},
@@ -257,11 +257,11 @@ const FD={
   single_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Undermount","Vessel","Drop-in","Pedestal","Wall-mount","Undecided"],req:true},{id:"faucet",label:"Faucet holes",type:"radio",opts:["Single hole","3-hole widespread","Wall mount","Undecided"],req:true},{id:"sink_product",label:"Exact sink selected",type:"text",ph:"e.g. Kohler Ladena 19\" Undermount K-2805-0",req:true},{id:"faucet_product",label:"Exact faucet selected",type:"text",ph:"e.g. Kohler Artifacts Single-Hole K-72759-4-CP",req:true}],
   double_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Undermount","Vessel","Drop-in","Undecided"],req:true},{id:"faucet",label:"Faucet holes per sink",type:"radio",opts:["Single hole","3-hole widespread","Wall mount","Undecided"],req:true},{id:"sink_product",label:"Exact sink selected",type:"text",ph:"e.g. Ronbow 48\" Double Undermount",req:true},{id:"faucet_product",label:"Exact faucet selected (x2)",type:"text",ph:"e.g. Kohler Purist 2-Handle K-14406-4A-CP",req:true}],
   walk_in_shower:[{id:"head",label:"Shower head setup",type:"radio",opts:["Single head","Dual heads","Rain head + hand shower","Full system","Undecided"],req:true},{id:"door",label:"Door / enclosure",type:"radio",opts:["Frameless glass door","Open entry","Semi-frameless","Curtain rod","Wet room","Undecided"],req:true},{id:"bench",label:"Built-in bench?",type:"radio",opts:["Yes","No","Undecided"],req:true},{id:"niche",label:"Shampoo niche(s)?",type:"radio",opts:["1 niche","2 niches","No niche","Undecided"],req:true},{id:"product",label:"Fixture product selected",type:"text",ph:"e.g. Kohler Artifacts 2.5 GPM K-72679-CP",req:true}],
-  tub_shower_combo:[{id:"head",label:"Shower head",type:"radio",opts:["Standard single","Rain head","Hand shower combo","Undecided"],req:true},{id:"surround",label:"Surround type",type:"radio",opts:["Tile surround","Solid surface","Acrylic unit","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Kohler Archer 5' Tub K-1123-0",req:true}],
+  tub_shower_combo:[{id:"head",label:"Shower head",type:"radio",opts:["Standard single","Rain head","Hand shower combo","Undecided"],req:true},{id:"surround",label:"Wall material — what will cover the walls around the tub?",type:"radio",opts:["Tile","Solid surface panel","Acrylic / fiberglass unit","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Kohler Archer 5' Tub K-1123-0",req:true}],
   freestanding_tub:[{id:"style",label:"Tub style",type:"radio",opts:["Classic clawfoot","Modern oval","Slipper","Rectangular modern","Undecided"],req:true},{id:"filler",label:"Faucet / filler type",type:"radio",opts:["Floor mount","Deck mount","Wall mount","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Victoria + Albert Amalfi 1700mm",req:true}],
   bidet:[{id:"type",label:"Bidet type",type:"radio",opts:["Bidet seat / attachment","Standalone fixture","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. TOTO Washlet S550e SW3056AT40#01",req:true}],
   urinal:[{id:"type",label:"Urinal type",type:"radio",opts:["Wall-hung standard","Waterless","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Kohler Bardon K-4917-0",req:true}],
-  kitchen_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Single basin undermount","Double basin undermount","Farmhouse / apron","Cast iron","Composite granite","Undecided"],req:true},{id:"sink_product",label:"Exact sink selected",type:"text",ph:"e.g. Kohler Whitehaven 35-7/8\" Farmhouse K-6489-0",req:true},{id:"faucet",label:"Faucet style",type:"radio",opts:["Pull-down single handle","Two handle","Commercial / bridge","Touch activated","Undecided"],req:true},{id:"faucet_product",label:"Exact faucet selected",type:"text",ph:"e.g. Kohler Artifacts Single-Handle K-72760-4",req:true}],
+  kitchen_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Single basin undermount","Double basin undermount","Farmhouse / apron","Cast iron","Composite granite","Undecided"],req:true},{id:"sink_product",label:"Exact sink selected",type:"text",ph:"e.g. Kohler Whitehaven 35-7/8\" Farmhouse K-6489-0",req:true},{id:"faucet",label:"Faucet style",type:"radio",opts:["Pull-down single handle","Two handle","Commercial / bridge","Touch activated","Undecided"],req:true},{id:"faucet_product",label:"Exact faucet selected",type:"text",ph:"e.g. Kohler Artifacts Single-Handle K-72760-4",req:true},{id:"disposal",label:"Garbage disposal",type:"radio",opts:["Yes","No","Undecided"],req:true},{id:"disposal_product",label:"Disposal product selected",type:"text",ph:"e.g. InSinkErator Evolution Excel 1.0 HP",req:false}],
   pot_filler:[{id:"mount",label:"Mount type",type:"radio",opts:["Wall mount over range","Ceiling mount","Undecided"],req:true},{id:"finish",label:"Finish",type:"radio",opts:["Match kitchen faucet","Matte black","Polished nickel","Brushed brass","Other","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Kohler Karbon K-6282-AF",req:true}],
   bar_prep_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Single basin undermount","Round undermount","Bar sink","Undecided"],req:true},{id:"location",label:"Location",type:"text",ph:"Island, butler's pantry, wet bar...",req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Blanco Diamond Mini 15\" Undermount",req:true}],
   outdoor_kitchen_sink:[{id:"type",label:"Sink type",type:"radio",opts:["Single basin","Double basin","Undecided"],req:true},{id:"product",label:"Exact product selected",type:"text",ph:"e.g. Sunstone 15\" Single Bowl SSINK15",req:true}],
@@ -840,28 +840,64 @@ function rfSpecialty(){
 }
 function rfFlooring(){
   if(!ST.rooms.length)return`<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No rooms set up. Go back to Project Setup first.</div>`;
+  const isGarage=r=>r.name.toLowerCase().includes('garage');
   return ST.rooms.map(r=>{const val=ST.answers[`flooring_floor_${r.id}`]||"";
     return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-hd-l"><div class="rs-nm">${r.name}</div></div><span style="font-size:11px;color:${val?"var(--sage)":"var(--text-secondary)"}">${val||"Not selected"}</span></div>
     <div class="rs-body">
       <div class="fg"><label>Flooring type <span class="req">*</span></label><div class="rg">${FLOOR_OPTS.map(o=>`<label class="ro${val===o?" sel":""}" onclick="pickFloor('${r.id}','${o}',this)"><input type="radio" name="fl_${r.id}" ${val===o?"checked":""}>${o}</label>`).join("")}</div></div>
       <div class="fg"><label>Color / finish direction <span class="req">*</span></label><input type="text" value="${(ST.answers[`flooring_color_${r.id}`]||"").replace(/"/g,'&quot;')}" placeholder="Light natural oak, warm gray, white marble look..." onchange="ST.answers['flooring_color_${r.id}']=this.value" onkeyup="ST.answers['flooring_color_${r.id}']=this.value"></div>
-      <div class="fg"><label>Exact product selected <span class="req">*</span></label><input type="text" value="${(ST.answers[`flooring_product_${r.id}`]||"").replace(/"/g,'&quot;')}" placeholder='e.g. Shaw Floorte Pro 5 Series, Mineral, 7" plank' onchange="ST.answers['flooring_product_${r.id}']=this.value" onkeyup="ST.answers['flooring_product_${r.id}']=this.value"></div>
-      <div class="fg"><label>Product photo URL</label>${photoInput('flooring_product_'+r.id,'Paste manufacturer or Houzz photo link...')}</div>
+      ${isGarage(r)?"":`<div class="fg"><label>Exact product selected <span class="req">*</span></label><input type="text" value="${(ST.answers[`flooring_product_${r.id}`]||"").replace(/"/g,'&quot;')}" placeholder='e.g. Shaw Floorte Pro 5 Series, Mineral, 7" plank' onchange="ST.answers['flooring_product_${r.id}']=this.value" onkeyup="ST.answers['flooring_product_${r.id}']=this.value"></div>
+      <div class="fg"><label>Product photo URL</label>${photoInput('flooring_product_'+r.id,'Paste manufacturer or Houzz photo link...')}</div>`}
     </div></div>`;}).join("");
 }
 function rfTile(){
   const baths=bathRooms();
-  if(!baths.length)return`<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No bathrooms in your room list. Go back to Project Setup and set a room's plumbing type to "Bath".</div>`;
-  return baths.map(b=>{const fv=k=>(ST.answers[`tile_${k}_${b.id}`]||"").replace(/"/g,'&quot;');
-    return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-nm">${b.name}</div></div>
-    <div class="rs-body">
-      <div class="fg"><label>Floor tile <span class="req">*</span></label><input type="text" value="${fv("floor")}" placeholder="Style, size, color direction..." onchange="ST.answers['tile_floor_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_${b.id}']=this.value"></div>
-      <div class="fg"><label>Floor tile exact product <span class="req">*</span></label><input type="text" value="${fv("floor_product")}" placeholder="e.g. Daltile Santorini White 12x24 S26012241P" onchange="ST.answers['tile_floor_product_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_product_${b.id}']=this.value"></div>
-      <div class="fg"><label>Shower wall tile <span class="req">*</span></label><input type="text" value="${fv("shower")}" placeholder="Large format marble look, 4x16 subway, mosaic..." onchange="ST.answers['tile_shower_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_${b.id}']=this.value"></div>
-      <div class="fg"><label>Shower wall exact product <span class="req">*</span></label><input type="text" value="${fv("shower_product")}" placeholder="e.g. Anatolia Vintage Chic 4x12 Subway" onchange="ST.answers['tile_shower_product_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_product_${b.id}']=this.value"></div>
-      <div class="fg"><label>Shower accent / niche tile</label><input type="text" value="${fv("accent")}" placeholder="Contrasting tile, mosaic strip..." onchange="ST.answers['tile_accent_${b.id}']=this.value" onkeyup="ST.answers['tile_accent_${b.id}']=this.value"></div>
-      <div class="fg"><label>Heated floor?</label><div class="rg">${["Yes","No","Undecided"].map(o=>`<label class="ro${(ST.answers[`tile_heat_${b.id}`]||"")===o?" sel":""}" onclick="ST.answers['tile_heat_${b.id}']='${o}';this.closest('.rg').querySelectorAll('.ro').forEach(x=>x.classList.remove('sel'));this.classList.add('sel')"><input type="radio" name="th_${b.id}" ${(ST.answers[`tile_heat_${b.id}`]||"")===o?"checked":""}>${o}</label>`).join("")}</div></div>
-    </div></div>`;}).join("");
+  const kitchens=ST.rooms.filter(r=>r.plumbing==="kitchen");
+  if(!baths.length&&!kitchens.length)return`<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No bathrooms or kitchens in your room list. Go back to Project Setup first.</div>`;
+  const SHOWER_FLOOR_OPTS=["Tile","Prefab insert / pan","Undecided"];
+  const SHOWER_WALL_OPTS=["Tile","Prefab insert / surround","Undecided"];
+  let html='';
+  // Per-bathroom shower tile / insert selections
+  if(baths.length){
+    html+=baths.map(b=>{const fv=k=>(ST.answers[`tile_${k}_${b.id}`]||"").replace(/"/g,'&quot;');
+      const sfType=ST.answers[`tile_shower_floor_type_${b.id}`]||"";
+      const swType=ST.answers[`tile_shower_wall_type_${b.id}`]||"";
+      return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-nm">${b.name}</div></div>
+      <div class="rs-body">
+        <div class="fg"><label>Shower floor <span class="req">*</span></label><div class="rg">${SHOWER_FLOOR_OPTS.map(o=>`<label class="ro${sfType===o?" sel":""}" onclick="ST.answers['tile_shower_floor_type_${b.id}']='${o}';this.closest('.rg').querySelectorAll('.ro').forEach(x=>x.classList.remove('sel'));this.classList.add('sel');render()"><input type="radio" name="sft_${b.id}" ${sfType===o?"checked":""}>${o}</label>`).join("")}</div></div>
+        ${sfType==="Tile"?`
+        <div class="fg"><label>Shower floor tile <span class="req">*</span></label><input type="text" value="${fv("floor")}" placeholder="Style, size, color direction..." onchange="ST.answers['tile_floor_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_${b.id}']=this.value"></div>
+        <div class="fg"><label>Shower floor tile exact product <span class="req">*</span></label><input type="text" value="${fv("floor_product")}" placeholder="e.g. Daltile Santorini White 12x24" onchange="ST.answers['tile_floor_product_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_product_${b.id}']=this.value"></div>
+        `:""}
+        ${sfType==="Prefab insert / pan"?`
+        <div class="fg"><label>Insert / pan product <span class="req">*</span></label><input type="text" value="${fv("floor_insert")}" placeholder="e.g. Schluter Kerdi 48x48 shower tray, Swanstone SF03636..." onchange="ST.answers['tile_floor_insert_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_insert_${b.id}']=this.value"></div>
+        `:""}
+        <div class="fg"><label>Shower wall <span class="req">*</span></label><div class="rg">${SHOWER_WALL_OPTS.map(o=>`<label class="ro${swType===o?" sel":""}" onclick="ST.answers['tile_shower_wall_type_${b.id}']='${o}';this.closest('.rg').querySelectorAll('.ro').forEach(x=>x.classList.remove('sel'));this.classList.add('sel');render()"><input type="radio" name="swt_${b.id}" ${swType===o?"checked":""}>${o}</label>`).join("")}</div></div>
+        ${swType==="Tile"?`
+        <div class="fg"><label>Shower wall tile <span class="req">*</span></label><input type="text" value="${fv("shower")}" placeholder="Large format marble look, 4x16 subway, mosaic..." onchange="ST.answers['tile_shower_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_${b.id}']=this.value"></div>
+        <div class="fg"><label>Shower wall exact product <span class="req">*</span></label><input type="text" value="${fv("shower_product")}" placeholder="e.g. Anatolia Vintage Chic 4x12 Subway" onchange="ST.answers['tile_shower_product_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_product_${b.id}']=this.value"></div>
+        `:""}
+        ${swType==="Prefab insert / surround"?`
+        <div class="fg"><label>Surround / insert product <span class="req">*</span></label><input type="text" value="${fv("shower_insert")}" placeholder="e.g. Sterling Ensemble 60x32 wall set, Swanstone STMK96..." onchange="ST.answers['tile_shower_insert_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_insert_${b.id}']=this.value"></div>
+        `:""}
+        <div class="fg"><label>Shower accent / niche tile</label><input type="text" value="${fv("accent")}" placeholder="Contrasting tile, mosaic strip..." onchange="ST.answers['tile_accent_${b.id}']=this.value" onkeyup="ST.answers['tile_accent_${b.id}']=this.value"></div>
+        <div class="fg"><label>Heated floor?</label><div class="rg">${["Yes","No","Undecided"].map(o=>`<label class="ro${(ST.answers[`tile_heat_${b.id}`]||"")===o?" sel":""}" onclick="ST.answers['tile_heat_${b.id}']='${o}';this.closest('.rg').querySelectorAll('.ro').forEach(x=>x.classList.remove('sel'));this.classList.add('sel')"><input type="radio" name="th_${b.id}" ${(ST.answers[`tile_heat_${b.id}`]||"")===o?"checked":""}>${o}</label>`).join("")}</div></div>
+      </div></div>`;}).join("");
+  }
+  // Kitchen backsplash
+  if(kitchens.length){
+    html+=`<div style="margin-top:14px"><div style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--sage);margin-bottom:10px">Kitchen Backsplash</div>`;
+    html+=kitchens.map(k=>{
+      const bsVal=(ST.answers[`tile_backsplash_${k.id}`]||"").replace(/"/g,'&quot;');
+      const bsProd=(ST.answers[`tile_backsplash_product_${k.id}`]||"").replace(/"/g,'&quot;');
+      return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-nm">${k.name} — Backsplash</div></div>
+      <div class="rs-body">
+        <div class="fg"><label>Backsplash tile <span class="req">*</span></label><input type="text" value="${bsVal}" placeholder="Subway, mosaic, large format slab..." onchange="ST.answers['tile_backsplash_${k.id}']=this.value" onkeyup="ST.answers['tile_backsplash_${k.id}']=this.value"></div>
+        <div class="fg"><label>Exact product selected <span class="req">*</span></label><input type="text" value="${bsProd}" placeholder="e.g. Clé Tile Zellige 2x6 Weathered White" onchange="ST.answers['tile_backsplash_product_${k.id}']=this.value" onkeyup="ST.answers['tile_backsplash_product_${k.id}']=this.value"></div>
+      </div></div>`;
+    }).join("")+`</div>`;
+  }
+  return html;
 }
 function rfPlumbing(){
   const rooms=plumbingRooms();
@@ -965,6 +1001,22 @@ function rfCountertops(){
     html+=`<div style="margin-top:14px"><div style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--sage);margin-bottom:10px">Bath Vanity Countertops — Per Room</div>${bathRows}</div>`;
   } else {
     html+=`<div style="margin-top:14px;padding:12px;background:var(--bg-secondary);border-radius:var(--radius);font-size:13px;color:var(--text-secondary)">No bathrooms set up. Go back to Project Setup and assign plumbing type "Bath" to your bathroom rooms.</div>`;
+  }
+  // Laundry room and pantry countertops
+  const utilRooms=ST.rooms.filter(r=>r.id==="laundry"||r.id==="pantry"||r.name.toLowerCase().includes("laundry")||r.name.toLowerCase().includes("pantry"));
+  if(utilRooms.length){
+    const UTIL_CT_OPTS=["Quartz","Laminate","Butcher block","Granite","Same as kitchen","None — no countertop","Other","Undecided"];
+    const utilRows=utilRooms.map(u=>{
+      const uval=ST.answers[`ct_util_${u.id}`]||"";
+      const opts=UTIL_CT_OPTS.map((o,oi)=>`<label class="ro${uval===o?" sel":""}" onclick="ST.answers['ct_util_${u.id}']=this.querySelector('input').value;this.closest('.rg').querySelectorAll('.ro').forEach(x=>x.classList.remove('sel'));this.classList.add('sel');render()"><input type="radio" name="ctu_${u.id}" value="${o.replace(/"/g,'&quot;')}" ${uval===o?"checked":""}>${o}</label>`).join("");
+      const uprod=(ST.answers[`ct_util_product_${u.id}`]||"").replace(/"/g,'&quot;');
+      return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-nm">${u.name} — Countertop</div></div>
+        <div class="rs-body">
+          <div class="fg"><label>Countertop material</label><div class="rg">${opts}</div></div>
+          ${uval&&uval!=="None — no countertop"&&uval!=="Undecided"&&uval!=="Same as kitchen"?`<div class="fg"><label>Exact product selected</label><input type="text" value="${uprod}" placeholder="e.g. IKEA Karlby Walnut 74&quot;, Formica Calacatta Marble" onchange="ST.answers['ct_util_product_${u.id}']=this.value" onkeyup="ST.answers['ct_util_product_${u.id}']=this.value"></div>`:""}
+        </div></div>`;
+    }).join("");
+    html+=`<div style="margin-top:14px"><div style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--sage);margin-bottom:10px">Utility Room Countertops</div>${utilRows}</div>`;
   }
   return html;
 }
@@ -1171,7 +1223,7 @@ function rfExteriorFinishes(){
     +'<div style="font-size:11px;color:var(--text-secondary)">Type ties to exterior framing and ventilation plan</div></div>'
     +'<div class="rs-body">'
     +radioGroup('ext_soffit_type','soffit_type',
-      ['Vented aluminum','Non-vented aluminum','Wood','Fiber cement','PVC / cellular','Undecided'],
+      ['Standard / contractor recommended','Vented aluminum','Non-vented aluminum','Wood','Fiber cement','PVC / cellular','Undecided'],
       'Soffit type',true)
     +radioGroup('ext_soffit_vent','soffit_vent',
       ['Vented (perforated)','Non-vented (solid)','Undecided'],
@@ -1185,7 +1237,7 @@ function rfExteriorFinishes(){
     +'<div style="font-size:11px;color:var(--text-secondary)">Downspout locations affect grading and drainage plan</div></div>'
     +'<div class="rs-body">'
     +radioGroup('ext_gutter_type','gutter_type',
-      ['K-style','Half-round','Box','Undecided'],
+      ['Standard / contractor recommended','K-style','Half-round','Box','Undecided'],
       'Gutter style',true)
     +radioGroup('ext_gutter_material','gutter_material',
       ['Aluminum seamless','Copper','Steel','Galvanized steel','Vinyl','Undecided'],
@@ -1198,7 +1250,23 @@ function rfExteriorFinishes(){
     +'onchange="ST.answers[\'ext_gutter_notes\']=this.value" onkeyup="ST.answers[\'ext_gutter_notes\']=this.value">'
     +'</div></div></div>';
 
-  return roofSection + soffitSection + gutterSection;
+  // ── Siding ───────────────────────────────────────────────────────────────
+  var sidingSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Siding</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Primary exterior cladding material</div></div>'
+    +'<div class="rs-body">'
+    +radioGroup('ext_siding_type','siding_type',
+      ['Fiber cement (HardiPlank)','Vinyl','Engineered wood','Natural wood','Stone veneer','Brick','Stucco','Board & batten','Mixed / combination','Undecided'],
+      'Siding type',true)
+    +textField('ext_siding_color','Color / finish','e.g. Iron Gray, Arctic White, Cobblestone, natural cedar...', true)
+    +textField('ext_siding_product','Exact product selected','e.g. James Hardie HardiPlank Cedarmill 8.25", Iron Gray',true)
+    +'<div class="fg"><label>Notes</label>'
+    +'<input type="text" value="'+(ST.answers['ext_siding_notes']||'').replace(/"/g,'&quot;')+'" '
+    +'placeholder="Accent areas, mixed materials, stone wainscot height..." '
+    +'onchange="ST.answers[\'ext_siding_notes\']=this.value" onkeyup="ST.answers[\'ext_siding_notes\']=this.value">'
+    +'</div></div></div>';
+
+  return roofSection + sidingSection + soffitSection + gutterSection;
 }
 
 function rfPaint(){
