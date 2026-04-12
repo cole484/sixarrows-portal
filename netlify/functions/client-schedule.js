@@ -15,12 +15,16 @@ function fmtDate(dateStr) {
 
 function statusToGroup(status) {
   switch (status) {
-    case 'complete':    return 'completed';
-    case 'in_progress': return 'active';
-    case 'scheduled':   return 'scheduled';
-    case 'not_started': return 'scheduled';
-    case 'blocked':     return 'needs_scheduling';
-    default:            return 'scheduled';
+    case 'complete':            return 'completed';
+    case 'in_progress':         return 'active';
+    case 'scheduled':           return 'scheduled';
+    case 'needs_scheduling':    return 'scheduled';
+    case 'not_started':         return 'scheduled';
+    case 'not_ready':           return 'upcoming';
+    case 'waiting_on_client':   return 'waiting';
+    case 'on_hold':             return 'on_hold';
+    case 'blocked':             return 'needs_scheduling';
+    default:                    return 'scheduled';
   }
 }
 
@@ -74,7 +78,7 @@ export const handler = async (event) => {
         dateLabel: fmtDate(r.planned_start || r.actual_start),
         phase: r.phase,
         trade: r.trade,
-        clientNote: r.notes || null,
+        clientNote: r.client_note || null,
         definitionOfDone: r.definition_of_done || null,
         duration: r.duration_days,
         sequence: r.sequence_order,

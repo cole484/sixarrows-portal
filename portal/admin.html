@@ -153,8 +153,17 @@
 .gantt-bar:hover { opacity:.82; }
 .gantt-bar.complete { background:var(--green); }
 .gantt-bar.in_progress { background:#4a7fb5; }
+.gantt-bar.scheduled { background:#6ba3c7; }
+.gantt-bar.needs_scheduling { background:#b0b0b0; }
 .gantt-bar.not_started { background:#b0b0b0; }
+.gantt-bar.not_ready { background:#d4a574; }
+.gantt-bar.waiting_on_client { background:#c89200; }
+.gantt-bar.on_hold { background:#8b6bb5; }
 .gantt-bar.skipped { background:#ddd; color:#999; }
+/* Workstream indicators on bars */
+.gantt-bar.ws-interior { border-left:3px solid var(--green); }
+.gantt-bar.ws-exterior { border-left:3px solid #6ba3c7; }
+.gantt-bar.ws-both { border-left:3px solid var(--charcoal-3); }
 .gantt-bar.critical { box-shadow:0 0 0 1.5px var(--charcoal); }
 .gantt-bar.alert-red { box-shadow:0 0 0 2px var(--danger); }
 .gantt-bar.alert-yellow { box-shadow:0 0 0 2px #c89200; }
@@ -170,6 +179,46 @@
 .sch-alert-row:last-child { border-bottom:none; }
 .sch-gate-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:6px; margin-top:8px; }
 .sch-gate-item { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--cream-pale); border:0.5px solid var(--border); border-radius:var(--r-md); font-size:11px; }
+
+/* ── Dependency arrows ───────────────────────────────── */
+.gantt-dep-svg { position:absolute; top:0; left:180px; pointer-events:none; z-index:1; overflow:visible; }
+.gantt-dep-svg line { stroke:var(--charcoal-4); stroke-width:1; opacity:.35; }
+.gantt-dep-svg polygon { fill:var(--charcoal-4); opacity:.35; }
+
+/* ── Zoom toggle ─────────────────────────────────────── */
+.sch-zoom-toggle { display:inline-flex; border:0.5px solid var(--border-2); border-radius:var(--r-md); overflow:hidden; margin-left:8px; }
+.sch-zoom-btn { padding:5px 10px; font-size:10px; font-weight:600; cursor:pointer; background:white; color:var(--charcoal-3); border:none; font-family:'Work Sans',sans-serif; transition:all .15s; }
+.sch-zoom-btn.active { background:var(--charcoal); color:var(--cream); }
+
+/* ── Gantt drag ──────────────────────────────────────── */
+.gantt-bar[data-draggable] { cursor:grab; }
+.gantt-bar[data-draggable]:active { cursor:grabbing; }
+.gantt-bar-ghost { opacity:.45; pointer-events:none; z-index:10; border:1.5px dashed var(--charcoal); }
+
+/* ── Queue sub-tabs ──────────────────────────────────── */
+.sch-queue-tabs { display:flex; gap:4px; margin-bottom:10px; }
+.sch-queue-tab { padding:5px 12px; font-size:11px; font-weight:600; cursor:pointer; background:white; color:var(--charcoal-3); border:0.5px solid var(--border-2); border-radius:999px; font-family:'Work Sans',sans-serif; transition:all .15s; }
+.sch-queue-tab.active { background:var(--charcoal); color:var(--cream); border-color:var(--charcoal); }
+.sch-queue-count { display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:rgba(0,0,0,.1); font-size:8px; font-weight:700; margin-left:3px; }
+.sch-queue-tab.active .sch-queue-count { background:rgba(255,255,255,.2); }
+
+/* ── Add task modal ──────────────────────────────────── */
+.sch-add-modal { background:white; border:1px solid var(--border-2); border-radius:var(--r-md); padding:16px; margin-bottom:1rem; box-shadow:var(--sh-md); }
+
+/* ── Task notes ──────────────────────────────────────── */
+.sch-note-item { display:flex; gap:8px; padding:8px 0; border-bottom:0.5px solid var(--border); font-size:12px; }
+.sch-note-item:last-child { border-bottom:none; }
+.sch-note-meta { font-size:10px; color:var(--charcoal-4); margin-bottom:2px; }
+.sch-note-type { font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:2px 6px; border-radius:999px; }
+.sch-note-type.instruction { background:var(--green-lt); color:var(--green-deep); }
+.sch-note-type.punchlist { background:var(--danger-lt); color:var(--danger); }
+.sch-note-type.observation { background:var(--warning-lt); color:var(--warning); }
+.sch-note-type.general { background:var(--cream-2); color:var(--charcoal-3); }
+
+/* ── Workstream lane accents ─────────────────────────── */
+.gantt-phase-hd.ws-interior { border-left:3px solid var(--green); }
+.gantt-phase-hd.ws-exterior { border-left:3px solid #6ba3c7; }
+.gantt-phase-hd.ws-both { border-left:3px solid var(--charcoal-3); }
 
 /* ── View toggle (Gantt / Table) ──────────────────────── */
 .sch-view-toggle { display:inline-flex; border:0.5px solid var(--border-2); border-radius:var(--r-md); overflow:hidden; margin-left:auto; }
@@ -2370,29 +2419,52 @@ async function createClientDirect() {
 }
 
 // ════════════════════════════════════════════════════════
-//  BUILD SCHEDULE VIEW
+//  BUILD SCHEDULE VIEW v2
 // ════════════════════════════════════════════════════════
 
 let scheduleCache = {};
-let schViewMode = 'gantt'; // 'gantt' or 'table'
-let schCollapsed = {}; // phaseIndex → boolean, persisted per session
+let schViewMode = 'gantt';
+let schCollapsed = {};
 let schBulkSelected = new Set();
+let schSubView = 'all';
+let schGroupBy = 'phase'; // 'phase' or 'workstream'
+let schZoom = 'days';
+let subsCache = null;
+let schShowAddTask = false;
 
-const SCH_DAY_WIDTH = 18;
+function getSchDayWidth() {
+  return schZoom === 'months' ? 1.5 : schZoom === 'weeks' ? 5 : 18;
+}
+
 const PHASE_ORDER = [
   'Preconstruction','Sitework','Foundation','Framing & Dry-in',
   'MEP Rough-ins','Insulation & Drywall','Interior Finishes',
   'Exterior Finishes','Closeout'
 ];
 
+const STATUS_LABELS = {
+  not_ready:'Not Ready', needs_scheduling:'Needs Scheduling',
+  waiting_on_client:'Waiting on Client', on_hold:'On Hold',
+  scheduled:'Scheduled', in_progress:'In Progress',
+  complete:'Complete', skipped:'Skipped', not_started:'Not Started'
+};
+
+const TRADE_OPTIONS = [
+  'Planning','Surveying','Excavation','Concrete','Masonry','Framing','Roofing',
+  'Windows/Doors','Plumbing','Electric','HVAC','Insulation','Drywall','Painting',
+  'Flooring','Tile','Cabinets','Counters','Trim','Landscaping','Utilities',
+  'Inspection','Cleaning','Other','GC'
+];
+
 function schDaysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
-function schBarLeft(taskStart, tlStart) { return schDaysBetween(tlStart, taskStart) * SCH_DAY_WIDTH; }
-function schBarWidth(dur) { return Math.max(dur * SCH_DAY_WIDTH, SCH_DAY_WIDTH); }
+function schBarLeft(taskStart, tlStart) { return schDaysBetween(tlStart, taskStart) * getSchDayWidth(); }
+function schBarWidth(dur) { return Math.max(dur * getSchDayWidth(), getSchDayWidth()); }
 function schFmtDate(d) { if (!d) return '—'; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
 function schFmtDateFull(d) { if (!d) return '—'; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+function schAddDays(dateStr, days) { const d=new Date(dateStr+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().split('T')[0]; }
 
-async function scheduleAPI(projectId, action, method='GET', body=null) {
-  const url = `/.netlify/functions/schedule-engine?projectId=${encodeURIComponent(projectId)}&action=${action}`;
+async function scheduleAPI(projectId, action, method='GET', body=null, extra='') {
+  const url = `/.netlify/functions/schedule-engine?projectId=${encodeURIComponent(projectId)}&action=${action}${extra}`;
   const opts = { method, headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
@@ -2402,10 +2474,21 @@ async function scheduleAPI(projectId, action, method='GET', body=null) {
   return data;
 }
 
+async function subsAPI(method='GET', id=null, body=null) {
+  const url = `/.netlify/functions/subcontractors${id ? '?id='+id : ''}`;
+  const opts = { method, headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  return await res.json();
+}
+
+async function loadSubcontractors() { subsCache = await subsAPI(); }
+
 async function loadSchedule(projectId) {
   const el = document.getElementById('sch-loading');
   if (el) el.textContent = 'Loading schedule…';
   try {
+    await loadSubcontractors();
     const sched = await scheduleAPI(projectId, 'schedule');
     if (sched.tasks && sched.tasks.length > 0) {
       await scheduleAPI(projectId, 'calculate');
@@ -2448,19 +2531,102 @@ async function saveTaskUpdate(projectId, taskId) {
   const g = id => document.getElementById(id);
   const body = {
     taskId,
-    status: g(`sch-e-status-${taskId}`)?.value || 'not_started',
+    status: g(`sch-e-status-${taskId}`)?.value || 'needs_scheduling',
     duration_days: parseInt(g(`sch-e-dur-${taskId}`)?.value) || 1,
     actual_start: g(`sch-e-astart-${taskId}`)?.value || null,
     actual_finish: g(`sch-e-afin-${taskId}`)?.value || null,
-    assigned_contractor: g(`sch-e-contr-${taskId}`)?.value || null,
+    subcontractor_id: g(`sch-e-sub-${taskId}`)?.value || null,
     contractor_confirmed: g(`sch-e-conf-${taskId}`)?.checked || false,
-    notes: g(`sch-e-notes-${taskId}`)?.value || null,
+    client_note: g(`sch-e-cnote-${taskId}`)?.value || null,
+    internal_note: g(`sch-e-inote-${taskId}`)?.value || null,
+    definition_of_done: g(`sch-e-dod-${taskId}`)?.value || null,
+    task_name: g(`sch-e-name-${taskId}`)?.value || undefined,
+    phase: g(`sch-e-phase-${taskId}`)?.value || undefined,
+    trade: g(`sch-e-trade-${taskId}`)?.value || undefined,
+    workstream: g(`sch-e-ws-${taskId}`)?.value || undefined,
+    perf_schedule: g(`sch-e-psch-${taskId}`)?.value || null,
+    perf_invoice: g(`sch-e-pinv-${taskId}`)?.value || null,
+    perf_communication: g(`sch-e-pcom-${taskId}`)?.value || null,
+    perf_scope: g(`sch-e-psco-${taskId}`)?.value || null,
+    perf_cleanliness: g(`sch-e-pcln-${taskId}`)?.value || null,
+    perf_notes: g(`sch-e-pnotes-${taskId}`)?.value || null,
   };
+  // Remove undefined keys
+  Object.keys(body).forEach(k => { if (body[k] === undefined) delete body[k]; });
   try {
     await scheduleAPI(projectId, 'update-task', 'PATCH', body);
     schShowToast('Saved & recalculated','success');
     renderAdmin();
   } catch(e) { schShowToast(e.message,'error'); }
+}
+
+// ── Dependency management ──
+async function schAddDep(projectId, taskId, blockedByTaskId) {
+  try {
+    await scheduleAPI(projectId, 'add-dep', 'POST', { taskId, blockedByTaskId });
+    schShowToast('Dependency added','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+async function schRemoveDep(projectId, taskId, blockedByTaskId) {
+  try {
+    await scheduleAPI(projectId, 'remove-dep', 'POST', { taskId, blockedByTaskId });
+    schShowToast('Dependency removed','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+// ── Task CRUD ──
+async function schAddTask(projectId) {
+  const g = id => document.getElementById(id);
+  const body = {
+    task_name: g('sch-add-name')?.value,
+    phase: g('sch-add-phase')?.value || 'Closeout',
+    trade: g('sch-add-trade')?.value || null,
+    workstream: g('sch-add-ws')?.value || 'both',
+    duration_days: parseInt(g('sch-add-dur')?.value) || 1,
+    sequence_order: parseInt(g('sch-add-seq')?.value) || 999,
+    definition_of_done: g('sch-add-dod')?.value || null,
+    client_note: g('sch-add-cnote')?.value || null,
+  };
+  if (!body.task_name) { schShowToast('Task name required','error'); return; }
+  try {
+    await scheduleAPI(projectId, 'add-task', 'POST', body);
+    schShowAddTask = false;
+    schShowToast('Task added','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+async function schDeleteTask(projectId, taskId, taskName) {
+  if (!confirm(`Delete "${taskName}"? Dependencies will be removed.`)) return;
+  try {
+    await scheduleAPI(projectId, 'delete-task', 'POST', { taskId });
+    schShowToast('Task deleted','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+// ── Task notes ──
+async function schAddNote(projectId, taskId) {
+  const g = id => document.getElementById(id);
+  const body = { taskId, body: g(`sch-note-body-${taskId}`)?.value, note_type: g(`sch-note-type-${taskId}`)?.value || 'general' };
+  if (!body.body) return;
+  try {
+    await scheduleAPI(projectId, 'add-note', 'POST', body);
+    schLoadNotes(projectId, taskId);
+    if (g(`sch-note-body-${taskId}`)) g(`sch-note-body-${taskId}`).value = '';
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+async function schLoadNotes(projectId, taskId) {
+  const data = await scheduleAPI(projectId, 'get-notes', 'GET', null, `&taskId=${taskId}`);
+  const el = document.getElementById(`sch-notes-list-${taskId}`);
+  if (!el) return;
+  const notes = data.notes || [];
+  el.innerHTML = notes.length === 0 ? '<div style="font-size:11px;color:var(--charcoal-4);font-style:italic;padding:8px 0">No notes yet.</div>' :
+    notes.map(n => `<div class="sch-note-item">
+      <div style="flex:1"><div class="sch-note-meta">${n.author} · ${new Date(n.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+      <span class="sch-note-type ${n.note_type}">${n.note_type}</span> ${n.body}</div>
+    </div>`).join('');
 }
 
 function schShowToast(msg, type) {
@@ -2471,19 +2637,26 @@ function schShowToast(msg, type) {
   if (type) setTimeout(() => { el.className = 'sch-toast'; el.textContent = ''; }, 4000);
 }
 
-function generateWeekMarkers(start, end) {
+function generateTimeMarkers(start, end) {
+  const dw = getSchDayWidth();
   const markers = [];
   const d = new Date(start + 'T00:00:00');
-  // Align to Monday
-  const day = d.getUTCDay();
-  d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
   const endD = new Date(end + 'T00:00:00');
-  while (d <= endD) {
-    markers.push({
-      label: d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}),
-      width: 7 * SCH_DAY_WIDTH
-    });
-    d.setUTCDate(d.getUTCDate() + 7);
+
+  if (schZoom === 'months') {
+    d.setUTCDate(1); // align to month start
+    while (d <= endD) {
+      const daysInMonth = new Date(d.getUTCFullYear(), d.getUTCMonth()+1, 0).getUTCDate();
+      markers.push({ label: d.toLocaleDateString('en-US',{month:'short',year:'2-digit',timeZone:'UTC'}), width: daysInMonth * dw });
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+  } else {
+    const day = d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
+    while (d <= endD) {
+      markers.push({ label: d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}), width: 7 * dw });
+      d.setUTCDate(d.getUTCDate() + 7);
+    }
   }
   return markers;
 }
@@ -2492,15 +2665,48 @@ function groupTasksByPhase(tasks) {
   const map = new Map();
   PHASE_ORDER.forEach(p => map.set(p, []));
   tasks.forEach(t => {
-    const phase = t.phase || t.taskPhase || 'Other';
+    const phase = t.phase || 'Other';
     if (!map.has(phase)) map.set(phase, []);
     map.get(phase).push(t);
   });
   return map;
 }
 
-// ── View toggle ──
+function groupTasksByWorkstream(tasks) {
+  const map = new Map([['Interior',[]],['Exterior',[]],['Both',[]]]);
+  tasks.forEach(t => {
+    const ws = (t.workstream||'both').charAt(0).toUpperCase() + (t.workstream||'both').slice(1);
+    if (!map.has(ws)) map.set(ws, []);
+    map.get(ws).push(t);
+  });
+  return map;
+}
+
+function filterQueue(tasks, queueKey) {
+  const now = new Date().toISOString().split('T')[0];
+  switch(queueKey) {
+    case 'next_to_schedule': {
+      const cutoff = schAddDays(now, 30);
+      return tasks.filter(t =>
+        (t.status === 'needs_scheduling' || t.status === 'not_ready') &&
+        (!t.plannedStart || t.plannedStart <= cutoff)
+      ).sort((a,b) => (a.sequenceOrder||0) - (b.sequenceOrder||0));
+    }
+    case 'long_lead':
+      return tasks.filter(t => t.isLongLead && t.status !== 'complete')
+        .sort((a,b) => (a.mustScheduleBy||'9999') < (b.mustScheduleBy||'9999') ? -1 : 1);
+    case 'waiting_hold':
+      return tasks.filter(t => t.status === 'waiting_on_client' || t.status === 'on_hold');
+    default: return tasks;
+  }
+}
+function countQueue(tasks, key) { return filterQueue(tasks, key).length; }
+
+// ── View / zoom / group toggles ──
 function schSetView(mode) { schViewMode = mode; renderAdmin(); }
+function schSetZoom(level) { schZoom = level; renderAdmin(); }
+function schSetGroupBy(mode) { schGroupBy = mode; renderAdmin(); }
+function schSetSubView(key) { schSubView = key; renderAdmin(); }
 
 // ── Phase collapse memory ──
 function schTogglePhase(pi) {
@@ -2569,10 +2775,63 @@ function schAutoScrollToday() {
   }
 }
 
+// ── Drag-to-reschedule ──
+let _dragState = null;
+function initGanttDrag() {
+  const scroll = document.querySelector('.gantt-scroll');
+  if (!scroll || scroll.dataset.dragInit) return;
+  scroll.dataset.dragInit = '1';
+
+  scroll.addEventListener('mousedown', (e) => {
+    const bar = e.target.closest('.gantt-bar[data-draggable]');
+    if (!bar) return;
+    e.preventDefault();
+    window._dragMoved = false;
+    const ghost = bar.cloneNode(true);
+    ghost.classList.add('gantt-bar-ghost');
+    bar.parentElement.appendChild(ghost);
+    _dragState = { bar, ghost, taskId: bar.dataset.taskId, origLeft: parseFloat(bar.dataset.originalLeft), startX: e.clientX + scroll.scrollLeft, scroll };
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!_dragState) return;
+    window._dragMoved = true;
+    const { ghost, origLeft, startX, scroll } = _dragState;
+    const dx = (e.clientX + scroll.scrollLeft) - startX;
+    const dw = getSchDayWidth();
+    ghost.style.left = Math.max(0, Math.round((origLeft + dx) / dw) * dw) + 'px';
+  });
+
+  document.addEventListener('mouseup', async (e) => {
+    if (!_dragState) return;
+    const { ghost, taskId, origLeft, startX, scroll } = _dragState;
+    _dragState = null;
+    ghost.remove();
+    if (!window._dragMoved) return;
+
+    const dw = getSchDayWidth();
+    const dx = (e.clientX + scroll.scrollLeft) - startX;
+    const newLeft = Math.max(0, Math.round((origLeft + dx) / dw) * dw);
+    const dayOffset = Math.round(newLeft / dw);
+
+    const cache = scheduleCache[activeProject];
+    if (!cache) return;
+    const tlStart = cache.tasks.reduce((m,t) => { const s=t.plannedStart; return s&&(!m||s<m)?s:m; }, null) || cache.buildStart;
+    const newStartDate = schAddDays(tlStart, dayOffset);
+
+    try {
+      schShowToast('Rescheduling…','');
+      await scheduleAPI(activeProject, 'update-task', 'PATCH', { taskId, planned_start: newStartDate });
+      schShowToast('Rescheduled & recalculated','success');
+      renderAdmin();
+    } catch(err) { schShowToast(err.message, 'error'); }
+  });
+}
+
 // ── Table view renderer ──
 function renderScheduleTable(tasks, projectId) {
-  const statusOpts = (cur) => ['not_started','in_progress','complete','skipped'].map(s =>
-    `<option value="${s}" ${s===cur?'selected':''}>${s==='not_started'?'Not Started':s==='in_progress'?'In Progress':s.charAt(0).toUpperCase()+s.slice(1)}</option>`
+  const statusOpts = (cur) => Object.entries(STATUS_LABELS).map(([s,l]) =>
+    `<option value="${s}" ${s===cur?'selected':''}>${l}</option>`
   ).join('');
 
   const phaseMap = groupTasksByPhase(tasks);
@@ -2604,17 +2863,24 @@ function renderScheduleTable(tasks, projectId) {
         const fl = t.float;
         const checked = schBulkSelected.has(id);
 
+        const ws = t.workstream || 'both';
+        const wsTag = `<span class="tag ${ws==='interior'?'ok':ws==='exterior'?'neutral':'dark'}" style="font-size:8px">${ws.charAt(0).toUpperCase()+ws.slice(1)}</span>`;
+        const subName = t.subcontractorId && subsCache ? (subsCache.find(s=>s.id===t.subcontractorId)||{}).name||'—' : contractor || '—';
+        const dur = t.durationDays || t.duration_days || 1;
+
         html += `<tr>
           <td style="width:30px;text-align:center"><input type="checkbox" class="sch-chk" ${checked?'checked':''} onchange="schToggleBulk('${id}')"></td>
           <td class="sch-tbl-name" title="${name}" onclick="toggleTaskEdit('${id}','${projectId}')" style="cursor:pointer">${name}</td>
           <td><select class="sch-tbl-status" onchange="schQuickStatus('${projectId}','${id}',this.value)">${statusOpts(status)}</select></td>
           <td class="sch-tbl-date">${schFmtDate(start)}</td>
           <td class="sch-tbl-date">${schFmtDate(finish)}</td>
-          <td style="font-size:11px;color:var(--charcoal-3)">${contractor || '—'}</td>
+          <td style="font-size:11px;text-align:center">${dur}d</td>
+          <td style="font-size:11px;color:var(--charcoal-3)">${subName}</td>
+          <td>${wsTag}</td>
           <td style="text-align:center">${alert==='red'?'<span class="tag danger" style="font-size:8px">RED</span>':alert==='yellow'?'<span class="tag warn" style="font-size:8px">YLW</span>':crit?'<span class="tag dark" style="font-size:8px">CRIT</span>':''}</td>
           <td style="font-size:10px;color:var(--charcoal-4);text-align:right">${fl!=null?fl+'d':''}</td>
         </tr>
-        <tr id="sch-edit-${id}" style="display:none"><td colspan="8" style="padding:0"></td></tr>`;
+        <tr id="sch-edit-${id}" style="display:none"><td colspan="10" style="padding:0"></td></tr>`;
       });
     }
   }
@@ -2623,7 +2889,7 @@ function renderScheduleTable(tasks, projectId) {
     <table class="sch-table">
       <thead><tr>
         <th style="width:30px"><input type="checkbox" class="sch-chk" onchange="this.checked?schSelectAll():schSelectNone()"></th>
-        <th>Task</th><th>Status</th><th>Start</th><th>Finish</th><th>Contractor</th><th>Alert</th><th style="text-align:right">Float</th>
+        <th>Task</th><th>Status</th><th>Start</th><th>Finish</th><th>Dur</th><th>Contractor</th><th>WS</th><th>Alert</th><th style="text-align:right">Float</th>
       </tr></thead>
       <tbody>${html}</tbody>
     </table>
@@ -2635,85 +2901,122 @@ let schEditOpen = null;
 function toggleTaskEdit(taskId, projectId) {
   const el = document.getElementById('sch-edit-' + taskId);
   if (!el) return;
-  if (schEditOpen === taskId) {
-    el.style.display = 'none';
-    schEditOpen = null;
-    return;
-  }
-  // Close any open panel
-  if (schEditOpen) {
-    const prev = document.getElementById('sch-edit-' + schEditOpen);
-    if (prev) prev.style.display = 'none';
-  }
-  // Find task in cache
+  if (schEditOpen === taskId) { el.style.display = 'none'; schEditOpen = null; return; }
+  if (schEditOpen) { const prev = document.getElementById('sch-edit-' + schEditOpen); if (prev) prev.style.display = 'none'; }
+
   const cache = scheduleCache[activeProject];
   if (!cache) return;
   const task = cache.tasks.find(t => t.id === taskId);
   if (!task) return;
+  const deps = cache.dependencies || [];
+  const blockedBy = deps.filter(d => d.taskId === taskId).map(d => { const bt = cache.tasks.find(t => t.id === d.blockedByTaskId); return bt ? { id: d.blockedByTaskId, name: bt.taskName } : null; }).filter(Boolean);
+  const blocking = deps.filter(d => d.blockedByTaskId === taskId).map(d => { const bt = cache.tasks.find(t => t.id === d.taskId); return bt ? { id: d.taskId, name: bt.taskName } : null; }).filter(Boolean);
 
-  const sel = (v) => (f) => f === v ? 'selected' : '';
-  const s = sel(task.status);
+  const statusOpts = Object.entries(STATUS_LABELS).map(([s,l]) => `<option value="${s}" ${s===task.status?'selected':''}>${l}</option>`).join('');
+  const phaseOpts = PHASE_ORDER.map(p => `<option value="${p}" ${p===task.phase?'selected':''}>${p}</option>`).join('');
+  const tradeOpts = TRADE_OPTIONS.map(t => `<option value="${t}" ${t===task.trade?'selected':''}>${t}</option>`).join('');
+  const wsOpts = ['interior','exterior','both'].map(w => `<option value="${w}" ${w===task.workstream?'selected':''}>${w.charAt(0).toUpperCase()+w.slice(1)}</option>`).join('');
+  const subOpts = `<option value="">— None —</option>` + (subsCache||[]).map(s => `<option value="${s.id}" ${s.id===task.subcontractorId?'selected':''}>${s.name}${s.trade?' ('+s.trade+')':''}</option>`).join('');
+  const rOpts = (val) => ['','excellent','good','fair','poor','na'].map(r => `<option value="${r}" ${r===(val||'')?'selected':''}>${r?r.charAt(0).toUpperCase()+r.slice(1):'—'}</option>`).join('');
+  const depSelectOpts = cache.tasks.filter(t => t.id !== taskId && !blockedBy.find(b => b.id === t.id)).map(t => `<option value="${t.id}">${t.taskName}</option>`).join('');
 
   el.innerHTML = `<div class="sch-edit-panel">
     <div class="sch-edit-hd">
       <div>
-        <div class="sch-edit-title">${task.taskName}</div>
-        <div class="sch-edit-meta">${task.phase} · ${task.trade||'GC'} · Float: ${task.float??'—'}d${task.isCritical?' · CRITICAL PATH':''}</div>
-        <div class="sch-edit-meta">${schFmtDate(task.plannedStart)} → ${schFmtDate(task.plannedFinish)}${task.selectionsGate?' · Gate: '+task.selectionsGate:''}</div>
+        <div class="sch-edit-meta">${schFmtDate(task.plannedStart)} → ${schFmtDate(task.plannedFinish)} · Float: ${task.float??'—'}d${task.isCritical?' · <strong>CRITICAL PATH</strong>':''}${task.selectionsGate?' · Gate: '+task.selectionsGate:''}</div>
       </div>
-      <span class="tag ${task.status==='complete'?'ok':task.status==='in_progress'?'neutral':task.alertLevel==='red'?'danger':task.alertLevel==='yellow'?'warn':'neutral'}">${task.status}</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="tag ${task.status==='complete'?'ok':task.alertLevel==='red'?'danger':task.alertLevel==='yellow'?'warn':'neutral'}">${STATUS_LABELS[task.status]||task.status}</span>
+        <button class="adm-btn adm-btn-danger" style="padding:4px 8px;font-size:10px" onclick="schDeleteTask('${projectId}','${taskId}','${(task.taskName||'').replace(/'/g,"\\'")}')">Delete</button>
+      </div>
     </div>
-    <div class="adm-grid2">
-      <div class="adm-field"><label>Status</label>
-        <select class="adm-inp adm-sel" id="sch-e-status-${taskId}">
-          <option value="not_started" ${s('not_started')}>Not Started</option>
-          <option value="in_progress" ${s('in_progress')}>In Progress</option>
-          <option value="complete" ${s('complete')}>Complete</option>
-          <option value="skipped" ${s('skipped')}>Skipped</option>
-        </select>
-      </div>
-      <div class="adm-field"><label>Duration (days)</label>
-        <input class="adm-inp" type="number" id="sch-e-dur-${taskId}" value="${task.durationDays}" min="1">
-      </div>
-      <div class="adm-field"><label>Actual Start</label>
-        <input class="adm-inp" type="date" id="sch-e-astart-${taskId}" value="${task.actualStart||''}">
-      </div>
-      <div class="adm-field"><label>Actual Finish</label>
-        <input class="adm-inp" type="date" id="sch-e-afin-${taskId}" value="${task.actualFinish||''}">
-      </div>
-      <div class="adm-field"><label>Assigned Contractor</label>
-        <input class="adm-inp" type="text" id="sch-e-contr-${taskId}" value="${task.assignedContractor||''}" placeholder="Contractor name">
-      </div>
+
+    <div class="adm-grid2" style="margin-bottom:6px">
+      <div class="adm-field"><label>Task Name</label><input class="adm-inp" id="sch-e-name-${taskId}" value="${task.taskName||''}"></div>
+      <div class="adm-field"><label>Status</label><select class="adm-inp adm-sel" id="sch-e-status-${taskId}">${statusOpts}</select></div>
+      <div class="adm-field"><label>Phase</label><select class="adm-inp adm-sel" id="sch-e-phase-${taskId}">${phaseOpts}</select></div>
+      <div class="adm-field"><label>Trade</label><select class="adm-inp adm-sel" id="sch-e-trade-${taskId}">${tradeOpts}</select></div>
+      <div class="adm-field"><label>Workstream</label><select class="adm-inp adm-sel" id="sch-e-ws-${taskId}">${wsOpts}</select></div>
+      <div class="adm-field"><label>Duration (days)</label><input class="adm-inp" type="number" id="sch-e-dur-${taskId}" value="${task.durationDays}" min="1"></div>
+      <div class="adm-field"><label>Actual Start</label><input class="adm-inp" type="date" id="sch-e-astart-${taskId}" value="${task.actualStart||''}"></div>
+      <div class="adm-field"><label>Actual Finish</label><input class="adm-inp" type="date" id="sch-e-afin-${taskId}" value="${task.actualFinish||''}"></div>
+    </div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:10px 0 6px">Client-Facing</div>
+    <div class="adm-field"><label>Client Note (visible to client)</label><textarea class="adm-inp" id="sch-e-cnote-${taskId}" rows="2" style="background:var(--cream-pale)">${task.clientNote||''}</textarea></div>
+    <div class="adm-field"><label>Definition of Done (acceptance criteria)</label><textarea class="adm-inp" id="sch-e-dod-${taskId}" rows="2">${task.definitionOfDone||''}</textarea></div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:10px 0 6px">Internal</div>
+    <div class="adm-field"><label>Internal Note (admin only)</label><textarea class="adm-inp" id="sch-e-inote-${taskId}" rows="2" style="border-color:var(--green)">${task.internalNote||''}</textarea></div>
+
+    <div class="adm-grid2" style="margin-top:6px">
+      <div class="adm-field"><label>Subcontractor</label><select class="adm-inp adm-sel" id="sch-e-sub-${taskId}">${subOpts}</select></div>
       <div class="adm-field" style="display:flex;align-items:center;gap:8px;padding-top:22px">
         <input type="checkbox" id="sch-e-conf-${taskId}" ${task.contractorConfirmed?'checked':''}>
         <label for="sch-e-conf-${taskId}" style="margin:0;text-transform:none;letter-spacing:0;font-size:12px">Contractor confirmed</label>
       </div>
     </div>
-    <div class="adm-field"><label>Notes</label>
-      <textarea class="adm-inp" id="sch-e-notes-${taskId}" rows="2" style="resize:vertical">${task.notes||''}</textarea>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:10px 0 6px">Dependencies</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--charcoal-3)">Blocked by:</span>
+      ${blockedBy.length ? blockedBy.map(b => `<span class="tag neutral" style="font-size:9px">${b.name} <span style="cursor:pointer;margin-left:2px" onclick="schRemoveDep('${projectId}','${taskId}','${b.id}')">&times;</span></span>`).join('') : '<span style="font-size:11px;color:var(--charcoal-4);font-style:italic">None</span>'}
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--charcoal-3)">Blocking:</span>
+      ${blocking.length ? blocking.map(b => `<span class="tag neutral" style="font-size:9px">${b.name}</span>`).join('') : '<span style="font-size:11px;color:var(--charcoal-4);font-style:italic">None</span>'}
+    </div>
+    ${depSelectOpts ? `<div style="display:flex;gap:4px;align-items:center"><select class="adm-inp adm-sel" id="sch-dep-add-${taskId}" style="font-size:11px;max-width:250px"><option value="">Add predecessor…</option>${depSelectOpts}</select><button class="adm-btn adm-btn-ghost" style="padding:4px 8px;font-size:10px" onclick="const v=document.getElementById('sch-dep-add-${taskId}').value;if(v)schAddDep('${projectId}','${taskId}',v)">Add</button></div>` : ''}
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:12px 0 6px">Performance Ratings</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">
+      <div class="adm-field"><label>Schedule</label><select class="adm-inp adm-sel" id="sch-e-psch-${taskId}">${rOpts(task.perfSchedule)}</select></div>
+      <div class="adm-field"><label>Invoice</label><select class="adm-inp adm-sel" id="sch-e-pinv-${taskId}">${rOpts(task.perfInvoice)}</select></div>
+      <div class="adm-field"><label>Communication</label><select class="adm-inp adm-sel" id="sch-e-pcom-${taskId}">${rOpts(task.perfCommunication)}</select></div>
+      <div class="adm-field"><label>Scope</label><select class="adm-inp adm-sel" id="sch-e-psco-${taskId}">${rOpts(task.perfScope)}</select></div>
+      <div class="adm-field"><label>Cleanliness</label><select class="adm-inp adm-sel" id="sch-e-pcln-${taskId}">${rOpts(task.perfCleanliness)}</select></div>
+    </div>
+    <div class="adm-field" style="margin-top:4px"><label>Performance Notes</label><textarea class="adm-inp" id="sch-e-pnotes-${taskId}" rows="2">${task.perfNotes||''}</textarea></div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:12px 0 6px">Task Notes & Instructions</div>
+    <div id="sch-notes-list-${taskId}" style="max-height:200px;overflow-y:auto"><div style="font-size:11px;color:var(--charcoal-4);font-style:italic;padding:8px 0">Loading notes…</div></div>
+    <div style="display:flex;gap:4px;margin-top:6px">
+      <select class="adm-inp adm-sel" id="sch-note-type-${taskId}" style="width:120px;font-size:11px">
+        <option value="general">General</option><option value="instruction">Instruction</option><option value="punchlist">Punchlist</option><option value="observation">Observation</option>
+      </select>
+      <input class="adm-inp" id="sch-note-body-${taskId}" placeholder="Add a note…" style="flex:1;font-size:11px">
+      <button class="adm-btn adm-btn-ghost" style="padding:4px 10px;font-size:10px" onclick="schAddNote('${projectId}','${taskId}')">Post</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:0.5px solid var(--border)">
       <button class="adm-btn adm-btn-green" onclick="saveTaskUpdate('${projectId}','${taskId}')">Save & Recalculate</button>
       <button class="adm-btn adm-btn-ghost" onclick="toggleTaskEdit('${taskId}','${projectId}')">Cancel</button>
     </div>
   </div>`;
   el.style.display = 'block';
   schEditOpen = taskId;
+  // Load notes async
+  schLoadNotes(projectId, taskId);
 }
 
 function renderGanttRow(task, tlStart, tlWidth) {
   const barL = schBarLeft(task.plannedStart || task.planned_start, tlStart);
   const barW = schBarWidth(task.durationDays || task.duration_days || 1);
-  const status = task.status || 'not_started';
+  const status = task.status || 'needs_scheduling';
   const crit = task.isCritical ? 'critical' : '';
   const alert = (task.alertLevel||task.alert_level)==='red' ? 'alert-red' : (task.alertLevel||task.alert_level)==='yellow' ? 'alert-yellow' : '';
+  const ws = (task.workstream||'both');
+  const wsClass = 'ws-'+ws;
   const name = task.taskName || task.task_name;
   const id = task.id;
-  return `<div class="gantt-row">
+  const canDrag = status !== 'complete' && status !== 'skipped';
+  const dw = getSchDayWidth();
+  return `<div class="gantt-row" data-task-id="${id}">
     <div class="gantt-row-label" title="${name}">${name}</div>
     <div class="gantt-row-track" style="width:${tlWidth}px">
-      <div class="gantt-bar ${status} ${crit} ${alert}" style="left:${barL}px;width:${barW}px"
-           onclick="toggleTaskEdit('${id}','${activeProject}')"
+      <div class="gantt-bar ${status} ${crit} ${alert} ${wsClass}" style="left:${barL}px;width:${barW}px"
+           ${canDrag ? `data-draggable="true" data-task-id="${id}" data-original-left="${barL}"` : ''}
+           onclick="if(!window._dragMoved)toggleTaskEdit('${id}','${activeProject}')"
            title="${name} (${task.durationDays||task.duration_days}d) ${task.trade||''}&#10;${schFmtDate(task.plannedStart||task.planned_start)} → ${schFmtDate(task.plannedFinish||task.planned_finish)}">
         ${barW > 70 ? name : ''}
       </div>
@@ -2772,45 +3075,86 @@ function renderScheduleView(p) {
     <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Alerts</div><div style="display:flex;gap:6px;margin-top:4px">${alerts.red.length?`<span class="tag danger">${alerts.red.length} Red</span>`:''}<span class="tag ${alerts.yellow.length?'warn':'neutral'}">${alerts.yellow.length} Yellow</span></div></div></div>
   </div>`;
 
-  // ── B: Action bar + view toggle + bulk bar ──
+  // ── B: Action bar + controls ──
   const actionHTML = `<div class="sch-action-bar">
     <button class="adm-btn adm-btn-green" onclick="recalculateSchedule('${p.id}')">Recalculate CPM</button>
-    <button class="adm-btn adm-btn-ghost" onclick="validateSchedule('${p.id}')">Validate Sequencing</button>
+    <button class="adm-btn adm-btn-ghost" onclick="validateSchedule('${p.id}')">Validate</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schShowAddTask=!schShowAddTask;renderAdmin()">+ Add Task</button>
     <div id="sch-toast" class="sch-toast"></div>
     <div class="sch-view-toggle">
       <button class="sch-view-btn ${schViewMode==='gantt'?'active':''}" onclick="schSetView('gantt')">Gantt</button>
       <button class="sch-view-btn ${schViewMode==='table'?'active':''}" onclick="schSetView('table')">Table</button>
     </div>
+    ${schViewMode==='gantt' ? `
+    <div class="sch-view-toggle" style="margin-left:4px">
+      <button class="sch-view-btn ${schGroupBy==='phase'?'active':''}" onclick="schSetGroupBy('phase')">Phase</button>
+      <button class="sch-view-btn ${schGroupBy==='workstream'?'active':''}" onclick="schSetGroupBy('workstream')">Workstream</button>
+    </div>
+    <div class="sch-zoom-toggle">
+      <button class="sch-zoom-btn ${schZoom==='days'?'active':''}" onclick="schSetZoom('days')">Days</button>
+      <button class="sch-zoom-btn ${schZoom==='weeks'?'active':''}" onclick="schSetZoom('weeks')">Weeks</button>
+      <button class="sch-zoom-btn ${schZoom==='months'?'active':''}" onclick="schSetZoom('months')">Months</button>
+    </div>` : ''}
   </div>
+
+  <div class="sch-queue-tabs">
+    ${[{key:'all',label:'All'},{key:'next_to_schedule',label:'Next to Schedule'},{key:'long_lead',label:'Long-Lead'},{key:'waiting_hold',label:'Waiting / Hold'}].map(t =>
+      `<button class="sch-queue-tab ${schSubView===t.key?'active':''}" onclick="schSetSubView('${t.key}')">${t.label}${t.key!=='all'?`<span class="sch-queue-count">${countQueue(tasks, t.key)}</span>`:''}</button>`
+    ).join('')}
+  </div>
+
+  ${schShowAddTask ? `<div class="sch-add-modal">
+    <div class="sh"><div class="sh-title">Add Custom Task</div></div>
+    <div class="adm-grid2">
+      <div class="adm-field"><label>Task Name *</label><input class="adm-inp" id="sch-add-name" placeholder="e.g. Install specialty beam"></div>
+      <div class="adm-field"><label>Phase</label><select class="adm-inp adm-sel" id="sch-add-phase">${PHASE_ORDER.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
+      <div class="adm-field"><label>Trade</label><select class="adm-inp adm-sel" id="sch-add-trade"><option value="">—</option>${TRADE_OPTIONS.map(t=>`<option value="${t}">${t}</option>`).join('')}</select></div>
+      <div class="adm-field"><label>Workstream</label><select class="adm-inp adm-sel" id="sch-add-ws"><option value="interior">Interior</option><option value="exterior">Exterior</option><option value="both" selected>Both</option></select></div>
+      <div class="adm-field"><label>Duration (days)</label><input class="adm-inp" type="number" id="sch-add-dur" value="1" min="1"></div>
+      <div class="adm-field"><label>Sequence #</label><input class="adm-inp" type="number" id="sch-add-seq" value="999" min="1"></div>
+    </div>
+    <div class="adm-field"><label>Definition of Done</label><input class="adm-inp" id="sch-add-dod" placeholder="What marks this task complete?"></div>
+    <div class="adm-field"><label>Client Note</label><input class="adm-inp" id="sch-add-cnote" placeholder="Visible to client"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="adm-btn adm-btn-green" onclick="schAddTask('${p.id}')">Add Task</button>
+      <button class="adm-btn adm-btn-ghost" onclick="schShowAddTask=false;renderAdmin()">Cancel</button>
+    </div>
+  </div>` : ''}
+
   <div id="sch-bulk-bar" class="sch-bulk-bar" style="display:${schBulkSelected.size>0?'flex':'none'}">
     <span id="sch-bulk-count">${schBulkSelected.size} selected</span>
-    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','in_progress')">Mark In Progress</button>
-    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','complete')">Mark Complete</button>
-    <button class="adm-btn adm-btn-ghost" onclick="schBulkSetStatus('${p.id}','skipped')">Skip</button>
+    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','scheduled')">Scheduled</button>
+    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','in_progress')">In Progress</button>
+    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','complete')">Complete</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schBulkSetStatus('${p.id}','on_hold')">On Hold</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schBulkSetStatus('${p.id}','waiting_on_client')">Waiting</button>
     <button class="adm-btn adm-btn-ghost" onclick="schSelectNone()" style="margin-left:auto">Clear</button>
   </div>`;
 
+  // ── Filter by queue sub-view ──
+  const viewTasks = schSubView === 'all' ? tasks : filterQueue(tasks, schSubView);
+
   // ── C: Gantt chart ──
-  const tlStart = tasks.reduce((m,t) => {
+  const dw = getSchDayWidth();
+  const tlStart = viewTasks.reduce((m,t) => {
     const s = t.plannedStart || t.planned_start;
     return s && (!m || s < m) ? s : m;
   }, null) || buildStart;
-  const tlEnd = tasks.reduce((m,t) => {
+  const tlEnd = viewTasks.reduce((m,t) => {
     const f = t.plannedFinish || t.planned_finish;
     return f && (!m || f > m) ? f : m;
   }, null) || computedEnd;
 
-  // Add padding
-  const tlEndPad = new Date(tlEnd + 'T00:00:00');
+  const tlEndPad = new Date((tlEnd||buildStart) + 'T00:00:00');
   tlEndPad.setUTCDate(tlEndPad.getUTCDate() + 14);
   const tlEndStr = tlEndPad.toISOString().split('T')[0];
 
-  const tlWidth = schDaysBetween(tlStart, tlEndStr) * SCH_DAY_WIDTH;
-  const weeks = generateWeekMarkers(tlStart, tlEndStr);
+  const tlWidth = schDaysBetween(tlStart, tlEndStr) * dw;
+  const timeMarkers = generateTimeMarkers(tlStart, tlEndStr);
 
   const headerHTML = `<div class="gantt-header" style="width:${180 + tlWidth}px">
     <div style="width:180px;flex-shrink:0;font-size:9px;font-weight:700;color:var(--charcoal-3);padding:0 8px">Task</div>
-    ${weeks.map(w => `<div class="gantt-week-mark" style="width:${w.width}px">${w.label}</div>`).join('')}
+    ${timeMarkers.map(w => `<div class="gantt-week-mark" style="width:${w.width}px">${w.label}</div>`).join('')}
   </div>`;
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -2818,21 +3162,22 @@ function renderScheduleView(p) {
   const todayLeft = 180 + schBarLeft(todayStr, tlStart);
   const todayHTML = todayInRange ? `<div class="gantt-today" style="left:${todayLeft}px"></div>` : '';
 
-  const phaseMap = groupTasksByPhase(tasks);
+  const groupMap = schGroupBy === 'workstream' ? groupTasksByWorkstream(viewTasks) : groupTasksByPhase(viewTasks);
   let phaseHTML = '';
   let pi = 0;
-  for (const [phaseName, phaseTasks] of phaseMap) {
-    if (phaseTasks.length === 0) { pi++; continue; }
-    const done = phaseTasks.filter(t => t.status === 'complete').length;
+  for (const [groupName, groupTasks] of groupMap) {
+    if (groupTasks.length === 0) { pi++; continue; }
+    const done = groupTasks.filter(t => t.status === 'complete').length;
     const isCollapsed = schCollapsed[pi];
+    const wsAccent = schGroupBy === 'workstream' ? ` ws-${groupName.toLowerCase()}` : '';
     phaseHTML += `<div class="gantt-phase ${isCollapsed?'collapsed':''}" id="sch-phase-${pi}">
-      <div class="gantt-phase-hd" onclick="schTogglePhase(${pi})">
+      <div class="gantt-phase-hd${wsAccent}" onclick="schTogglePhase(${pi})">
         <svg viewBox="0 0 10 10"><path d="M3 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
-        ${phaseName}
-        <span class="gantt-phase-count">${done}/${phaseTasks.length} complete</span>
+        ${groupName}
+        <span class="gantt-phase-count">${done}/${groupTasks.length} complete</span>
       </div>
       <div class="gantt-phase-body">
-        ${phaseTasks.map(t => renderGanttRow(t, tlStart, tlWidth)).join('')}
+        ${groupTasks.map(t => renderGanttRow(t, tlStart, tlWidth)).join('')}
       </div>
     </div>`;
     pi++;
@@ -2865,14 +3210,14 @@ function renderScheduleView(p) {
   }
 
   // ── E: Table view ──
-  const tableHTML = renderScheduleTable(tasks, p.id);
+  const tableHTML = renderScheduleTable(viewTasks, p.id);
 
   // Choose view
   const mainView = schViewMode === 'table' ? tableHTML : ganttHTML;
 
-  // Auto-scroll Gantt to today after render
+  // Auto-scroll + drag init after render
   if (schViewMode === 'gantt') {
-    setTimeout(schAutoScrollToday, 150);
+    setTimeout(() => { schAutoScrollToday(); initGanttDrag(); }, 150);
   }
 
   return kpiHTML + actionHTML + mainView + alertsHTML;
