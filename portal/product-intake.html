@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fox — Product Intake</title>
+<link rel="stylesheet" href="style.css"/>
+<style>
+/* ── Intake layout ── */
+body { background: var(--cream); margin: 0; }
+
+.intake-shell {
+  max-width: 820px; margin: 0 auto; padding: 2rem 1.5rem;
+}
+
+.intake-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 2rem;
+}
+.intake-header h1 {
+  font-size: 20px; font-weight: 700; color: var(--charcoal); margin: 0;
+}
+.intake-header .sub {
+  font-size: 12px; color: var(--charcoal-3); margin-top: 2px;
+}
+
+/* ── URL input ── */
+.url-bar {
+  display: flex; gap: 10px; margin-bottom: 1.5rem;
+}
+.url-input {
+  flex: 1; padding: 12px 16px; font-size: 14px; font-family: 'Work Sans', sans-serif;
+  border: 1px solid var(--border-2); border-radius: var(--r-md); background: white;
+  color: var(--charcoal); outline: none; transition: border-color .15s;
+}
+.url-input:focus { border-color: var(--green); }
+.url-input::placeholder { color: var(--charcoal-3); opacity: .5; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 20px; border-radius: var(--r-md); border: none;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Work Sans', sans-serif;
+  transition: all .15s; white-space: nowrap;
+}
+.btn-primary { background: var(--charcoal); color: var(--cream); }
+.btn-primary:hover { opacity: .85; }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn-green { background: var(--green); color: white; }
+.btn-green:hover { opacity: .85; }
+.btn-green:disabled { opacity: .4; cursor: not-allowed; }
+.btn-outline {
+  background: transparent; color: var(--charcoal);
+  border: 1px solid var(--border-2);
+}
+.btn-outline:hover { border-color: var(--charcoal); }
+
+/* ── Status messages ── */
+.status {
+  padding: 10px 14px; border-radius: var(--r-md); font-size: 13px; margin-bottom: 1rem;
+  display: none;
+}
+.status.show { display: block; }
+.status.loading { background: #f0f5ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* ── Product review card ── */
+.product-review {
+  background: white; border: 1px solid var(--border-2); border-radius: var(--r-lg);
+  padding: 1.5rem; display: none;
+}
+.product-review.show { display: block; }
+
+.product-top {
+  display: grid; grid-template-columns: 180px 1fr; gap: 1.5rem; margin-bottom: 1.25rem;
+}
+.product-img-wrap {
+  width: 180px; height: 180px; border-radius: var(--r-md); overflow: hidden;
+  background: var(--cream-pale); display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-1);
+}
+.product-img-wrap img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.product-img-wrap .no-img {
+  font-size: 11px; color: var(--charcoal-3); text-align: center; padding: 1rem;
+}
+
+.product-info h2 {
+  font-size: 17px; font-weight: 700; color: var(--charcoal); margin: 0 0 4px;
+}
+.product-vendor {
+  font-size: 12px; color: var(--charcoal-3); margin-bottom: 8px;
+}
+
+/* ── Form fields ── */
+.field-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;
+}
+.field-row-3 {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;
+}
+.field {
+  display: flex; flex-direction: column;
+}
+.field label {
+  font-size: 10px; font-weight: 600; color: var(--charcoal-3);
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px;
+}
+.field input, .field select {
+  padding: 8px 10px; font-size: 13px; font-family: 'Work Sans', sans-serif;
+  border: 1px solid var(--border-2); border-radius: var(--r-sm); background: white;
+  color: var(--charcoal); outline: none;
+}
+.field input:focus, .field select:focus { border-color: var(--green); }
+.field textarea {
+  padding: 8px 10px; font-size: 13px; font-family: 'Work Sans', sans-serif;
+  border: 1px solid var(--border-2); border-radius: var(--r-sm); background: white;
+  color: var(--charcoal); outline: none; resize: vertical; min-height: 60px;
+}
+
+/* ── Taste tags ── */
+.taste-section {
+  margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-1);
+}
+.taste-section h3 {
+  font-size: 13px; font-weight: 700; color: var(--charcoal); margin: 0 0 12px;
+}
+.taste-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+}
+.taste-dim {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.taste-dim label {
+  font-size: 10px; font-weight: 600; color: var(--charcoal-3);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.taste-dim .taste-bar {
+  display: flex; align-items: center; gap: 8px;
+}
+.taste-dim .taste-labels {
+  display: flex; justify-content: space-between;
+  font-size: 9px; color: var(--charcoal-3); opacity: .6;
+}
+.taste-dim input[type=range] {
+  flex: 1; accent-color: var(--green); cursor: pointer;
+}
+.taste-dim .taste-val {
+  font-size: 13px; font-weight: 700; color: var(--charcoal);
+  min-width: 20px; text-align: center;
+}
+
+/* ── Style fit chips ── */
+.style-chips {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
+}
+.style-chip {
+  padding: 5px 12px; border-radius: var(--r-full); font-size: 11px; font-weight: 500;
+  border: 1px solid var(--border-2); background: white; color: var(--charcoal-3);
+  cursor: pointer; transition: all .15s; user-select: none;
+}
+.style-chip.active {
+  background: var(--charcoal); color: var(--cream); border-color: var(--charcoal);
+}
+.style-chip:hover:not(.active) { border-color: var(--charcoal); color: var(--charcoal); }
+
+/* ── Actions bar ── */
+.actions-bar {
+  display: flex; gap: 10px; margin-top: 1.25rem; padding-top: 1.25rem;
+  border-top: 1px solid var(--border-1);
+}
+
+/* ── Saved queue ── */
+.queue-section {
+  margin-top: 2rem;
+}
+.queue-section h3 {
+  font-size: 14px; font-weight: 700; color: var(--charcoal); margin: 0 0 12px;
+}
+.queue-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  border: 1px solid var(--border-1); border-radius: var(--r-md); margin-bottom: 8px;
+  background: white;
+}
+.queue-item .qi-name { font-size: 13px; font-weight: 600; color: var(--charcoal); flex: 1; }
+.queue-item .qi-cat { font-size: 11px; color: var(--charcoal-3); }
+.queue-item .qi-status {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  padding: 3px 8px; border-radius: var(--r-full);
+}
+.qi-status.saved { background: #f0fdf4; color: #166534; }
+.qi-status.pending { background: #fef3c7; color: #92400e; }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .product-top { grid-template-columns: 1fr; }
+  .product-img-wrap { width: 100%; height: 200px; }
+  .field-row, .field-row-3, .taste-grid { grid-template-columns: 1fr; }
+  .url-bar { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<div class="intake-shell">
+
+  <!-- Header -->
+  <div class="intake-header">
+    <div>
+      <h1>Fox Product Intake</h1>
+      <div class="sub">Paste a vendor URL — AI extracts product data and suggests taste tags</div>
+    </div>
+  </div>
+
+  <!-- URL input -->
+  <div class="url-bar">
+    <input type="url" class="url-input" id="urlInput"
+           placeholder="https://vendor.com/product-page"
+           onkeydown="if(event.key==='Enter') analyzeUrl()"/>
+    <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeUrl()">
+      Analyze Product
+    </button>
+  </div>
+
+  <!-- Status -->
+  <div class="status" id="status"></div>
+
+  <!-- Product review card -->
+  <div class="product-review" id="productCard">
+    <div class="product-top">
+      <div class="product-img-wrap" id="imgWrap">
+        <div class="no-img">No image</div>
+      </div>
+      <div class="product-info">
+        <div class="field">
+          <label>Product Name</label>
+          <input type="text" id="f_name"/>
+        </div>
+        <div class="field-row" style="margin-top:8px">
+          <div class="field">
+            <label>Vendor</label>
+            <input type="text" id="f_vendor"/>
+          </div>
+          <div class="field">
+            <label>Price Range</label>
+            <input type="text" id="f_priceRange"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-row-3">
+      <div class="field">
+        <label>Category</label>
+        <select id="f_category">
+          <option value="">Select…</option>
+          <option>Cabinetry</option>
+          <option>Countertops</option>
+          <option>Backsplash Tile</option>
+          <option>Floor Tile</option>
+          <option>Plumbing Fixtures</option>
+          <option>Cabinet Hardware</option>
+          <option>Lighting</option>
+          <option>Paint</option>
+          <option>Flooring</option>
+          <option>Vanities</option>
+          <option>Mirrors</option>
+          <option>Accessories</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Tier</label>
+        <select id="f_tier">
+          <option value="">Select…</option>
+          <option>Essential</option>
+          <option>Elevated</option>
+          <option>Showpiece</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Image URL</label>
+        <input type="url" id="f_imageUrl" placeholder="https://…"/>
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:12px">
+      <label>Notes</label>
+      <textarea id="f_notes" placeholder="Material, finish, dimensions, lead time…"></textarea>
+    </div>
+
+    <!-- Style Fit -->
+    <div class="field">
+      <label>Style Fit</label>
+      <div class="style-chips" id="styleChips">
+        <div class="style-chip" data-style="Modern Farmhouse" onclick="toggleChip(this)">Modern Farmhouse</div>
+        <div class="style-chip" data-style="Transitional" onclick="toggleChip(this)">Transitional</div>
+        <div class="style-chip" data-style="Modern Traditional" onclick="toggleChip(this)">Modern Traditional</div>
+        <div class="style-chip" data-style="Organic Modern" onclick="toggleChip(this)">Organic Modern</div>
+        <div class="style-chip" data-style="Clean Modern" onclick="toggleChip(this)">Clean Modern</div>
+        <div class="style-chip" data-style="Warm Luxury" onclick="toggleChip(this)">Warm Luxury</div>
+      </div>
+    </div>
+
+    <!-- Taste dimensions -->
+    <div class="taste-section">
+      <h3>Taste Dimension Tags</h3>
+      <div class="taste-grid">
+        <div class="taste-dim">
+          <label>Temperature</label>
+          <div class="taste-bar">
+            <input type="range" min="1" max="10" value="5" id="f_temperature"
+                   oninput="this.nextElementSibling.textContent=this.value"/>
+            <span class="taste-val">5</span>
+          </div>
+          <div class="taste-labels"><span>Cool</span><span>Warm</span></div>
+        </div>
+        <div class="taste-dim">
+          <label>Material Feel</label>
+          <div class="taste-bar">
+            <input type="range" min="1" max="10" value="5" id="f_materialFeel"
+                   oninput="this.nextElementSibling.textContent=this.value"/>
+            <span class="taste-val">5</span>
+          </div>
+          <div class="taste-labels"><span>Manufactured</span><span>Natural</span></div>
+        </div>
+        <div class="taste-dim">
+          <label>Surface</label>
+          <div class="taste-bar">
+            <input type="range" min="1" max="10" value="5" id="f_surface"
+                   oninput="this.nextElementSibling.textContent=this.value"/>
+            <span class="taste-val">5</span>
+          </div>
+          <div class="taste-labels"><span>Matte</span><span>Polished</span></div>
+        </div>
+        <div class="taste-dim">
+          <label>Visual Weight</label>
+          <div class="taste-bar">
+            <input type="range" min="1" max="10" value="5" id="f_visualWeight"
+                   oninput="this.nextElementSibling.textContent=this.value"/>
+            <span class="taste-val">5</span>
+          </div>
+          <div class="taste-labels"><span>Quiet</span><span>Expressive</span></div>
+        </div>
+        <div class="taste-dim">
+          <label>Risk Level</label>
+          <div class="taste-bar">
+            <input type="range" min="1" max="10" value="5" id="f_riskLevel"
+                   oninput="this.nextElementSibling.textContent=this.value"/>
+            <span class="taste-val">5</span>
+          </div>
+          <div class="taste-labels"><span>Proven</span><span>Adventurous</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions-bar">
+      <button class="btn btn-green" id="saveBtn" onclick="saveProduct()">
+        Save to Catalog
+      </button>
+      <button class="btn btn-outline" onclick="resetForm()">
+        Clear
+      </button>
+    </div>
+  </div>
+
+  <!-- Saved queue -->
+  <div class="queue-section" id="queueSection" style="display:none">
+    <h3>Session Queue</h3>
+    <div id="queueList"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+let currentProduct = null;
+const savedQueue = [];
+
+const API_BASE = window.location.hostname === 'localhost'
+  ? 'http://localhost:8888/.netlify/functions'
+  : '/.netlify/functions';
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+
+function showStatus(msg, type) {
+  const el = $('status');
+  el.textContent = msg;
+  el.className = `status show ${type}`;
+}
+
+function hideStatus() {
+  $('status').className = 'status';
+}
+
+function toggleChip(el) {
+  el.classList.toggle('active');
+}
+
+function getSelectedStyles() {
+  return [...document.querySelectorAll('.style-chip.active')].map(c => c.dataset.style);
+}
+
+function setSelectedStyles(styles) {
+  document.querySelectorAll('.style-chip').forEach(c => {
+    c.classList.toggle('active', (styles || []).includes(c.dataset.style));
+  });
+}
+
+// ─── Analyze URL ────────────────────────────────────────────────────────────
+async function analyzeUrl() {
+  const url = $('urlInput').value.trim();
+  if (!url) { showStatus('Please enter a product URL', 'error'); return; }
+
+  const btn = $('analyzeBtn');
+  btn.disabled = true;
+  btn.textContent = 'Analyzing…';
+  showStatus('Fetching page and extracting product data with AI… This may take 15-30 seconds.', 'loading');
+
+  try {
+    const res = await fetch(`${API_BASE}/product-intake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, action: 'analyze' }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Analysis failed');
+
+    currentProduct = data.product;
+    populateForm(data.product);
+    $('productCard').classList.add('show');
+    showStatus('Product analyzed — review and adjust before saving.', 'success');
+
+  } catch (err) {
+    showStatus(`Error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Analyze Product';
+  }
+}
+
+// ─── Populate form with AI results ──────────────────────────────────────────
+function populateForm(p) {
+  $('f_name').value = p.name || '';
+  $('f_vendor').value = p.vendor || '';
+  $('f_priceRange').value = p.priceRange || '';
+  $('f_category').value = p.category || '';
+  $('f_tier').value = p.tier || '';
+  $('f_imageUrl').value = p.imageUrl || '';
+  $('f_notes').value = p.notes || '';
+
+  setSelectedStyles(p.styleFit);
+
+  // Taste sliders
+  const dims = ['temperature', 'materialFeel', 'surface', 'visualWeight', 'riskLevel'];
+  for (const d of dims) {
+    const el = $(`f_${d}`);
+    const val = p[d] || 5;
+    el.value = val;
+    el.nextElementSibling.textContent = val;
+  }
+
+  // Image preview
+  const wrap = $('imgWrap');
+  if (p.imageUrl) {
+    wrap.innerHTML = `<img src="${p.imageUrl}" alt="${p.name}" onerror="this.parentElement.innerHTML='<div class=no-img>Image failed to load</div>'"/>`;
+  } else {
+    wrap.innerHTML = '<div class="no-img">No image found</div>';
+  }
+}
+
+// ─── Collect form data ──────────────────────────────────────────────────────
+function collectFormData() {
+  return {
+    name:         $('f_name').value.trim(),
+    vendor:       $('f_vendor').value.trim(),
+    vendorUrl:    $('urlInput').value.trim(),
+    imageUrl:     $('f_imageUrl').value.trim() || null,
+    category:     $('f_category').value,
+    tier:         $('f_tier').value,
+    styleFit:     getSelectedStyles(),
+    temperature:  parseInt($('f_temperature').value),
+    materialFeel: parseInt($('f_materialFeel').value),
+    surface:      parseInt($('f_surface').value),
+    visualWeight: parseInt($('f_visualWeight').value),
+    riskLevel:    parseInt($('f_riskLevel').value),
+    priceRange:   $('f_priceRange').value.trim(),
+    notes:        $('f_notes').value.trim(),
+  };
+}
+
+// ─── Save to Notion ─────────────────────────────────────────────────────────
+async function saveProduct() {
+  const product = collectFormData();
+  if (!product.name) { showStatus('Product name is required', 'error'); return; }
+  if (!product.category) { showStatus('Category is required', 'error'); return; }
+
+  const btn = $('saveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  showStatus('Saving to Notion catalog…', 'loading');
+
+  try {
+    const res = await fetch(`${API_BASE}/product-intake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'save', product }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Save failed');
+
+    showStatus(`Saved! Product added to catalog.`, 'success');
+
+    // Add to session queue
+    savedQueue.push({ name: product.name, category: product.category, notionUrl: data.notionUrl });
+    renderQueue();
+
+    // Clear for next product
+    setTimeout(() => {
+      $('urlInput').value = '';
+      $('productCard').classList.remove('show');
+      currentProduct = null;
+      hideStatus();
+      $('urlInput').focus();
+    }, 1500);
+
+  } catch (err) {
+    showStatus(`Save error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save to Catalog';
+  }
+}
+
+// ─── Queue display ──────────────────────────────────────────────────────────
+function renderQueue() {
+  if (!savedQueue.length) {
+    $('queueSection').style.display = 'none';
+    return;
+  }
+
+  $('queueSection').style.display = 'block';
+  $('queueList').innerHTML = savedQueue.map(q => `
+    <div class="queue-item">
+      <span class="qi-name">${q.name}</span>
+      <span class="qi-cat">${q.category}</span>
+      <span class="qi-status saved">Saved</span>
+    </div>
+  `).join('');
+}
+
+// ─── Reset ──────────────────────────────────────────────────────────────────
+function resetForm() {
+  $('urlInput').value = '';
+  $('productCard').classList.remove('show');
+  currentProduct = null;
+  hideStatus();
+  $('urlInput').focus();
+}
+
+// Auto-focus
+$('urlInput').focus();
+</script>
+
+</body>
+</html>
