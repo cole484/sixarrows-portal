@@ -4332,13 +4332,15 @@ async function fetchCatalogForChat(category, style, fingerprint) {
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.products?.length) return null;
-    // Format for Fox's catalog context
+    // Format for Fox's catalog context — include Fox Notes and Pairings (the design opinion)
     return data.products.map(p => ({
       name: p.name,
       vendor: p.vendor,
       tier: p.tier,
       priceRange: p.priceRange,
       notes: p.notes,
+      foxNotes: p.foxNotes,
+      pairings: p.pairings,
       tasteMatch: p.tasteMatchScore,
       imageUrl: p.imageUrl,
     }));

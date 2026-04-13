@@ -237,6 +237,42 @@ Rules:
 `.trim());
   }
 
+  if (mode === 'profile-analyze') {
+    parts.push(`
+## Current task: taste profile analysis
+
+The client just completed the full taste profiling flow — identity words, 12 visual comparisons, lifestyle questions, and design guardrails. Their computed style fingerprint (12 dimensions, coherence score, derived material directions, style fit) is in the user turn as JSON.
+
+Your job:
+1. Review the fingerprint dimensions, coherence, and style fit.
+2. Confirm or adjust the primary style from the six profiles above.
+3. Write a design concept statement — a 2-4 sentence narrative describing what their home should *feel* like. Ground it in their specific dimension scores, not generic descriptions.
+4. Note any inconsistencies worth gently surfacing (from the coherence conflicts).
+5. Translate lifestyle constraints into livability notes Fox should remember.
+6. Output ONE JSON object, and NOTHING ELSE. No prose before or after. No code fence. Pure JSON.
+
+Schema:
+{
+  "style":             "Modern Farmhouse" | "Transitional" | "Modern Traditional" | "Organic Modern" | "Clean Modern" | "Warm Luxury",
+  "confidence":        0-100,
+  "summary":           "2-3 sentence style description specific to this client.",
+  "greeting":          "Warm 3-5 sentence introduction. Introduce yourself as Fox, name their style, describe one or two sensory things they'll see in their finished home, invite them to start. Conversational, no bullets.",
+  "conceptStatement":  "2-4 sentence design concept/thesis. Describe the feeling of their home using their specific taste signals. e.g. 'Your home should feel like a collected retreat — warm materials grounded by quiet restraint, where every surface has texture but nothing competes for attention.'",
+  "designGuardrails":  ["Array of 3-6 short design rules derived from their guardrails and taste. e.g. 'No visual busyness — keep pattern minimal and tonal'"],
+  "inconsistencies":   ["Array of 0-3 gentle observations about taste tensions. e.g. 'You're drawn to natural materials but prefer low maintenance — we'll find engineered options that feel authentic'. Empty array if coherent."],
+  "livabilityNotes":   ["Array of 1-4 lifestyle-driven notes. e.g. 'Heavy kitchen use — prioritize durable, easy-clean surfaces over delicate finishes'"]
+}
+
+Rules:
+- The greeting and conceptStatement MUST stay in Fox's voice (warm, decisive, brief, specific).
+- conceptStatement should feel like a design thesis, not a style label recap.
+- designGuardrails should be abstract ("no visual busyness") not product-literal ("no wallpaper").
+- inconsistencies should be framed as "here's how we'll solve this tension" not "you contradicted yourself."
+- Never invent a seventh style.
+- If the fingerprint strongly supports one style, set confidence high (80-95). Only go lower if genuinely split.
+`.trim());
+  }
+
   if (mode === 'chat') {
     parts.push(PRESENTATION_FORMAT.trim());
 
@@ -254,11 +290,16 @@ Rules:
 
     if (context.catalog) {
       parts.push(`
-## Curated catalog for this client
+## Curated product catalog
 
-You have been handed a curated catalog of products for this client's style. **Prefer the catalog** for your three picks — it has been pre-vetted by David Adler Group. Only reach outside the catalog if the client specifically asks for something the catalog doesn't cover.
+You have been handed a curated catalog of real products vetted by David Adler Group. **Always prefer catalog products** for your three picks. Only reach outside the catalog if the client specifically asks for something the catalog doesn't cover.
 
-When the catalog is available, your "three picks" for a category should be drawn from the Value / Mid / Statement tiers listed below.
+Each product includes:
+- **foxNotes**: The designer's opinion on WHY this product fits certain client personalities. Use this reasoning when explaining your picks — it's your design authority.
+- **pairings**: What the product works well with. Use this to ensure your picks create a cohesive palette.
+- **tasteMatch**: How well the product matches this client's taste fingerprint (0-100). Higher = better match. Prefer high-match products.
+
+Your three picks (Essential / Elevated / Showpiece) should be drawn from these products, sorted by taste match:
 
 \`\`\`json
 ${safeStringify(context.catalog)}
@@ -276,6 +317,38 @@ These selections are locked in. Stay consistent with them — never recommend a 
 ${safeStringify(context.answersSoFar)}
 \`\`\`
 `.trim());
+    }
+
+    if (context.fingerprint) {
+      const fp = context.fingerprint;
+      const dimLines = Object.entries(fp.dimensions || {}).map(([k, v]) =>
+        `- ${k}: ${v.score}/10 (confidence: ${v.confidence})`
+      ).join('\n');
+      parts.push(`
+## Client taste fingerprint
+
+${dimLines}
+
+Coherence: ${fp.coherence?.score ?? '?'}/100 (${fp.coherence?.classification ?? 'unknown'})
+${fp.coherence?.conflicts?.length ? 'Tensions: ' + fp.coherence.conflicts.map(c => c.description || `${c.dimA} vs ${c.dimB}`).join('; ') : 'No major tensions.'}
+
+Decision style: ${fp.decisionStyle || 'unknown'}
+Maintenance tolerance: ${fp.maintenanceTolerance || 'unknown'}
+
+Derived directions: ${safeStringify(fp.materialDirections || {})}
+`.trim());
+    }
+
+    if (context.designGuardrails?.length) {
+      parts.push(`
+## Design guardrails (from profiling)
+
+${context.designGuardrails.map(g => `- ${g}`).join('\n')}
+`.trim());
+    }
+
+    if (context.designConcept) {
+      parts.push(`## Design concept\n\n${context.designConcept}`);
     }
   }
 
@@ -357,7 +430,7 @@ export const handler = async (event) => {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'messages array required' }) };
   }
 
-  const allowedModes = new Set(['chat', 'quiz-analyze']);
+  const allowedModes = new Set(['chat', 'quiz-analyze', 'profile-analyze']);
   if (!allowedModes.has(mode)) {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: `Unknown mode: ${mode}` }) };
   }
@@ -376,8 +449,8 @@ export const handler = async (event) => {
   }
 
   // Mode-tuned token budgets
-  const maxTokens = mode === 'quiz-analyze' ? 1024 : 2048;
-  const temperature = mode === 'quiz-analyze' ? 0.3 : 0.7;
+  const maxTokens = (mode === 'quiz-analyze' || mode === 'profile-analyze') ? 1536 : 2048;
+  const temperature = (mode === 'quiz-analyze' || mode === 'profile-analyze') ? 0.3 : 0.7;
 
   const system = buildSystemPrompt(mode, context);
 

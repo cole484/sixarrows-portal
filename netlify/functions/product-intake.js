@@ -85,12 +85,17 @@ Choose 1-3 that best fit: Modern Farmhouse, Transitional, Modern Traditional, Or
 - Elevated: Designer-level, noticeably premium
 - Showpiece: Magazine-cover, investment piece
 
+## Rooms
+Choose 1+ that apply: Kitchen, Primary Bath, Powder Room, Living Room, Exterior, All Rooms
+
 ## Response Format
 Return ONLY valid JSON (no markdown, no explanation):
 {
   "name": "Product name as it should appear in catalog",
   "vendor": "Brand or manufacturer name",
+  "skuModel": "Exact SKU or model number if found on page, or null",
   "category": "one of the categories above",
+  "room": ["Kitchen", "Primary Bath"],
   "imageUrl": "URL of the best product image from the page, or null",
   "styleFit": ["style1", "style2"],
   "tier": "Essential|Elevated|Showpiece",
@@ -100,7 +105,9 @@ Return ONLY valid JSON (no markdown, no explanation):
   "visualWeight": 4,
   "riskLevel": 3,
   "priceRange": "$X - $Y or approximate",
-  "notes": "Brief design notes: material, finish, dimensions, lead time if mentioned. 1-2 sentences max."
+  "notes": "Brief design notes: material, finish, dimensions, lead time if mentioned. 1-2 sentences max.",
+  "foxNotes": "Why a designer would choose this product for a specific client personality. Reference taste dimensions. 1-2 sentences.",
+  "pairings": "What this product works well with — other materials, finishes, styles. Comma-separated list."
 }`;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,7 +247,9 @@ async function saveToNotion(product) {
     'Image URL':    product.imageUrl  ? { url: product.imageUrl }  : undefined,
     'Category':     { select: { name: product.category } },
     'Style Fit':    { multi_select: (product.styleFit || []).map(s => ({ name: s })) },
+    'Room':         product.room?.length ? { multi_select: product.room.map(r => ({ name: r })) } : undefined,
     'Tier':         { select: { name: product.tier } },
+    'SKU/Model':    product.skuModel ? { rich_text: [{ text: { content: product.skuModel } }] } : undefined,
     'Temperature':  { number: product.temperature },
     'Material Feel':{ number: product.materialFeel },
     'Surface':      { number: product.surface },
@@ -248,6 +257,8 @@ async function saveToNotion(product) {
     'Risk Level':   { number: product.riskLevel },
     'Price Range':  product.priceRange ? { rich_text: [{ text: { content: product.priceRange } }] } : undefined,
     'Notes':        product.notes ? { rich_text: [{ text: { content: product.notes } }] } : undefined,
+    'Fox Notes':    product.foxNotes ? { rich_text: [{ text: { content: product.foxNotes } }] } : undefined,
+    'Pairings':     product.pairings ? { rich_text: [{ text: { content: product.pairings } }] } : undefined,
     'Status':       { select: { name: 'Review' } },
   };
 

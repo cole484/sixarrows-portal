@@ -236,15 +236,9 @@ body { background: var(--cream); margin: 0; }
           <label>Product Name</label>
           <input type="text" id="f_name"/>
         </div>
-        <div class="field-row" style="margin-top:8px">
-          <div class="field">
-            <label>Vendor</label>
-            <input type="text" id="f_vendor"/>
-          </div>
-          <div class="field">
-            <label>Price Range</label>
-            <input type="text" id="f_priceRange"/>
-          </div>
+        <div class="field" style="margin-top:8px">
+          <label>Vendor</label>
+          <input type="text" id="f_vendor"/>
         </div>
       </div>
     </div>
@@ -278,8 +272,32 @@ body { background: var(--cream); margin: 0; }
         </select>
       </div>
       <div class="field">
+        <label>SKU / Model</label>
+        <input type="text" id="f_skuModel" placeholder="Model number…"/>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
         <label>Image URL</label>
         <input type="url" id="f_imageUrl" placeholder="https://…"/>
+      </div>
+      <div class="field">
+        <label>Price Range</label>
+        <input type="text" id="f_priceRange2" placeholder="$X–$Y/sf installed"/>
+      </div>
+    </div>
+
+    <!-- Room chips -->
+    <div class="field" style="margin-bottom:12px">
+      <label>Room</label>
+      <div class="style-chips" id="roomChips">
+        <div class="style-chip" data-room="Kitchen" onclick="toggleChip(this)">Kitchen</div>
+        <div class="style-chip" data-room="Primary Bath" onclick="toggleChip(this)">Primary Bath</div>
+        <div class="style-chip" data-room="Powder Room" onclick="toggleChip(this)">Powder Room</div>
+        <div class="style-chip" data-room="Living Room" onclick="toggleChip(this)">Living Room</div>
+        <div class="style-chip" data-room="Exterior" onclick="toggleChip(this)">Exterior</div>
+        <div class="style-chip" data-room="All Rooms" onclick="toggleChip(this)">All Rooms</div>
       </div>
     </div>
 
@@ -288,9 +306,19 @@ body { background: var(--cream); margin: 0; }
       <textarea id="f_notes" placeholder="Material, finish, dimensions, lead time…"></textarea>
     </div>
 
+    <div class="field" style="margin-bottom:12px">
+      <label>Fox Notes <span style="font-weight:400;opacity:.6">(why Fox chooses this — the design opinion)</span></label>
+      <textarea id="f_foxNotes" placeholder="Why a designer would choose this for a specific client personality…"></textarea>
+    </div>
+
+    <div class="field" style="margin-bottom:12px">
+      <label>Pairings <span style="font-weight:400;opacity:.6">(what it works with)</span></label>
+      <textarea id="f_pairings" placeholder="Other materials, finishes, products this works well with…"></textarea>
+    </div>
+
     <!-- Style Fit -->
     <div class="field">
-      <label>Style Fit</label>
+      <label>Style Fit <span style="font-weight:400;opacity:.6">(secondary — taste dimensions are primary)</span></label>
       <div class="style-chips" id="styleChips">
         <div class="style-chip" data-style="Modern Farmhouse" onclick="toggleChip(this)">Modern Farmhouse</div>
         <div class="style-chip" data-style="Transitional" onclick="toggleChip(this)">Transitional</div>
@@ -399,12 +427,22 @@ function toggleChip(el) {
 }
 
 function getSelectedStyles() {
-  return [...document.querySelectorAll('.style-chip.active')].map(c => c.dataset.style);
+  return [...document.querySelectorAll('#styleChips .style-chip.active')].map(c => c.dataset.style);
+}
+
+function getSelectedRooms() {
+  return [...document.querySelectorAll('#roomChips .style-chip.active')].map(c => c.dataset.room);
 }
 
 function setSelectedStyles(styles) {
-  document.querySelectorAll('.style-chip').forEach(c => {
+  document.querySelectorAll('#styleChips .style-chip').forEach(c => {
     c.classList.toggle('active', (styles || []).includes(c.dataset.style));
+  });
+}
+
+function setSelectedRooms(rooms) {
+  document.querySelectorAll('#roomChips .style-chip').forEach(c => {
+    c.classList.toggle('active', (rooms || []).includes(c.dataset.room));
   });
 }
 
@@ -446,12 +484,18 @@ function populateForm(p) {
   $('f_name').value = p.name || '';
   $('f_vendor').value = p.vendor || '';
   $('f_priceRange').value = p.priceRange || '';
+  // Also populate the second price range field if it exists
+  if ($('f_priceRange2')) $('f_priceRange2').value = p.priceRange || '';
   $('f_category').value = p.category || '';
   $('f_tier').value = p.tier || '';
   $('f_imageUrl').value = p.imageUrl || '';
+  $('f_skuModel').value = p.skuModel || '';
   $('f_notes').value = p.notes || '';
+  $('f_foxNotes').value = p.foxNotes || '';
+  $('f_pairings').value = p.pairings || '';
 
   setSelectedStyles(p.styleFit);
+  setSelectedRooms(p.room);
 
   // Taste sliders
   const dims = ['temperature', 'materialFeel', 'surface', 'visualWeight', 'riskLevel'];
@@ -477,8 +521,10 @@ function collectFormData() {
     name:         $('f_name').value.trim(),
     vendor:       $('f_vendor').value.trim(),
     vendorUrl:    $('urlInput').value.trim(),
+    skuModel:     $('f_skuModel').value.trim() || null,
     imageUrl:     $('f_imageUrl').value.trim() || null,
     category:     $('f_category').value,
+    room:         getSelectedRooms(),
     tier:         $('f_tier').value,
     styleFit:     getSelectedStyles(),
     temperature:  parseInt($('f_temperature').value),
@@ -486,8 +532,10 @@ function collectFormData() {
     surface:      parseInt($('f_surface').value),
     visualWeight: parseInt($('f_visualWeight').value),
     riskLevel:    parseInt($('f_riskLevel').value),
-    priceRange:   $('f_priceRange').value.trim(),
+    priceRange:   ($('f_priceRange2') ? $('f_priceRange2').value.trim() : '') || $('f_priceRange').value.trim(),
     notes:        $('f_notes').value.trim(),
+    foxNotes:     $('f_foxNotes').value.trim(),
+    pairings:     $('f_pairings').value.trim(),
   };
 }
 

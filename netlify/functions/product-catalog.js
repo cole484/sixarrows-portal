@@ -147,7 +147,9 @@ function extractProduct(page) {
     id:           page.id,
     name:         p['Product Name']?.title?.[0]?.plain_text || '',
     vendor:       p['Vendor']?.rich_text?.[0]?.plain_text || '',
+    skuModel:     p['SKU/Model']?.rich_text?.[0]?.plain_text || '',
     category:     p['Category']?.select?.name || '',
+    room:         (p['Room']?.multi_select || []).map(r => r.name),
     imageUrl:     p['Image URL']?.url || null,
     vendorUrl:    p['Vendor URL']?.url || null,
     styleFit:     (p['Style Fit']?.multi_select || []).map(s => s.name),
@@ -159,6 +161,8 @@ function extractProduct(page) {
     riskLevel:    p['Risk Level']?.number ?? null,
     priceRange:   p['Price Range']?.rich_text?.[0]?.plain_text || '',
     notes:        p['Notes']?.rich_text?.[0]?.plain_text || '',
+    foxNotes:     p['Fox Notes']?.rich_text?.[0]?.plain_text || '',
+    pairings:     p['Pairings']?.rich_text?.[0]?.plain_text || '',
   };
 }
 
