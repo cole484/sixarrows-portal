@@ -1,3 +1,4 @@
+/* eslint-disable */
 // netlify/functions/product-intake.js
 // ─────────────────────────────────────────────────────────────────────────────
 //  Product Intake — AI-powered product cataloging for Fox

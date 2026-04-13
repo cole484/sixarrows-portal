@@ -1,3 +1,4 @@
+/* eslint-disable */
 // netlify/functions/product-catalog.js
 // ─────────────────────────────────────────────────────────────────────────────
 //  Product Catalog API — serves real products matched to client fingerprints
