@@ -609,9 +609,10 @@ function validate(){
   // ── FLOORING ───────────────────────────────────────────────────────────────
   if(ST.catId==="flooring"){
     for(var _k=0;_k<ST.rooms.length;_k++){var r=ST.rooms[_k];
+      var _isGarage=r.name.toLowerCase().includes('garage');
       if(!ST.answers['flooring_floor_'+r.id])return{ok:false,msg:'Please select flooring type for '+r.name+'.'};
       if(!(ST.answers['flooring_color_'+r.id]||'').trim())return{ok:false,msg:'Please enter color direction for '+r.name+'.'};
-      if(!(ST.answers['flooring_product_'+r.id]||'').trim())return{ok:false,msg:'Please enter exact product for '+r.name+'.'};
+      if(!_isGarage && !(ST.answers['flooring_product_'+r.id]||'').trim())return{ok:false,msg:'Please enter exact product for '+r.name+'.'};
     }
     return{ok:true};
   }
