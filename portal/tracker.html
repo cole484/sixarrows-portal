@@ -78,6 +78,39 @@
 .phase-record-milestone { font-size:12px; font-weight:600; color:var(--green-dk); margin-top:1px; }
 .phase-record-date { font-size:11px; color:var(--green-dk); opacity:.7; margin-top:1px; }
 
+/* ── Phase section divider (all phases rendered together) ── */
+.phase-section { scroll-margin-top:80px; margin-top:24px; }
+.phase-section:first-child { margin-top:0; }
+.phase-section.future .step-card { opacity:.72; }
+.phase-section-header {
+  display:flex; align-items:center; gap:12px;
+  padding:12px 14px; margin-bottom:10px;
+  background:var(--cream-pale); border:0.5px solid var(--border);
+  border-radius:var(--r-lg);
+}
+.phase-section-header.done { background:var(--green-lt); border-color:rgba(117,127,105,.28); }
+.phase-section-header.active { background:var(--charcoal); border-color:var(--charcoal); }
+.phase-section-pip {
+  width:10px; height:10px; border-radius:50%;
+  background:var(--charcoal-4); flex-shrink:0;
+}
+.phase-section-header.done .phase-section-pip { background:var(--green); }
+.phase-section-header.active .phase-section-pip { background:var(--cream); }
+.phase-section-eyebrow {
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em;
+  color:var(--charcoal-4);
+}
+.phase-section-header.active .phase-section-eyebrow { color:rgba(235,233,222,.6); }
+.phase-section-title {
+  font-size:15px; font-weight:700; color:var(--charcoal); line-height:1.2; margin-top:1px;
+}
+.phase-section-header.active .phase-section-title { color:var(--cream); }
+.phase-section-header.done .phase-section-title { color:var(--green-deep); }
+.phase-section-goal {
+  font-size:12px; color:var(--charcoal-4); line-height:1.4; margin-top:3px;
+}
+.phase-section-header.active .phase-section-goal { color:rgba(235,233,222,.7); }
+
 .step-date-val {
   font-size:12px; color:var(--charcoal-3); font-weight:500;
 }
@@ -331,7 +364,7 @@ function rerender() {
   if (isRemodel && dynData?.phases) {
     document.getElementById('phase-tabs').innerHTML = dynData.phases.map((ph, pi) => {
       const active = pi === activeTab;
-      return `<button class="phase-tab ${active?'active':''} ${ph.complete?'done':''}" onclick="activeTab=${pi};rerender()">
+      return `<button class="phase-tab ${active?'active':''} ${ph.complete?'done':''}" onclick="switchTab(${pi})">
         <div class="phase-tab-pip"></div>Phase ${pi+1}: ${ph.label.split(' ')[0]}
       </button>`;
     }).join('');
@@ -481,36 +514,54 @@ function ownerBadgeHTML(owner) {
 }
 
 function renderSteps() {
-  const pi  = activeTab;
-  const ph  = p.sabPhases[pi];
-  const prevPhaseDone = pi===0||isPhaseDone(pi-1);
   const list = document.getElementById('step-list');
+  const phases = p.sabPhases || [];
 
-  // Show phase record if done
-  if (isPhaseDone(pi) && ph.milestoneDate) {
-    list.innerHTML = `<div class="phase-record">
-      <div class="phase-record-ico"><svg viewBox="0 0 20 20"><path d="M4 10l4 4 8-8" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></div>
-      <div class="phase-record-body">
-        <div class="phase-record-title">${ph.milestone} — Phase ${pi+1} Complete</div>
-        <div class="phase-record-milestone">${ph.milestoneDesc}</div>
-        <div class="phase-record-date">Completed ${ph.milestoneDate}</div>
-      </div>
-    </div>` + ph.steps.map((step,si) => renderStepCard(pi,si,step,true)).join('');
-    return;
-  }
+  let html = '';
+  phases.forEach((ph, pi) => {
+    const done   = isPhaseDone(pi);
+    const active = !done && (pi === 0 || isPhaseDone(pi-1));
+    const future = !done && !active;
+    const stateCls = done ? 'done' : active ? 'active' : 'future';
 
-  // Future phases are viewable (not locked) so clients can see what's coming
+    html += `<div class="phase-section ${future?'future':''}" id="phase-section-${pi}">
+      <div class="phase-section-header ${stateCls}">
+        <div class="phase-section-pip"></div>
+        <div style="flex:1;min-width:0">
+          <div class="phase-section-eyebrow">Phase ${pi+1}${done?' · Complete':active?' · In progress':' · Upcoming'}</div>
+          <div class="phase-section-title">${ph.short || ph.label || ('Phase '+(pi+1))}</div>
+          ${ph.goal?`<div class="phase-section-goal">${ph.goal}</div>`:''}
+        </div>
+      </div>`;
 
-  list.innerHTML = ph.steps.map((step,si) => renderStepCard(pi,si,step,false)).join('');
+    // Phase completion record
+    if (done && ph.milestoneDate) {
+      html += `<div class="phase-record">
+        <div class="phase-record-ico"><svg viewBox="0 0 20 20"><path d="M4 10l4 4 8-8" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></div>
+        <div class="phase-record-body">
+          <div class="phase-record-title">${ph.milestone} — Phase ${pi+1} Complete</div>
+          <div class="phase-record-milestone">${ph.milestoneDesc}</div>
+          <div class="phase-record-date">Completed ${ph.milestoneDate}</div>
+        </div>
+      </div>`;
+    }
 
-  // Phase milestone banner at bottom when freshly done
-  if (isPhaseDone(pi) && !ph.milestoneDate) {
-    const bar = document.createElement('div');
-    bar.className = 'phase-done-bar';
-    bar.innerHTML = `<svg viewBox="0 0 18 18"><path d="M3 9l4 4 8-8" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
-      <div><div class="pdb-title">Milestone reached — ${ph.milestone}</div><div class="pdb-sub">${ph.milestoneDesc}</div></div>`;
-    document.getElementById('step-list').appendChild(bar);
-  }
+    // All steps (never locked)
+    html += ph.steps.map((step,si) => renderStepCard(pi,si,step,done)).join('');
+
+    // Milestone bar (freshly done, no stored date)
+    if (done && !ph.milestoneDate) {
+      html += `<div class="phase-done-bar">
+        <svg viewBox="0 0 18 18"><path d="M3 9l4 4 8-8" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+        <div><div class="pdb-title">Milestone reached — ${ph.milestone}</div><div class="pdb-sub">${ph.milestoneDesc}</div></div>
+      </div>`;
+    }
+
+    html += `</div>`;
+  });
+
+  list.innerHTML = html;
+  maybeScrollToActiveStep();
 }
 
 // ── Dynamic step renderer for remodel clients ──────────
@@ -518,18 +569,49 @@ function renderDynamicSteps(dynData) {
   const list = document.getElementById('step-list');
   list.innerHTML = '';
 
-  const phase = dynData.phases[activeTab];
-  if (!phase) return;
+  const phases = dynData.phases || [];
 
-  // Phase goal banner
-  if (phase.goal) {
-    const goalEl = document.createElement('div');
-    goalEl.style.cssText = 'font-size:12px;color:var(--charcoal-4);font-style:italic;padding:8px 0 12px;line-height:1.5';
-    goalEl.textContent = phase.goal;
-    list.appendChild(goalEl);
-  }
+  // Determine active phase: first not-complete
+  let activePi = -1;
+  for (let i = 0; i < phases.length; i++) { if (!phases[i].complete) { activePi = i; break; } }
 
-  // Render each step
+  phases.forEach((phase, pIdx) => {
+    const done   = !!phase.complete;
+    const active = !done && pIdx === activePi;
+    const future = !done && !active;
+    const stateCls = done ? 'done' : active ? 'active' : 'future';
+
+    const section = document.createElement('div');
+    section.className = 'phase-section' + (future ? ' future' : '');
+    section.id = 'phase-section-' + pIdx;
+
+    section.innerHTML = `
+      <div class="phase-section-header ${stateCls}">
+        <div class="phase-section-pip"></div>
+        <div style="flex:1;min-width:0">
+          <div class="phase-section-eyebrow">Phase ${pIdx+1}${done?' · Complete':active?' · In progress':' · Upcoming'}</div>
+          <div class="phase-section-title">${phase.label || ('Phase '+(pIdx+1))}</div>
+          ${phase.goal?`<div class="phase-section-goal">${phase.goal}</div>`:''}
+        </div>
+      </div>`;
+    list.appendChild(section);
+
+    renderDynamicPhaseSteps(section, phase, pIdx);
+
+    // Phase milestone bar
+    if (done && phase.milestone) {
+      const bar = document.createElement('div');
+      bar.className = 'phase-done-bar';
+      bar.innerHTML = `<svg viewBox="0 0 18 18"><path d="M3 9l4 4 8-8" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+        <div><div class="pdb-title">Milestone — ${phase.milestone}</div><div class="pdb-sub">${phase.milestoneDesc||''}</div></div>`;
+      section.appendChild(bar);
+    }
+  });
+
+  maybeScrollToActiveStep();
+}
+
+function renderDynamicPhaseSteps(container, phase, phaseIdx) {
   phase.steps.forEach((step, si) => {
     // isFinal steps get the review card treatment
     if (step.isFinal) {
@@ -555,7 +637,7 @@ function renderDynamicSteps(dynData) {
                </a>`
           }
         </div>`;
-      list.appendChild(card);
+      container.appendChild(card);
       return;
     }
 
@@ -564,12 +646,12 @@ function renderDynamicSteps(dynData) {
     const total    = topItems.length;
     const pct      = total ? Math.round(doneItems / total * 100) : 100;
     const done     = step.complete;
-    const isOpen   = !!TS[`open-dyn-${activeTab}-${si}`];
+    const isOpen   = !!TS[`open-dyn-${phaseIdx}-${si}`];
 
     const card = document.createElement('div');
     card.className = `step-card ${done ? 'complete' : ''}`;
     card.innerHTML = `
-      <div class="step-hd" onclick="toggleDynStep(${activeTab},${si})">
+      <div class="step-hd" onclick="toggleDynStep(${phaseIdx},${si})">
         <div class="step-num ${done ? 'complete' : doneItems > 0 ? 'progress' : 'pending'}">
           ${done
             ? `<svg viewBox="0 0 12 12"><path d="M2 6l2.8 3 5.2-5.5" stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`
@@ -591,7 +673,7 @@ function renderDynamicSteps(dynData) {
           <svg class="step-chev ${isOpen ? 'open' : ''}" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2.5l4 3.5-4 3.5"/></svg>
         </div>
       </div>
-      <div class="step-body ${isOpen ? 'open' : ''}" id="dyn-sb-${activeTab}-${si}">
+      <div class="step-body ${isOpen ? 'open' : ''}" id="dyn-sb-${phaseIdx}-${si}">
         <div class="step-body-inner">
           <ul class="checklist">
             ${renderDynItems(step.items, 0)}
@@ -602,17 +684,8 @@ function renderDynamicSteps(dynData) {
           </div>` : ''}
         </div>
       </div>`;
-    list.appendChild(card);
+    container.appendChild(card);
   });
-
-  // Phase milestone bar
-  if (phase.complete && phase.milestone) {
-    const bar = document.createElement('div');
-    bar.className = 'phase-done-bar';
-    bar.innerHTML = `<svg viewBox="0 0 18 18"><path d="M3 9l4 4 8-8" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
-      <div><div class="pdb-title">Milestone — ${phase.milestone}</div><div class="pdb-sub">${phase.milestoneDesc}</div></div>`;
-    list.appendChild(bar);
-  }
 }
 
 function renderDynItems(items, parentDepth) {
@@ -868,7 +941,55 @@ function toggleStep(pi,si) {
   if (body)    body.classList.toggle('open',!!TS[k]);
   if (chevron) chevron.classList.toggle('open',!!TS[k]);
 }
-function switchTab(pi) { activeTab = pi; try { localStorage.setItem(SK+'tab_'+p.id, pi); } catch(e) {} rerender(); }
+function switchTab(pi) {
+  activeTab = pi;
+  try { localStorage.setItem(SK+'tab_'+p.id, pi); } catch(e) {}
+  const sec = document.getElementById('phase-section-'+pi);
+  if (sec) {
+    sec.scrollIntoView({ behavior:'smooth', block:'start' });
+  } else {
+    rerender();
+  }
+  // Update tab active states without full rerender
+  document.querySelectorAll('.phase-tab').forEach((btn, idx) => {
+    btn.classList.toggle('active', idx === pi);
+  });
+}
+
+let _scrolledToActive = false;
+function maybeScrollToActiveStep() {
+  if (_scrolledToActive) return;
+  _scrolledToActive = true;
+  // Defer so layout is painted
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      let target = null;
+      const isRemodel = p.projectType === 'remodel';
+      if (isRemodel && notionDynamicData?.phases) {
+        outer: for (let pi = 0; pi < notionDynamicData.phases.length; pi++) {
+          const ph = notionDynamicData.phases[pi];
+          for (let si = 0; si < ph.steps.length; si++) {
+            if (!ph.steps[si].complete && !ph.steps[si].isFinal) {
+              target = document.getElementById('dyn-sb-'+pi+'-'+si)?.closest('.step-card');
+              break outer;
+            }
+          }
+        }
+      } else if (p.sabPhases) {
+        outer: for (let pi = 0; pi < p.sabPhases.length; pi++) {
+          const ph = p.sabPhases[pi];
+          for (let si = 0; si < ph.steps.length; si++) {
+            if (!isStepDone(pi, si) && !ph.steps[si].isFinal) {
+              target = document.getElementById('sb-'+pi+'-'+si)?.closest('.step-card');
+              break outer;
+            }
+          }
+        }
+      }
+      if (target) target.scrollIntoView({ behavior:'smooth', block:'center' });
+    }, 40);
+  });
+}
 function setDate(key,val) { TS[key]=val; saveState(); rerender(); }
 
 function toggle(key,pi,si) {
