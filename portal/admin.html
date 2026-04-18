@@ -1717,6 +1717,46 @@ function buildSelectionsContent(ck, p, saved, answers) {
     { id:'countertops',wave:2,name:'Countertops' },{ id:'hardware',wave:2,name:'Hardware' },
     { id:'paint',wave:2,name:'Paint & Stain' },{ id:'doors',wave:2,name:'Interior Doors & Trim' },
   ];
+
+  // Stash fresh answers on window so save handler can find them
+  window._selAdminAnswers = window._selAdminAnswers || {};
+  window._selAdminAnswers[ck] = answers;
+
+  // Open questions from client
+  const openQs = ALL_CATS.filter(c => answers['question_flag_'+c.id] && (answers['question_text_'+c.id]||'').trim());
+  const unansweredQs = openQs.filter(c => !answers['question_answered_'+c.id]);
+  const answeredQs   = openQs.filter(c =>  answers['question_answered_'+c.id]);
+
+  function qHtml(c, isAnswered){
+    const text = (answers['question_text_'+c.id]||'').replace(/</g,'&lt;');
+    const ts   = answers['question_ts_'+c.id] ? new Date(answers['question_ts_'+c.id]).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+    const existing = (answers['question_answer_'+c.id]||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    const waveLabel = ['Wave 1','Wave 2','Wave 3'][c.wave];
+    return `<div style="padding:12px 14px;background:${isAnswered?'#eef3e8':'#fdfbf4'};border:1px solid ${isAnswered?'#c8cec2':'#ece6d0'};border-radius:var(--r-md);margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4)">${waveLabel} · ${c.name}</span>
+        ${ts?`<span style="font-size:10px;color:var(--charcoal-4)">· asked ${ts}</span>`:''}
+        ${isAnswered?`<span class="tag ok" style="font-size:9px">Answered</span>`:`<span class="tag" style="font-size:9px;background:#f4e6c6;color:#7a5500">Awaiting response</span>`}
+      </div>
+      <div style="font-size:13px;color:var(--charcoal);line-height:1.5;margin-bottom:10px;white-space:pre-wrap">${text}</div>
+      ${isAnswered
+        ? `<div style="font-size:12px;color:var(--charcoal-3);padding:8px 10px;background:white;border:1px solid var(--border);border-radius:6px"><strong style="color:var(--green-dk)">Your reply:</strong> ${existing}</div>
+           <button class="adm-btn" style="margin-top:8px;font-size:11px;padding:5px 10px" onclick="reopenSelQuestion('${ck}','${c.id}')">Reopen / edit reply</button>`
+        : `<textarea id="qr-${c.id}" placeholder="Type a reply the client will see inline on their selections page…" style="width:100%;min-height:70px;padding:9px 11px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:6px;background:white;color:var(--charcoal);resize:vertical;line-height:1.5">${existing}</textarea>
+           <div style="display:flex;gap:8px;margin-top:8px">
+             <button class="adm-btn adm-btn-green" style="font-size:11px;padding:6px 12px" onclick="answerSelQuestion('${ck}','${c.id}')">Mark answered & save reply</button>
+             <span id="qr-msg-${c.id}" style="font-size:11px;color:var(--charcoal-4);align-self:center"></span>
+           </div>`}
+    </div>`;
+  }
+
+  const questionsCard = openQs.length ? `
+    <div class="card" style="margin-bottom:1rem;border-left:3px solid #c87000">
+      <div class="sh"><div class="sh-title">Open Questions from Client${unansweredQs.length?` (${unansweredQs.length})`:''}</div></div>
+      <p style="font-size:12px;color:var(--charcoal-3);margin-bottom:12px">Replies save to the client's selections data and appear inline under that category the next time they open it.</p>
+      ${unansweredQs.map(c => qHtml(c, false)).join('')}
+      ${answeredQs.length ? `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:14px 0 8px">Answered</div>${answeredQs.map(c => qHtml(c, true)).join('')}` : ''}
+    </div>` : '';
   function catDone(id) {
     if (id==='fireplace' && answers['fireplace_fp_want']==='No — no fireplace') return true;
     return !!saved[id];
@@ -1736,6 +1776,7 @@ function buildSelectionsContent(ck, p, saved, answers) {
   ];
 
   return `
+    ${questionsCard}
     <div class="card dark" style="margin-bottom:1rem">
       <div class="kpi"><div class="kpi-lbl">Selections Complete</div><div class="kpi-val">${pct}%</div><div class="kpi-sub">${done} of ${ALL_CATS.length} categories</div></div>
       <div class="track" style="margin-top:11px;background:rgba(255,255,255,.1)"><div class="bar" style="width:${pct}%"></div></div>
@@ -1757,6 +1798,66 @@ function buildSelectionsContent(ck, p, saved, answers) {
           </div>`;
         }).join('')}`).join('')}
     </div>`;
+}
+
+async function answerSelQuestion(ck, catId){
+  const ta   = document.getElementById('qr-'+catId);
+  const msg  = document.getElementById('qr-msg-'+catId);
+  const reply = (ta?.value||'').trim();
+  if (!reply) { if (msg) { msg.textContent='Type a reply first.'; msg.style.color='var(--charcoal-4)'; } return; }
+  if (msg) { msg.textContent='Saving…'; msg.style.color='var(--charcoal-4)'; }
+  try {
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${ck}&suffix=ans`);
+    const j   = res.ok ? await res.json() : null;
+    const answers = (j?.data) || (window._selAdminAnswers?.[ck]) || {};
+    answers['question_answer_'+catId]   = reply;
+    answers['question_answered_'+catId] = '1';
+    answers['question_answered_ts_'+catId] = new Date().toISOString();
+    const saveRes = await fetch(`/.netlify/functions/selections-storage?clientKey=${ck}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ suffix:'ans', data: answers }),
+    });
+    if (!saveRes.ok) throw new Error('Save failed ('+saveRes.status+')');
+    if (window._selAdminAnswers) window._selAdminAnswers[ck] = answers;
+    if (msg) { msg.textContent='Saved.'; msg.style.color='var(--green-dk)'; }
+    // Refresh view
+    setTimeout(() => {
+      const el = document.getElementById('admin-sel-content');
+      const p  = PROJECTS[activeProject];
+      if (el && p) {
+        const saved = {};
+        fetch(`/.netlify/functions/selections-storage?clientKey=${ck}&suffix=sav`)
+          .then(r => r.ok ? r.json() : null)
+          .then(sj => el.innerHTML = buildSelectionsContent(ck, p, (sj?.data)||{}, answers));
+      }
+    }, 400);
+  } catch(e) {
+    console.error('answerSelQuestion failed:', e);
+    if (msg) { msg.textContent='Save failed. Try again.'; msg.style.color='var(--red,#c33)'; }
+  }
+}
+
+async function reopenSelQuestion(ck, catId){
+  try {
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${ck}&suffix=ans`);
+    const j   = res.ok ? await res.json() : null;
+    const answers = (j?.data) || {};
+    answers['question_answered_'+catId] = '';
+    await fetch(`/.netlify/functions/selections-storage?clientKey=${ck}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ suffix:'ans', data: answers }),
+    });
+    if (window._selAdminAnswers) window._selAdminAnswers[ck] = answers;
+    const el = document.getElementById('admin-sel-content');
+    const p  = PROJECTS[activeProject];
+    if (el && p) {
+      fetch(`/.netlify/functions/selections-storage?clientKey=${ck}&suffix=sav`)
+        .then(r => r.ok ? r.json() : null)
+        .then(sj => el.innerHTML = buildSelectionsContent(ck, p, (sj?.data)||{}, answers));
+    }
+  } catch(e) { console.error('reopen failed:', e); }
 }
 
 // ════════════════════════════════════════════════════════

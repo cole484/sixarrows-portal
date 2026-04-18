@@ -182,6 +182,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .photo-row input:focus{outline:none;border-color:var(--sage)}
 .inspo-section{margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)}
 .inspo-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+
+/* ── Ask-a-question section ── */
+.ask-section{margin-top:1.25rem;padding:14px 16px;background:#fdfbf4;border:1px solid #ece6d0;border-radius:var(--radius)}
+.ask-lbl{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:var(--text-primary)}
+.ask-lbl input[type=checkbox]{width:16px;height:16px;accent-color:var(--sage);cursor:pointer;flex-shrink:0}
+.ask-sub{font-size:11px;color:var(--text-secondary);margin-top:4px;margin-left:26px;font-weight:400}
+.ask-body{margin-top:10px;margin-left:26px}
+.ask-body textarea{width:100%;min-height:80px;padding:10px 12px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);resize:vertical;line-height:1.5}
+.ask-body textarea:focus{outline:none;border-color:var(--sage)}
+.ask-answered{margin-top:8px;padding:10px 12px;background:#eef3e8;border:1px solid #c8cec2;border-radius:6px;font-size:12px;color:var(--sage-dk)}
+.ask-answered strong{color:var(--sage-dk)}
+
+/* ── Flooring group cards ── */
+.floor-group{margin-bottom:1.25rem;padding:16px;background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius)}
+.floor-group-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px}
+.floor-group-title{font-size:14px;font-weight:700;color:var(--text-primary)}
+.floor-group-rm{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;font-size:12px;margin:4px 6px 0 0;cursor:pointer;user-select:none;transition:all .15s}
+.floor-group-rm input{margin:0;accent-color:var(--sage);cursor:pointer}
+.floor-group-rm.sel{background:var(--sage);color:#fff;border-color:var(--sage)}
+.floor-group-rm.disabled{opacity:.4;cursor:not-allowed;text-decoration:line-through}
+.floor-group-rmlist{margin-top:6px}
+.floor-remove-btn{background:none;border:none;color:var(--text-danger);font-size:18px;cursor:pointer;padding:2px 6px;line-height:1;flex-shrink:0}
+.floor-add-btn{display:block;width:100%;padding:12px;background:var(--bg-primary);border:2px dashed var(--border);border-radius:var(--radius);font-size:13px;font-weight:600;color:var(--sage);cursor:pointer;transition:border-color .15s}
+.floor-add-btn:hover{border-color:var(--sage)}
+.floor-tally{font-size:12px;color:var(--text-secondary);margin-bottom:10px}
+.floor-tally.complete{color:var(--sage-dk);font-weight:600}
 </style>
 </head>
 <body>
@@ -442,6 +468,10 @@ function photoInput(key, ph){
 }
 function photoInputHandler(el){
   setPhoto(el.dataset.photokey, el.value);
+  // If this is a flooring-group photo, mirror to each assigned room's photo key
+  if (el.dataset.photokey && el.dataset.photokey.indexOf('flooring_group_')===0 && typeof syncFlooringPerRoomKeys==='function'){
+    syncFlooringPerRoomKeys();
+  }
 }
 
 // Inspiration photos
@@ -482,6 +512,49 @@ function inspoSection(catId){
     +'</div>'
     +(rows||'<div style="font-size:13px;color:var(--text-secondary)">Paste photo URLs from Pinterest, Houzz, or manufacturer sites.</div>')
     +'</div>';
+}
+
+// Build "Have a question?" section HTML (shown at bottom of every category)
+function questionSection(catId){
+  var flagKey='question_flag_'+catId;
+  var textKey='question_text_'+catId;
+  var answeredKey='question_answered_'+catId;
+  var answerKey='question_answer_'+catId;
+  var flag=!!ST.answers[flagKey];
+  var text=(ST.answers[textKey]||'').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  var answered=!!ST.answers[answeredKey];
+  var answer=(ST.answers[answerKey]||'').replace(/</g,'&lt;');
+  var answeredBlock='';
+  if(answered && answer){
+    answeredBlock='<div class="ask-answered"><strong>Six Arrows response:</strong><br>'+answer+'</div>';
+  }
+  return '<div class="ask-section">'
+    +'<label class="ask-lbl">'
+    +'<input type="checkbox" '+(flag?'checked':'')+' onchange="toggleQuestion(\''+catId+'\',this.checked)">'
+    +'<span>Have a question about this section?</span>'
+    +'</label>'
+    +'<div class="ask-sub">Check the box, ask away, and your Six Arrows team will follow up.</div>'
+    +(flag?'<div class="ask-body">'
+      +'<textarea placeholder="What are you unsure about? e.g. \'Should we go with hardwood or LVP for the kitchen?\'" '
+      +'oninput="ST.answers[\'question_text_'+catId+'\']=this.value" '
+      +'onchange="ST.answers[\'question_text_'+catId+'\']=this.value;persist()">'+text+'</textarea>'
+      +answeredBlock
+      +'</div>':'')
+    +'</div>';
+}
+
+function toggleQuestion(catId, checked){
+  ST.answers['question_flag_'+catId]=checked?'1':'';
+  if(!checked){
+    // Keep text so it isn't lost if re-checked, but clear timestamp so admin doesn't see stale
+    ST.answers['question_text_'+catId]='';
+    ST.answers['question_answered_'+catId]='';
+    ST.answers['question_answer_'+catId]='';
+  } else {
+    ST.answers['question_ts_'+catId]=new Date().toISOString();
+  }
+  persist();
+  render();
 }
 
 // Summary thumbnail
@@ -608,12 +681,33 @@ function validate(){
   }
   // ── FLOORING ───────────────────────────────────────────────────────────────
   if(ST.catId==="flooring"){
-    for(var _k=0;_k<ST.rooms.length;_k++){var r=ST.rooms[_k];
-      var _isGarage=r.name.toLowerCase().includes('garage');
-      if(!ST.answers['flooring_floor_'+r.id])return{ok:false,msg:'Please select flooring type for '+r.name+'.'};
-      if(!(ST.answers['flooring_color_'+r.id]||'').trim())return{ok:false,msg:'Please enter color direction for '+r.name+'.'};
-      if(!_isGarage && !(ST.answers['flooring_product_'+r.id]||'').trim())return{ok:false,msg:'Please enter exact product for '+r.name+'.'};
+    var groups=getFGroups();
+    if(!groups.length) return {ok:false, msg:'Add at least one flooring type to get started.'};
+    // Every group must have a type + color, and a product unless garage/epoxy
+    var isGarageType=function(t){ return /garage|epoxy/i.test(t||''); };
+    var isGarageRoom=function(r){ return r.name.toLowerCase().includes('garage'); };
+    for (var gi=0; gi<groups.length; gi++){
+      var g=groups[gi];
+      var label='Flooring Type '+(gi+1)+(g.type?' ('+g.type+')':'');
+      if(!(g.type||'').trim())   return {ok:false, msg:'Select a flooring type for '+label+'.'};
+      if(!(g.roomIds||[]).length)return {ok:false, msg:'Assign at least one room to '+label+'.'};
+      if(!(g.color||'').trim())  return {ok:false, msg:'Enter color direction for '+label+'.'};
+      var allGarageRooms=(g.roomIds||[]).every(function(rid){
+        var r=ST.rooms.find(function(x){return x.id===rid;}); return r && isGarageRoom(r);
+      });
+      if(!isGarageType(g.type) && !allGarageRooms && !(g.product||'').trim()){
+        return {ok:false, msg:'Enter exact product for '+label+'.'};
+      }
     }
+    // Every room must be assigned to some group
+    var assigned=new Set();
+    groups.forEach(function(g){ (g.roomIds||[]).forEach(function(rid){ assigned.add(rid); }); });
+    var missing=ST.rooms.filter(function(r){ return !assigned.has(r.id); }).map(function(r){return r.name;});
+    if(missing.length){
+      return {ok:false, msg:'You forgot flooring in '+(missing.length>1?'these rooms: ':'')+missing.join(', ')+'.'};
+    }
+    // Sync per-room keys one more time so downstream reads are fresh
+    syncFlooringPerRoomKeys();
     return{ok:true};
   }
   // ── TILE ───────────────────────────────────────────────────────────────────
@@ -839,17 +933,192 @@ function rfSpecialty(){
     </div><div class="spec-body${checked?"":" hidden"}" id="sb-${item.id}">${fields}</div></div>`;
   }).join("")}</div>`;
 }
+// ── Flooring group helpers ─────────────────────────────────
+function getFGroups(){
+  var g=ST.answers.flooring_groups;
+  if (Array.isArray(g)) return g;
+  if (typeof g === 'string'){ try { var p=JSON.parse(g); if(Array.isArray(p)) return p; } catch(e){} }
+  return [];
+}
+function setFGroups(arr){
+  ST.answers.flooring_groups = arr;
+  syncFlooringPerRoomKeys();
+}
+function nextFGroupId(){
+  return 'fg_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
+}
+// Keep per-room answer keys in sync with the group model so downstream
+// code (CSV export, mood board, summary) keeps working unchanged.
+function syncFlooringPerRoomKeys(){
+  var groups=getFGroups();
+  // Clear existing per-room flooring keys (only those we own)
+  ST.rooms.forEach(function(r){
+    ST.answers['flooring_floor_'+r.id]='';
+    ST.answers['flooring_color_'+r.id]='';
+    ST.answers['flooring_product_'+r.id]='';
+    ST.answers['flooring_product_'+r.id+'_photo']='';
+  });
+  // Populate from groups
+  groups.forEach(function(g){
+    var groupPhoto = ST.answers['flooring_group_'+g.id+'_photo'] || '';
+    (g.roomIds||[]).forEach(function(rid){
+      ST.answers['flooring_floor_'+rid]=g.type||'';
+      ST.answers['flooring_color_'+rid]=g.color||'';
+      ST.answers['flooring_product_'+rid]=g.product||'';
+      if (groupPhoto) ST.answers['flooring_product_'+rid+'_photo']=groupPhoto;
+    });
+  });
+}
+// One-time migration: if groups empty but old per-room data exists, rebuild groups.
+function migrateFlooringIfNeeded(){
+  var groups=getFGroups();
+  if (groups.length) return;
+  var haveOld=ST.rooms.some(function(r){return (ST.answers['flooring_floor_'+r.id]||'').trim();});
+  if (!haveOld) return;
+  var byType={};
+  ST.rooms.forEach(function(r){
+    var t=(ST.answers['flooring_floor_'+r.id]||'').trim();
+    if(!t) return;
+    if(!byType[t]) byType[t]={ id:nextFGroupId(), type:t, color:'', product:'', roomIds:[] };
+    byType[t].roomIds.push(r.id);
+    // Prefer first non-empty color/product in the group
+    if(!byType[t].color   && (ST.answers['flooring_color_'+r.id]||'').trim())   byType[t].color   = ST.answers['flooring_color_'+r.id];
+    if(!byType[t].product && (ST.answers['flooring_product_'+r.id]||'').trim()) byType[t].product = ST.answers['flooring_product_'+r.id];
+  });
+  ST.answers.flooring_groups = Object.keys(byType).map(function(k){return byType[k];});
+}
+
 function rfFlooring(){
   if(!ST.rooms.length)return`<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No rooms set up. Go back to Project Setup first.</div>`;
-  const isGarage=r=>r.name.toLowerCase().includes('garage');
-  return ST.rooms.map(r=>{const val=ST.answers[`flooring_floor_${r.id}`]||"";
-    return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-hd-l"><div class="rs-nm">${r.name}</div></div><span style="font-size:11px;color:${val?"var(--sage)":"var(--text-secondary)"}">${val||"Not selected"}</span></div>
-    <div class="rs-body">
-      <div class="fg"><label>Flooring type <span class="req">*</span></label><div class="rg">${FLOOR_OPTS.map(o=>`<label class="ro${val===o?" sel":""}" onclick="pickFloor('${r.id}','${o}',this)"><input type="radio" name="fl_${r.id}" ${val===o?"checked":""}>${o}</label>`).join("")}</div></div>
-      <div class="fg"><label>Color / finish direction <span class="req">*</span></label><input type="text" value="${(ST.answers[`flooring_color_${r.id}`]||"").replace(/"/g,'&quot;')}" placeholder="Light natural oak, warm gray, white marble look..." onchange="ST.answers['flooring_color_${r.id}']=this.value" onkeyup="ST.answers['flooring_color_${r.id}']=this.value"></div>
-      ${isGarage(r)?"":`<div class="fg"><label>Exact product selected <span class="req">*</span></label><input type="text" value="${(ST.answers[`flooring_product_${r.id}`]||"").replace(/"/g,'&quot;')}" placeholder='e.g. Shaw Floorte Pro 5 Series, Mineral, 7" plank' onchange="ST.answers['flooring_product_${r.id}']=this.value" onkeyup="ST.answers['flooring_product_${r.id}']=this.value"></div>
-      <div class="fg"><label>Product photo URL</label>${photoInput('flooring_product_'+r.id,'Paste manufacturer or Houzz photo link...')}</div>`}
-    </div></div>`;}).join("");
+  migrateFlooringIfNeeded();
+  var groups=getFGroups();
+  var isGarageType=function(t){ return /garage|epoxy/i.test(t||''); };
+  var isGarageRoom=function(r){ return r.name.toLowerCase().includes('garage'); };
+
+  var assignedRoomIds=new Set();
+  groups.forEach(function(g){ (g.roomIds||[]).forEach(function(rid){ assignedRoomIds.add(rid); }); });
+  var total=ST.rooms.length;
+  var assigned=assignedRoomIds.size;
+  var tallyComplete = assigned===total && total>0;
+
+  var tallyHtml='<div class="floor-tally'+(tallyComplete?' complete':'')+'">'
+    +(tallyComplete
+      ? '✓ All '+total+' rooms assigned to a flooring type'
+      : assigned+' of '+total+' rooms assigned — every room needs a flooring type')
+    +'</div>';
+
+  var groupsHtml=groups.map(function(g, gi){
+    var roomsInThisGroup=new Set(g.roomIds||[]);
+    var hideProduct = isGarageType(g.type) || (g.roomIds||[]).length>0 && (g.roomIds||[]).every(function(rid){
+      var r=ST.rooms.find(function(x){return x.id===rid;});
+      return r && isGarageRoom(r);
+    });
+
+    var typePills=FLOOR_OPTS.map(function(o){
+      var sel=g.type===o;
+      return '<label class="ro'+(sel?' sel':'')+'" onclick="pickFloorGroupType(\''+g.id+'\',\''+o.replace(/'/g,"\\'")+'\',this)">'
+        +'<input type="radio" name="fgt_'+g.id+'" '+(sel?'checked':'')+'>'+o+'</label>';
+    }).join('');
+
+    var roomPills=ST.rooms.map(function(r){
+      var inThis=roomsInThisGroup.has(r.id);
+      var inOther=!inThis && assignedRoomIds.has(r.id);
+      var cls='floor-group-rm'+(inThis?' sel':'')+(inOther?' disabled':'');
+      var title=inOther?'Already in another flooring type — uncheck there first':'Assign '+r.name+' to this flooring type';
+      return '<label class="'+cls+'" title="'+title+'" onclick="toggleFloorGroupRoom(\''+g.id+'\',\''+r.id+'\','+(inOther?'true':'false')+')">'
+        +'<input type="checkbox" '+(inThis?'checked':'')+' '+(inOther?'disabled':'')+'>'
+        +r.name+'</label>';
+    }).join('');
+
+    var colorSafe=(g.color||'').replace(/"/g,'&quot;');
+    var productSafe=(g.product||'').replace(/"/g,'&quot;');
+    var photoKey='flooring_group_'+g.id; // per-group photo storage
+
+    return '<div class="floor-group">'
+      +'<div class="floor-group-hd">'
+        +'<div class="floor-group-title">Flooring Type '+(gi+1)+(g.type?' — '+g.type:'')+'</div>'
+        +'<button class="floor-remove-btn" title="Remove this flooring type" onclick="removeFloorGroup(\''+g.id+'\')">×</button>'
+      +'</div>'
+      +'<div class="fg"><label>Flooring type <span class="req">*</span></label><div class="rg">'+typePills+'</div></div>'
+      +'<div class="fg"><label>Rooms with this flooring <span class="req">*</span></label>'
+        +'<div class="floor-group-rmlist">'+roomPills+'</div>'
+        +'<div style="font-size:11px;color:var(--text-secondary);margin-top:6px">Check every room that uses this flooring type. A room can only belong to one type.</div>'
+      +'</div>'
+      +'<div class="fg"><label>Color / finish direction <span class="req">*</span></label>'
+        +'<input type="text" value="'+colorSafe+'" placeholder="Light natural oak, warm gray, white marble look..." '
+        +'onchange="updateFloorGroupField(\''+g.id+'\',\'color\',this.value)" '
+        +'onkeyup="updateFloorGroupField(\''+g.id+'\',\'color\',this.value)">'
+      +'</div>'
+      +(hideProduct?'':
+        '<div class="fg"><label>Exact product selected <span class="req">*</span></label>'
+          +'<input type="text" value="'+productSafe+'" placeholder=\'e.g. Shaw Floorte Pro 5 Series, Mineral, 7" plank\' '
+          +'onchange="updateFloorGroupField(\''+g.id+'\',\'product\',this.value)" '
+          +'onkeyup="updateFloorGroupField(\''+g.id+'\',\'product\',this.value)">'
+        +'</div>'
+        +'<div class="fg"><label>Product photo URL</label>'+photoInput(photoKey,'Paste manufacturer or Houzz photo link...')+'</div>'
+      )
+    +'</div>';
+  }).join('');
+
+  var addBtn='<button class="floor-add-btn" onclick="addFloorGroup()">+ Add another flooring type</button>';
+
+  return tallyHtml + groupsHtml + addBtn;
+}
+
+function addFloorGroup(){
+  var groups=getFGroups().slice();
+  groups.push({ id:nextFGroupId(), type:'', color:'', product:'', roomIds:[] });
+  setFGroups(groups);
+  persist();
+  render();
+}
+function removeFloorGroup(gid){
+  var groups=getFGroups().filter(function(g){return g.id!==gid;});
+  setFGroups(groups);
+  persist();
+  render();
+}
+function pickFloorGroupType(gid, val, el){
+  var groups=getFGroups().slice();
+  var g=groups.find(function(x){return x.id===gid;});
+  if(!g) return;
+  // Toggle off if same value clicked again
+  if(g.type===val){
+    g.type='';
+  } else {
+    g.type=val;
+  }
+  setFGroups(groups);
+  persist();
+  render();
+}
+function toggleFloorGroupRoom(gid, rid, disabled){
+  if(disabled) return;
+  var groups=getFGroups().slice();
+  var g=groups.find(function(x){return x.id===gid;});
+  if(!g) return;
+  g.roomIds = g.roomIds || [];
+  var idx=g.roomIds.indexOf(rid);
+  if(idx>=0){
+    g.roomIds.splice(idx,1);
+  } else {
+    // Remove from any other group first (safety; UI already disables it)
+    groups.forEach(function(og){
+      if(og.id!==gid){ og.roomIds=(og.roomIds||[]).filter(function(x){return x!==rid;}); }
+    });
+    g.roomIds.push(rid);
+  }
+  setFGroups(groups);
+  persist();
+  render();
+}
+function updateFloorGroupField(gid, field, val){
+  var groups=getFGroups().slice();
+  var g=groups.find(function(x){return x.id===gid;});
+  if(!g) return;
+  g[field]=val;
+  setFGroups(groups);
+  // Don't re-render on every keystroke; just persist debounced via advance/save
 }
 function rfTile(){
   const baths=bathRooms();
@@ -1470,7 +1739,8 @@ function renderForm(){
   else body=rfStandard();
   const INSPO_CATS=['flooring','tile','plumbing','lighting','countertops','paint','exterior_finishes'];
   const inspoHtml=INSPO_CATS.includes(ST.catId)?inspoSection(ST.catId):'';
-  return`<div class="card"><span class="wlbl">${wv.label} — ${wv.name}</span><div class="ctitle">${cat.name}</div><div class="guidance">${cat.guidance}</div><div class="fields">${body}</div>${inspoHtml}
+  const askHtml=questionSection(ST.catId);
+  return`<div class="card"><span class="wlbl">${wv.label} — ${wv.name}</span><div class="ctitle">${cat.name}</div><div class="guidance">${cat.guidance}</div><div class="fields">${body}</div>${inspoHtml}${askHtml}
     <div id="val-msg" class="val-msg"></div>
     <div class="btn-row"><button class="btn" onclick="goBack()">${isFirst?"← Setup":"Back"}</button><button class="btn-s" id="save-prog-btn" onclick="saveProgress(this)">Save progress</button><button class="btn btn-p" onclick="advance()">${isLast?"View Summary →":"Save & Continue →"}</button></div>
   </div>`;
