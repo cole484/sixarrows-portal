@@ -658,6 +658,15 @@ function validate(){
     if(!(ST.answers['ext_soffit_type']||'').trim())return{ok:false,msg:'Please select a soffit type.'};
     if(!(ST.answers['ext_soffit_vent']||'').trim())return{ok:false,msg:'Please select vented or non-vented soffit.'};
     if(!(ST.answers['ext_soffit_color']||'').trim())return{ok:false,msg:'Please enter a soffit color.'};
+    var pct=(ST.answers['ext_porch_ceil_type']||'').trim();
+    if(!pct) return{ok:false,msg:'Please select a porch ceiling material (pick "None / no porch" if the home has no covered porch).'};
+    if(pct!=='None / no porch' && pct!=='Undecided'){
+      if(pct==='Other (describe below)'){
+        if(!(ST.answers['ext_porch_ceil_other']||'').trim()) return{ok:false,msg:'Please describe your porch ceiling material.'};
+      } else {
+        if(!(ST.answers['ext_porch_ceil_color']||'').trim()) return{ok:false,msg:'Please enter a color / finish direction for the porch ceiling.'};
+      }
+    }
     if(!(ST.answers['ext_gutter_type']||'').trim())return{ok:false,msg:'Please select a gutter style.'};
     if(!(ST.answers['ext_gutter_material']||'').trim())return{ok:false,msg:'Please select a gutter material.'};
     if(!(ST.answers['ext_gutter_color']||'').trim())return{ok:false,msg:'Please enter a gutter color.'};
@@ -1501,6 +1510,36 @@ function rfExteriorFinishes(){
     +textField('ext_soffit_color','Color','e.g. White, Almond, Clay, or custom match...', true)
     +'</div></div>';
 
+  // ── Porch Ceiling ───────────────────────────────────────────────────────
+  var porchType=ST.answers['ext_porch_ceil_type']||'';
+  var porchNoPorch = porchType==='None / no porch';
+  var porchUndecided = porchType==='Undecided';
+  var porchIsOther = porchType==='Other (describe below)';
+  var PORCH_OPTS=['T&G pine','T&G cedar','PVC beadboard / composite','Vented vinyl / aluminum soffit panels','Painted drywall / smooth','Exposed rafters — no ceiling','None / no porch','Undecided','Other (describe below)'];
+  var porchPills=PORCH_OPTS.map(function(o){
+    var sel=porchType===o;
+    var esc=o.replace(/'/g,"\\'");
+    return '<label class="ro'+(sel?' sel':'')+'" onclick="ST.answers[\'ext_porch_ceil_type\']=\''+esc+'\';render()">'
+      +'<input type="radio" name="porch_ceil_type" '+(sel?'checked':'')+'>'+o+'</label>';
+  }).join('');
+  var porchCeilSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Porch Ceiling</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Material for any covered porch, lanai, or breezeway ceiling</div></div>'
+    +'<div class="rs-body">'
+    +'<div class="fg"><label>Porch ceiling material <span class="req">*</span></label><div class="rg">'+porchPills+'</div></div>'
+    +(porchNoPorch || porchUndecided ? '' :
+      (porchIsOther
+        ? textField('ext_porch_ceil_other','Describe porch ceiling material','e.g. Reclaimed barn wood, cypress planks, metal panel...',true)
+        : textField('ext_porch_ceil_color','Color / finish direction','e.g. Natural stain, SW Alabaster, clear poly, haint blue (SW Rainwashed)...',true))
+      +textField('ext_porch_ceil_product','Exact product selected','e.g. 1x6 #2 Southern Yellow Pine T&G, AZEK beadboard, Kaycan vented soffit...',false)
+      +'<div class="fg"><label>Notes</label>'
+        +'<input type="text" value="'+(ST.answers['ext_porch_ceil_notes']||'').replace(/"/g,'&quot;')+'" '
+        +'placeholder="Recessed lighting plan, speakers, fan locations, venting strategy..." '
+        +'onchange="ST.answers[\'ext_porch_ceil_notes\']=this.value" onkeyup="ST.answers[\'ext_porch_ceil_notes\']=this.value">'
+      +'</div>'
+    )
+    +'</div></div>';
+
   // ── Gutters ─────────────────────────────────────────────────────────────
   var gutterSection='<div class="room-section">'
     +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Gutters</div>'
@@ -1536,7 +1575,7 @@ function rfExteriorFinishes(){
     +'onchange="ST.answers[\'ext_siding_notes\']=this.value" onkeyup="ST.answers[\'ext_siding_notes\']=this.value">'
     +'</div></div></div>';
 
-  return roofSection + sidingSection + soffitSection + gutterSection;
+  return roofSection + sidingSection + soffitSection + porchCeilSection + gutterSection;
 }
 
 function rfPaint(){
