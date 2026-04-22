@@ -525,6 +525,27 @@ async function handleUpdateTask(projectId, body) {
   return respond(200, cpmResult);
 }
 
+// ── Move task (free mode, no CPM ripple) ──────────────────
+
+async function handleMoveTask(projectId, body) {
+  if (!body.taskId || !body.planned_start) return respond(400, { error: 'taskId and planned_start required' });
+
+  // Fetch task to compute new finish = start + duration
+  const task = await sbFetch(
+    `project_schedule?id=eq.${body.taskId}&project_id=eq.${encodeURIComponent(projectId)}&select=duration_days`
+  ).then(r => r?.[0]);
+  if (!task) return respond(404, { error: 'Task not found' });
+
+  const newFinish = addDays(body.planned_start, task.duration_days || 1);
+
+  await sbFetch(
+    `project_schedule?id=eq.${body.taskId}&project_id=eq.${encodeURIComponent(projectId)}`,
+    { method: 'PATCH', body: JSON.stringify({ planned_start: body.planned_start, planned_finish: newFinish }) }
+  );
+
+  return respond(200, { message: 'Task moved', taskId: body.taskId, planned_start: body.planned_start, planned_finish: newFinish });
+}
+
 // ── Add / Delete task ──────────────────────────────────────
 
 async function handleAddTask(projectId, body) {
@@ -667,6 +688,10 @@ export const handler = async (event) => {
       const body = JSON.parse(event.body || '{}');
       return await handleUpdateTask(projectId, body);
     }
+    if (action === 'move-task' && event.httpMethod === 'PATCH') {
+      const body = JSON.parse(event.body || '{}');
+      return await handleMoveTask(projectId, body);
+    }
     if (action === 'add-task' && event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
       return await handleAddTask(projectId, body);
@@ -692,7 +717,7 @@ export const handler = async (event) => {
     }
 
     return respond(400, {
-      error: 'Invalid action. Valid: instantiate, calculate, schedule, validate, update-task, add-task, delete-task, add-dep, remove-dep, add-note, get-notes',
+      error: 'Invalid action. Valid: instantiate, calculate, schedule, validate, update-task, move-task, add-task, delete-task, add-dep, remove-dep, add-note, get-notes',
     });
   } catch (err) {
     if (err.status) {

@@ -128,6 +128,24 @@
 
 /* ── Schedule Dashboard & Gantt ──────────────────────── */
 .sch-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:1rem; }
+/* Compact KPI bar (default) */
+.sch-kpi-compact { display:flex; align-items:center; gap:14px; padding:8px 14px; background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); margin-bottom:8px; font-size:12px; flex-wrap:wrap; }
+.sch-kpi-compact .sch-kpi-stat { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.sch-kpi-compact .sch-kpi-stat-lbl { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--charcoal-4); font-weight:700; }
+.sch-kpi-compact .sch-kpi-stat-val { font-weight:700; color:var(--charcoal); }
+.sch-kpi-compact .sch-kpi-expand { margin-left:auto; font-size:10px; color:var(--charcoal-4); cursor:pointer; background:none; border:none; font-family:'Work Sans',sans-serif; }
+.sch-kpi-compact .sch-kpi-expand:hover { color:var(--charcoal); }
+
+/* Focus mode — hide everything except Gantt */
+.sch-focus-active .sch-kpi-row,
+.sch-focus-active .sch-kpi-compact,
+.sch-focus-active .sch-alerts,
+.sch-focus-active .sch-queue-tabs { display:none !important; }
+.sch-focus-active .sch-action-bar { padding:6px 10px; margin-bottom:6px; }
+.sch-focus-active .gantt-wrap { min-height:calc(100vh - 180px); }
+
+/* Drag tooltip */
+.gantt-drag-tip { position:fixed; z-index:50; background:var(--charcoal); color:var(--cream); padding:5px 10px; border-radius:var(--r-md); font-size:11px; font-weight:600; pointer-events:none; white-space:nowrap; box-shadow:var(--sh-md); }
 .sch-kpi-card { background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); padding:14px 16px; }
 .sch-action-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:1rem; padding:10px 14px; background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); }
 .sch-toast { font-size:12px; padding:6px 12px; border-radius:var(--r-md); margin-left:auto; transition:opacity .3s; }
@@ -2431,6 +2449,9 @@ let schGroupBy = 'phase'; // 'phase' or 'workstream'
 let schZoom = 'days';
 let subsCache = null;
 let schShowAddTask = false;
+let schFocusMode = false;      // Full-screen Gantt
+let schKpiExpanded = false;    // Expand compact KPI bar
+let schRippleMode = true;      // true = auto-CPM on drag; false = free move
 
 function getSchDayWidth() {
   return schZoom === 'months' ? 1.5 : schZoom === 'weeks' ? 5 : 18;
@@ -2775,8 +2796,18 @@ function schAutoScrollToday() {
   }
 }
 
-// ── Drag-to-reschedule ──
+// ── Drag-to-reschedule (smooth free-follow with live tooltip) ──
 let _dragState = null;
+let _dragTip = null;
+
+function schComputeDateFromLeft(leftPx) {
+  const cache = scheduleCache[activeProject];
+  if (!cache) return null;
+  const tlStart = cache.tasks.reduce((m,t) => { const s=t.plannedStart; return s&&(!m||s<m)?s:m; }, null) || cache.buildStart;
+  const dw = getSchDayWidth();
+  return schAddDays(tlStart, Math.round(leftPx / dw));
+}
+
 function initGanttDrag() {
   const scroll = document.querySelector('.gantt-scroll');
   if (!scroll || scroll.dataset.dragInit) return;
@@ -2790,16 +2821,40 @@ function initGanttDrag() {
     const ghost = bar.cloneNode(true);
     ghost.classList.add('gantt-bar-ghost');
     bar.parentElement.appendChild(ghost);
-    _dragState = { bar, ghost, taskId: bar.dataset.taskId, origLeft: parseFloat(bar.dataset.originalLeft), startX: e.clientX + scroll.scrollLeft, scroll };
+
+    // Create floating date tooltip
+    _dragTip = document.createElement('div');
+    _dragTip.className = 'gantt-drag-tip';
+    _dragTip.textContent = '';
+    document.body.appendChild(_dragTip);
+
+    _dragState = {
+      bar, ghost,
+      taskId: bar.dataset.taskId,
+      origLeft: parseFloat(bar.dataset.originalLeft),
+      startX: e.clientX + scroll.scrollLeft,
+      scroll,
+    };
   });
 
   document.addEventListener('mousemove', (e) => {
     if (!_dragState) return;
     window._dragMoved = true;
     const { ghost, origLeft, startX, scroll } = _dragState;
+    // Free follow — no snapping during move, just track cursor
     const dx = (e.clientX + scroll.scrollLeft) - startX;
-    const dw = getSchDayWidth();
-    ghost.style.left = Math.max(0, Math.round((origLeft + dx) / dw) * dw) + 'px';
+    const newLeft = Math.max(0, origLeft + dx);
+    ghost.style.left = newLeft + 'px';
+
+    // Live tooltip: show the date the bar will snap to
+    if (_dragTip) {
+      const dw = getSchDayWidth();
+      const snapped = Math.round(newLeft / dw) * dw;
+      const d = schComputeDateFromLeft(snapped);
+      _dragTip.textContent = d ? new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '';
+      _dragTip.style.left = (e.clientX + 14) + 'px';
+      _dragTip.style.top = (e.clientY + 14) + 'px';
+    }
   });
 
   document.addEventListener('mouseup', async (e) => {
@@ -2807,23 +2862,41 @@ function initGanttDrag() {
     const { ghost, taskId, origLeft, startX, scroll } = _dragState;
     _dragState = null;
     ghost.remove();
+    if (_dragTip) { _dragTip.remove(); _dragTip = null; }
+
     if (!window._dragMoved) return;
 
     const dw = getSchDayWidth();
     const dx = (e.clientX + scroll.scrollLeft) - startX;
-    const newLeft = Math.max(0, Math.round((origLeft + dx) / dw) * dw);
-    const dayOffset = Math.round(newLeft / dw);
+    const rawLeft = Math.max(0, origLeft + dx);
+    // Snap to nearest day on drop
+    const snappedLeft = Math.round(rawLeft / dw) * dw;
+    const newStartDate = schComputeDateFromLeft(snappedLeft);
+    if (!newStartDate) return;
 
-    const cache = scheduleCache[activeProject];
-    if (!cache) return;
-    const tlStart = cache.tasks.reduce((m,t) => { const s=t.plannedStart; return s&&(!m||s<m)?s:m; }, null) || cache.buildStart;
-    const newStartDate = schAddDays(tlStart, dayOffset);
-
+    const endpoint = schRippleMode ? 'update-task' : 'move-task';
+    const msg = schRippleMode ? 'Rescheduled & recalculated' : 'Moved';
     try {
-      schShowToast('Rescheduling…','');
-      await scheduleAPI(activeProject, 'update-task', 'PATCH', { taskId, planned_start: newStartDate });
-      schShowToast('Rescheduled & recalculated','success');
-      renderAdmin();
+      schShowToast(schRippleMode ? 'Rescheduling…' : 'Moving…','');
+      await scheduleAPI(activeProject, endpoint, 'PATCH', { taskId, planned_start: newStartDate });
+      if (schRippleMode) {
+        schShowToast(msg,'success');
+        renderAdmin();
+      } else {
+        // Free mode — update cache locally without full re-fetch
+        const cache = scheduleCache[activeProject];
+        if (cache) {
+          const t = cache.tasks.find(x => x.id === taskId);
+          if (t) {
+            t.plannedStart = newStartDate;
+            const d = new Date(newStartDate+'T00:00:00Z');
+            d.setUTCDate(d.getUTCDate() + (t.durationDays||1));
+            t.plannedFinish = d.toISOString().split('T')[0];
+          }
+        }
+        schShowToast(msg,'success');
+        renderAdmin();
+      }
     } catch(err) { schShowToast(err.message, 'error'); }
   });
 }
@@ -3066,14 +3139,26 @@ function renderScheduleView(p) {
   const targetEnd = cache.targetEnd || p.targetEndDate || '';
   const computedEnd = cache.computedEnd || p.computedEndDate || '';
 
-  // ── A: KPI row ──
-  const kpiHTML = `<div class="sch-kpi-row">
+  // ── A: KPI row (compact by default, expandable) ──
+  const alertBadges = `${alerts.red.length?`<span class="tag danger" style="font-size:9px">${alerts.red.length} Red</span>`:''}${alerts.yellow.length?`<span class="tag warn" style="font-size:9px;margin-left:4px">${alerts.yellow.length} Yellow</span>`:''}${!alerts.red.length&&!alerts.yellow.length?`<span class="tag ok" style="font-size:9px">Clear</span>`:''}`;
+  const kpiCompactHTML = `<div class="sch-kpi-compact">
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Progress</span><span class="sch-kpi-stat-val">${pct}%</span><div class="track" style="width:60px;margin:0"><div class="bar" style="width:${pct}%"></div></div></div>
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Tasks</span><span class="sch-kpi-stat-val">${complete}/${total}</span><span style="font-size:10px;color:var(--charcoal-4)">· ${inProg} active</span></div>
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Timeline</span><span class="sch-kpi-stat-val">${schFmtDate(buildStart)} → ${schFmtDate(computedEnd)}</span></div>
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Critical</span><span class="sch-kpi-stat-val">${critCount}</span></div>
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Alerts</span>${alertBadges}</div>
+    <button class="sch-kpi-expand" onclick="schKpiExpanded=!schKpiExpanded;renderAdmin()">${schKpiExpanded?'Collapse ↑':'Expand ↓'}</button>
+  </div>`;
+
+  const kpiExpandedHTML = `<div class="sch-kpi-row">
     <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Tasks</div><div class="kpi-val">${total}</div><div class="kpi-sub">${complete} done · ${inProg} active · ${skipped} skipped</div></div></div>
     <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Complete</div><div class="kpi-val">${pct}%</div></div><div class="track" style="margin-top:6px"><div class="bar" style="width:${pct}%"></div></div></div>
     <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Timeline</div><div class="kpi-val" style="font-size:13px">${schFmtDate(buildStart)} → ${schFmtDate(computedEnd)}</div><div class="kpi-sub">Target: ${schFmtDateFull(targetEnd)}</div></div></div>
     <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Critical Path</div><div class="kpi-val">${critCount}</div><div class="kpi-sub">Zero-float tasks</div></div></div>
     <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Alerts</div><div style="display:flex;gap:6px;margin-top:4px">${alerts.red.length?`<span class="tag danger">${alerts.red.length} Red</span>`:''}<span class="tag ${alerts.yellow.length?'warn':'neutral'}">${alerts.yellow.length} Yellow</span></div></div></div>
   </div>`;
+
+  const kpiHTML = schKpiExpanded ? kpiCompactHTML + kpiExpandedHTML : kpiCompactHTML;
 
   // ── B: Action bar + controls ──
   const actionHTML = `<div class="sch-action-bar">
@@ -3094,7 +3179,12 @@ function renderScheduleView(p) {
       <button class="sch-zoom-btn ${schZoom==='days'?'active':''}" onclick="schSetZoom('days')">Days</button>
       <button class="sch-zoom-btn ${schZoom==='weeks'?'active':''}" onclick="schSetZoom('weeks')">Weeks</button>
       <button class="sch-zoom-btn ${schZoom==='months'?'active':''}" onclick="schSetZoom('months')">Months</button>
-    </div>` : ''}
+    </div>
+    <div class="sch-zoom-toggle" title="Ripple mode: when you drag a task, also recalculate downstream dates">
+      <button class="sch-zoom-btn ${schRippleMode?'active':''}" onclick="schRippleMode=true;renderAdmin()">Ripple</button>
+      <button class="sch-zoom-btn ${!schRippleMode?'active':''}" onclick="schRippleMode=false;renderAdmin()">Free</button>
+    </div>
+    <button class="adm-btn adm-btn-ghost" onclick="schFocusMode=!schFocusMode;renderAdmin()" title="Hide everything but the Gantt" style="margin-left:4px">${schFocusMode?'Exit Focus':'Focus'}</button>` : ''}
   </div>
 
   <div class="sch-queue-tabs">
@@ -3220,7 +3310,8 @@ function renderScheduleView(p) {
     setTimeout(() => { schAutoScrollToday(); initGanttDrag(); }, 150);
   }
 
-  return kpiHTML + actionHTML + mainView + alertsHTML;
+  const wrapperOpen = schFocusMode ? '<div class="sch-focus-active">' : '<div>';
+  return wrapperOpen + kpiHTML + actionHTML + mainView + alertsHTML + '</div>';
 }
 
 // ════════════════════════════════════════════════════════
