@@ -515,6 +515,7 @@ function showMsg(id, type, text, duration=2800) {
 function renderAdmin() {
   const p   = PROJECTS[activeProject];
   const nav = [
+    { key:'today',     icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="6"/><polyline points="7,3.5 7,7 9.5,8.5"/></svg>`, label:'Today'            },
     { key:'tracker',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="3.5" x2="13" y2="3.5"/><line x1="1" y1="7" x2="9" y2="7"/><line x1="1" y1="10.5" x2="11" y2="10.5"/></svg>`, label:'SAB Tracker'     },
     { key:'updates',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 10V3a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H4L1 12V10z"/></svg>`, label:'Project Updates' },
     { key:'timeline',  icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="2.5" cy="3.5" r="1.5"/><line x1="5" y1="3.5" x2="13" y2="3.5"/><circle cx="2.5" cy="7" r="1.5"/><line x1="5" y1="7" x2="13" y2="7"/></svg>`, label:'Milestones'        },
@@ -543,8 +544,14 @@ function renderAdmin() {
 
   let mainContent = '';
 
+  // ── TODAY VIEW ────────────────────────────────────────
+  if (activeView === 'today') {
+    mainContent = renderTodayView(p);
+    setTimeout(() => loadActionItems(p.id), 50);
+  }
+
   // ── TRACKER VIEW ──────────────────────────────────────
-  if (activeView === 'tracker') {
+  else if (activeView === 'tracker') {
     mainContent = renderTrackerView(p);
   }
 
@@ -2868,10 +2875,28 @@ function initGanttDrag() {
     };
   });
 
+  // Robust row-at-point: elementFromPoint first, then nearest-row fallback by Y.
+  // Falls back because elementFromPoint may land on empty area (dep SVG, hidden
+  // edit panel, phase gap) where .closest('.gantt-row') returns null.
+  function schRowAtPoint(clientX, clientY) {
+    const el = document.elementFromPoint(clientX, clientY);
+    const row = el?.closest?.('.gantt-row');
+    if (row && row.dataset.taskId) return row;
+    let best = null, bestDist = Infinity;
+    document.querySelectorAll('.gantt-row[data-task-id]').forEach(r => {
+      const rect = r.getBoundingClientRect();
+      if (rect.height === 0) return;
+      const center = rect.top + rect.height / 2;
+      const dist = Math.abs(clientY - center);
+      if (dist < bestDist && dist < 60) { best = r; bestDist = dist; }
+    });
+    return best;
+  }
+
   document.addEventListener('mousemove', (e) => {
     if (!_dragState) return;
     window._dragMoved = true;
-    const { ghost, origLeft, startX, startY, scroll } = _dragState;
+    const { ghost, origLeft, startX, startY, scroll, taskId } = _dragState;
     // Free follow — X and Y
     const dx = (e.clientX + scroll.scrollLeft) - startX;
     const dy = e.clientY - startY;
@@ -2879,29 +2904,34 @@ function initGanttDrag() {
     ghost.style.left = newLeft + 'px';
     ghost.style.transform = `translateY(${dy}px)`;
 
-    // Detect hovered row for reorder feedback
-    const hoveredRow = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gantt-row');
-    const hoveredPhase = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gantt-phase');
-    _dragState.hoveredTaskId = hoveredRow?.dataset.taskId || null;
-    _dragState.hoveredPhaseId = hoveredPhase?.id || null;
+    // Detect hovered row (ignore dragged task's own row)
+    const hoveredRow = schRowAtPoint(e.clientX, e.clientY);
+    const validTarget = hoveredRow && hoveredRow.dataset.taskId && hoveredRow.dataset.taskId !== taskId;
+    _dragState.hoveredTaskId = validTarget ? hoveredRow.dataset.taskId : null;
 
     // Highlight hovered row
     document.querySelectorAll('.gantt-row').forEach(r => r.style.outline = '');
-    if (hoveredRow && hoveredRow.dataset.taskId && hoveredRow.dataset.taskId !== _dragState.taskId) {
+    if (validTarget) {
       hoveredRow.style.outline = '2px solid var(--green)';
       hoveredRow.style.outlineOffset = '-2px';
     }
 
     // Live tooltip
     if (_dragTip) {
+      const isReorderIntent = Math.abs(dy) > 20;
       const dw = getSchDayWidth();
       const snapped = Math.round(newLeft / dw) * dw;
       const d = schComputeDateFromLeft(snapped);
       const dateStr = d ? new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '';
-      const overTask = _dragState.hoveredTaskId && _dragState.hoveredTaskId !== _dragState.taskId;
       const cache = scheduleCache[activeProject];
-      const hoveredTask = overTask && cache ? cache.tasks.find(t => t.id === _dragState.hoveredTaskId) : null;
-      _dragTip.innerHTML = `${dateStr}${hoveredTask?`<br><span style="font-size:9px;opacity:.8">↔ reorder before "${hoveredTask.taskName}"</span>`:''}`;
+      const hoveredTask = _dragState.hoveredTaskId && cache ? cache.tasks.find(t => t.id === _dragState.hoveredTaskId) : null;
+      if (isReorderIntent && hoveredTask) {
+        _dragTip.innerHTML = `↕ reorder before "${hoveredTask.taskName}"`;
+      } else if (isReorderIntent) {
+        _dragTip.innerHTML = `<span style="opacity:.7">release on a row to reorder</span>`;
+      } else {
+        _dragTip.innerHTML = dateStr;
+      }
       _dragTip.style.left = (e.clientX + 14) + 'px';
       _dragTip.style.top = (e.clientY + 14) + 'px';
     }
@@ -2909,7 +2939,7 @@ function initGanttDrag() {
 
   document.addEventListener('mouseup', async (e) => {
     if (!_dragState) return;
-    const { ghost, taskId, origLeft, startX, startY, scroll, hoveredTaskId, hoveredPhaseId } = _dragState;
+    const { ghost, taskId, origLeft, startX, startY, scroll } = _dragState;
     _dragState = null;
     ghost.remove();
     if (_dragTip) { _dragTip.remove(); _dragTip = null; }
@@ -2923,27 +2953,58 @@ function initGanttDrag() {
     const cache = scheduleCache[activeProject];
     if (!cache) return;
 
-    // Dominant axis: Y (reorder) or X (reschedule)?
-    const REORDER_THRESHOLD = 20; // px vertical before treating as reorder
-    const isReorder = Math.abs(dy) > REORDER_THRESHOLD && hoveredTaskId && hoveredTaskId !== taskId;
+    // Recompute drop target at release time (don't trust stale mousemove value).
+    const dropRow = schRowAtPoint(e.clientX, e.clientY);
+    const hoveredTaskId = (dropRow && dropRow.dataset.taskId && dropRow.dataset.taskId !== taskId)
+      ? dropRow.dataset.taskId : null;
+
+    // Intent: vertical drag above threshold means the user wants to reorder.
+    // If intent is reorder but no valid target, cancel silently — do NOT reschedule.
+    const REORDER_THRESHOLD = 20;
+    const reorderIntent = Math.abs(dy) > REORDER_THRESHOLD;
+    if (reorderIntent && !hoveredTaskId) {
+      schShowToast('Drop on a task row to reorder','');
+      return;
+    }
+    const isReorder = reorderIntent && hoveredTaskId;
 
     try {
       if (isReorder) {
-        // REORDER: move this task to the sequence position of the hovered task
+        // REORDER: insert dragged task immediately before the hovered task.
+        // Optimistic UI — reorder in-memory and re-render before the network round-trip.
         const draggedTask = cache.tasks.find(t => t.id === taskId);
         const targetTask = cache.tasks.find(t => t.id === hoveredTaskId);
         if (!draggedTask || !targetTask) return;
 
-        const patch = { taskId, sequence_order: targetTask.sequenceOrder };
-        // If target is in a different phase, also change phase
-        if (targetTask.phase && targetTask.phase !== draggedTask.phase) {
-          patch.phase = targetTask.phase;
-        }
+        const newPhase = (targetTask.phase && targetTask.phase !== draggedTask.phase) ? targetTask.phase : null;
 
-        schShowToast('Reordering…','');
-        await scheduleAPI(activeProject, 'update-task', 'PATCH', patch);
-        schShowToast('Reordered & recalculated','success');
+        // Snapshot for rollback
+        const snapshot = cache.tasks.map(t => ({ id: t.id, sequenceOrder: t.sequenceOrder, phase: t.phase }));
+
+        // In-memory reorder + renumber
+        const arr = cache.tasks.slice().sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+        const fromIdx = arr.findIndex(t => t.id === taskId);
+        if (fromIdx < 0) return;
+        const [moved] = arr.splice(fromIdx, 1);
+        const toIdx = arr.findIndex(t => t.id === hoveredTaskId);
+        arr.splice(toIdx, 0, moved);
+        if (newPhase) moved.phase = newPhase;
+        arr.forEach((t, i) => { t.sequenceOrder = i + 1; });
+        cache.tasks = arr;
         renderAdmin();
+
+        // Fire server update in background
+        const patch = { taskId, targetTaskId: hoveredTaskId };
+        if (newPhase) patch.phase = newPhase;
+        scheduleAPI(activeProject, 'reorder-task', 'PATCH', patch)
+          .then(() => schShowToast('Reordered','success'))
+          .catch(err => {
+            // Roll back on failure
+            const byId = new Map(snapshot.map(s => [s.id, s]));
+            cache.tasks.forEach(t => { const s = byId.get(t.id); if (s) { t.sequenceOrder = s.sequenceOrder; t.phase = s.phase; } });
+            renderAdmin();
+            schShowToast('Reorder failed: ' + err.message, 'error');
+          });
       } else {
         // RESCHEDULE (horizontal move)
         const rawLeft = Math.max(0, origLeft + dx);
@@ -3338,6 +3399,181 @@ function renderScheduleCharts(tasks, cache) {
       ${critHTML}
     </div>
   </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  TODAY VIEW — the PM's action queue
+// ══════════════════════════════════════════════════════
+
+let actionItemsCache = {}; // projectId → array
+
+const KIND_LABELS = {
+  approve_contractor_text: 'Approve contractor message',
+  review_qc_complete:      'Review QC',
+  approve_client_update:   'Approve client update',
+  confirm_selection_gate:  'Resolve selection gate',
+  reschedule_response:     'Contractor reschedule',
+  manual:                  'Manual',
+};
+
+function renderTodayView(p) {
+  return `
+    <div class="sch-hd" style="margin-bottom:12px">
+      <div>
+        <div class="sh-title" style="font-size:18px">Today — ${p.clientName}</div>
+        <div style="font-size:11px;color:var(--charcoal-4)">Everything that needs your attention. The system will fill this queue automatically as rules are added.</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="adm-btn adm-btn-ghost" onclick="loadActionItems('${p.id}')" title="Refresh">↻ Refresh</button>
+        <button class="adm-btn adm-btn-ghost" onclick="openManualItemForm('${p.id}')">+ Add manual item</button>
+      </div>
+    </div>
+    <div id="manual-item-form" style="display:none;margin-bottom:12px"></div>
+    <div id="today-queue">
+      <div style="padding:2rem;text-align:center;color:var(--charcoal-4);font-size:12px">Loading action items…</div>
+    </div>
+  `;
+}
+
+async function loadActionItems(projectId) {
+  const el = document.getElementById('today-queue');
+  if (!el) return;
+  try {
+    const res = await fetch(`/.netlify/functions/action-items?projectId=${encodeURIComponent(projectId)}&status=open`, {
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load');
+    actionItemsCache[projectId] = data.items || [];
+    renderTodayQueue(projectId);
+  } catch (err) {
+    el.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--danger);font-size:12px">Error: ${err.message}</div>`;
+  }
+}
+
+function renderTodayQueue(projectId) {
+  const el = document.getElementById('today-queue');
+  if (!el) return;
+  const items = actionItemsCache[projectId] || [];
+  if (items.length === 0) {
+    el.innerHTML = `<div class="card" style="padding:2.5rem;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">✓</div>
+      <div style="font-size:14px;font-weight:600;color:var(--charcoal)">All clear</div>
+      <div style="font-size:11px;color:var(--charcoal-4);margin-top:4px">Nothing needs your attention right now.</div>
+    </div>`;
+    return;
+  }
+  const byPri = { red:[], yellow:[], normal:[] };
+  items.forEach(it => (byPri[it.priority] || byPri.normal).push(it));
+  const order = [
+    ['red',    'Urgent',     'var(--danger)'],
+    ['yellow', 'This week',  '#c89200'],
+    ['normal', 'Normal',     'var(--charcoal-3)'],
+  ];
+  el.innerHTML = order.map(([pri, label, color]) => {
+    if (!byPri[pri].length) return '';
+    return `<div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${color};margin-bottom:6px">${label} · ${byPri[pri].length}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${byPri[pri].map(renderActionCard).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderActionCard(it) {
+  const kindLabel = KIND_LABELS[it.kind] || it.kind;
+  const borderColor = it.priority === 'red' ? 'var(--danger)' : it.priority === 'yellow' ? '#c89200' : 'var(--border-2)';
+  const age = timeAgo(it.created_at);
+  return `<div class="card" style="padding:12px;border-left:3px solid ${borderColor}">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--charcoal-4);font-weight:700;margin-bottom:3px">${kindLabel}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--charcoal);margin-bottom:2px">${escapeHtml(it.title)}</div>
+        ${it.body ? `<div style="font-size:11px;color:var(--charcoal-3);margin-top:4px;line-height:1.4">${escapeHtml(it.body)}</div>` : ''}
+        <div style="font-size:10px;color:var(--charcoal-4);margin-top:6px">Created ${age}${it.due_at?` · Due ${new Date(it.due_at).toLocaleDateString()}`:''}</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="adm-btn adm-btn-green" style="padding:5px 10px;font-size:11px" onclick="completeActionItem('${it.id}','${it.project_id}')" title="Mark done">✓ Done</button>
+        <button class="adm-btn adm-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="snoozeActionItem('${it.id}','${it.project_id}')" title="Snooze 24h">⏱ Snooze</button>
+        <button class="adm-btn adm-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="dismissActionItem('${it.id}','${it.project_id}')" title="Dismiss">✕</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+
+async function patchActionItem(id, projectId, action, extra = '') {
+  const res = await fetch(`/.netlify/functions/action-items?id=${id}&action=${action}${extra}`, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+  });
+  if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || `HTTP ${res.status}`); }
+  // Optimistic: remove locally and re-render
+  actionItemsCache[projectId] = (actionItemsCache[projectId] || []).filter(it => it.id !== id);
+  renderTodayQueue(projectId);
+}
+
+async function completeActionItem(id, projectId) {
+  try { await patchActionItem(id, projectId, 'complete'); schShowToast('Marked done','success'); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(projectId); }
+}
+async function snoozeActionItem(id, projectId) {
+  try { await patchActionItem(id, projectId, 'snooze'); schShowToast('Snoozed 24h',''); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(projectId); }
+}
+async function dismissActionItem(id, projectId) {
+  try { await patchActionItem(id, projectId, 'dismiss'); schShowToast('Dismissed',''); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(projectId); }
+}
+
+function openManualItemForm(projectId) {
+  const el = document.getElementById('manual-item-form');
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="card" style="padding:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--charcoal);margin-bottom:8px">Add manual action item</div>
+    <div style="display:grid;grid-template-columns:1fr 140px;gap:8px;margin-bottom:8px">
+      <input class="adm-inp" id="mi-title" placeholder="Title (what needs to be done)">
+      <select class="adm-inp adm-sel" id="mi-priority"><option value="normal">Normal</option><option value="yellow">This week</option><option value="red">Urgent</option></select>
+    </div>
+    <textarea class="adm-inp adm-textarea" id="mi-body" placeholder="Details (optional)" style="margin-bottom:8px"></textarea>
+    <div style="display:flex;gap:6px">
+      <button class="adm-btn adm-btn-green" onclick="submitManualItem('${projectId}')">Create</button>
+      <button class="adm-btn adm-btn-ghost" onclick="openManualItemForm('${projectId}')">Cancel</button>
+    </div>
+  </div>`;
+  setTimeout(() => document.getElementById('mi-title')?.focus(), 30);
+}
+
+async function submitManualItem(projectId) {
+  const title = document.getElementById('mi-title')?.value.trim();
+  const body  = document.getElementById('mi-body')?.value.trim() || null;
+  const priority = document.getElementById('mi-priority')?.value || 'normal';
+  if (!title) { schShowToast('Title required','error'); return; }
+  try {
+    const res = await fetch(`/.netlify/functions/action-items`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ projectId, kind: 'manual', title, body, priority }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    schShowToast('Item created','success');
+    openManualItemForm(projectId); // close form
+    loadActionItems(projectId);
+  } catch (e) { schShowToast(e.message, 'error'); }
 }
 
 function renderScheduleView(p) {

@@ -14,6 +14,7 @@
 // GET   ?projectId=xxx&action=get-notes&taskId=yyy — Get notes for a task
 
 import { respond, corsHeaders } from './lib/supabase-client.js';
+import { logEventSafe } from './lib/events.js';
 
 const SB_URL = () => process.env.SUPABASE_URL;
 const SB_KEY = () => process.env.SUPABASE_ANON_KEY;
@@ -514,6 +515,11 @@ async function handleUpdateTask(projectId, body) {
 
   if (Object.keys(patch).length === 0) return respond(400, { error: 'No valid fields to update' });
 
+  // Fetch previous state to emit meaningful events (status transitions, etc.)
+  const prior = await sbFetch(
+    `project_schedule?id=eq.${body.taskId}&project_id=eq.${encodeURIComponent(projectId)}&select=status,contractor_confirmed,task_name`
+  ).then(r => r?.[0]);
+
   const result = await sbFetch(
     `project_schedule?id=eq.${body.taskId}&project_id=eq.${encodeURIComponent(projectId)}`,
     { method: 'PATCH', body: JSON.stringify(patch) }
@@ -521,8 +527,97 @@ async function handleUpdateTask(projectId, body) {
 
   if (!result || (Array.isArray(result) && result.length === 0)) return respond(404, { error: 'Task not found' });
 
+  // Emit events (non-fatal — won't break the PATCH if logging fails)
+  if (prior) {
+    const actor = body.actor || 'pm';
+    if (patch.status && patch.status !== prior.status) {
+      await logEventSafe({
+        projectId, taskId: body.taskId, actor,
+        eventType: 'task.status_changed',
+        payload: { from: prior.status, to: patch.status, task_name: prior.task_name },
+      });
+      if (patch.status === 'complete') {
+        await logEventSafe({
+          projectId, taskId: body.taskId, actor,
+          eventType: 'task.completed',
+          payload: { actual_finish: patch.actual_finish || null, task_name: prior.task_name },
+        });
+      }
+    }
+    if (patch.contractor_confirmed === true && !prior.contractor_confirmed) {
+      await logEventSafe({
+        projectId, taskId: body.taskId, actor,
+        eventType: 'contractor.confirmed',
+        payload: { task_name: prior.task_name },
+      });
+    }
+  }
+
   const cpmResult = await runCPM(projectId);
   return respond(200, cpmResult);
+}
+
+// ── Reorder task (vertical drag — change sequence/phase only) ─
+// Insert-before semantics: dragged task ends up immediately before target.
+// Skips CPM since sequence_order only affects Kahn tie-break and dates
+// are driven by dependencies, not sequence.
+
+async function handleReorderTask(projectId, body) {
+  const { taskId, targetTaskId, phase } = body;
+  if (!taskId || !targetTaskId) return respond(400, { error: 'taskId and targetTaskId required' });
+  if (taskId === targetTaskId) return respond(200, { message: 'No change', changed: 0 });
+
+  const tasks = await sbFetch(
+    `project_schedule?project_id=eq.${encodeURIComponent(projectId)}&select=id,sequence_order,phase`
+  );
+  const T = tasks.find(t => t.id === taskId);
+  const U = tasks.find(t => t.id === targetTaskId);
+  if (!T || !U) return respond(404, { error: 'Task not found' });
+
+  const S_T = T.sequence_order;
+  const S_U = U.sequence_order;
+  const phaseChanged = phase && phase !== T.phase;
+
+  const writes = []; // array of { id, patch }
+
+  if (S_T < S_U) {
+    // Dragging down: shift (S_T, S_U-1] by -1, T → S_U - 1
+    for (const t of tasks) {
+      if (t.id === taskId) continue;
+      if (t.sequence_order > S_T && t.sequence_order <= S_U - 1) {
+        writes.push({ id: t.id, patch: { sequence_order: t.sequence_order - 1 } });
+      }
+    }
+    const tPatch = { sequence_order: S_U - 1 };
+    if (phaseChanged) tPatch.phase = phase;
+    writes.push({ id: taskId, patch: tPatch });
+  } else if (S_T > S_U) {
+    // Dragging up: shift [S_U, S_T) by +1, T → S_U
+    for (const t of tasks) {
+      if (t.id === taskId) continue;
+      if (t.sequence_order >= S_U && t.sequence_order < S_T) {
+        writes.push({ id: t.id, patch: { sequence_order: t.sequence_order + 1 } });
+      }
+    }
+    const tPatch = { sequence_order: S_U };
+    if (phaseChanged) tPatch.phase = phase;
+    writes.push({ id: taskId, patch: tPatch });
+  } else {
+    // Same sequence — only a phase change to apply
+    if (phaseChanged) writes.push({ id: taskId, patch: { phase } });
+  }
+
+  if (writes.length === 0) return respond(200, { message: 'No change', changed: 0 });
+
+  await Promise.all(writes.map(w =>
+    sbFetch(`project_schedule?id=eq.${w.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(w.patch),
+      prefer: 'return=minimal',
+    })
+  ));
+
+  return respond(200, { message: 'Reordered', changed: writes.length });
 }
 
 // ── Move task (free mode, no CPM ripple) ──────────────────
@@ -692,6 +787,10 @@ export const handler = async (event) => {
       const body = JSON.parse(event.body || '{}');
       return await handleMoveTask(projectId, body);
     }
+    if (action === 'reorder-task' && event.httpMethod === 'PATCH') {
+      const body = JSON.parse(event.body || '{}');
+      return await handleReorderTask(projectId, body);
+    }
     if (action === 'add-task' && event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
       return await handleAddTask(projectId, body);
@@ -717,7 +816,7 @@ export const handler = async (event) => {
     }
 
     return respond(400, {
-      error: 'Invalid action. Valid: instantiate, calculate, schedule, validate, update-task, move-task, add-task, delete-task, add-dep, remove-dep, add-note, get-notes',
+      error: 'Invalid action. Valid: instantiate, calculate, schedule, validate, update-task, move-task, reorder-task, add-task, delete-task, add-dep, remove-dep, add-note, get-notes',
     });
   } catch (err) {
     if (err.status) {
