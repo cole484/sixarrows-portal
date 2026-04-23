@@ -14,7 +14,19 @@
   width:220px; flex-shrink:0; background:var(--charcoal);
   padding:1.25rem 1rem; display:flex; flex-direction:column; gap:1.25rem;
   position:sticky; top:0; height:100vh; overflow-y:auto;
+  transition:width .2s ease, padding .2s ease;
 }
+.admin-shell.sidebar-hidden .admin-sidebar { width:0; padding:0; overflow:hidden; }
+.admin-sidebar-toggle {
+  position:fixed; top:14px; z-index:20; width:26px; height:26px;
+  background:var(--charcoal); color:var(--cream); border:none; border-radius:0 6px 6px 0;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  font-size:14px; font-family:'Work Sans',sans-serif;
+  transition:left .2s ease; opacity:.85;
+}
+.admin-sidebar-toggle:hover { opacity:1; }
+.admin-shell:not(.sidebar-hidden) .admin-sidebar-toggle { left:220px; }
+.admin-shell.sidebar-hidden .admin-sidebar-toggle { left:0; border-radius:0 6px 6px 0; }
 .admin-logo { display:flex; align-items:center; gap:9px; }
 .admin-logo img { width:28px; height:28px; object-fit:contain; }
 .admin-logo-text { font-size:11px; font-weight:700; color:var(--cream); letter-spacing:.05em; text-transform:uppercase; }
@@ -41,6 +53,7 @@
 }
 .admin-topbar-title { font-size:13px; font-weight:600; color:var(--charcoal); }
 .admin-content { padding:1.5rem; max-width:900px; }
+.admin-content.full-width { max-width:none; padding:1rem 1.25rem; }
 
 /* Project tabs */
 .project-tabs { display:flex; gap:6px; margin-bottom:1.25rem; flex-wrap:wrap; }
@@ -278,6 +291,15 @@ const SUPABASE_DIRECT_URL = 'https://mtvcahscwpralmlqlnzg.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10dmNhaHNjd3ByYWxtbHFsbnpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTY4ODEsImV4cCI6MjA5MDM5Mjg4MX0.givpTh-YxG16vYZmn0KLBCPG0ivxYbjh-i8Q87eCNnk';
 let adminAuthed  = false;
 let activeProject = sessionStorage.getItem('sa_admin_project') || Object.keys(PROJECTS)[0];
+let adminSidebarCollapsed = sessionStorage.getItem('sa_admin_sidebar_collapsed') === '1';
+function toggleAdminSidebar() {
+  adminSidebarCollapsed = !adminSidebarCollapsed;
+  sessionStorage.setItem('sa_admin_sidebar_collapsed', adminSidebarCollapsed ? '1' : '0');
+  const shell = document.querySelector('.admin-shell');
+  if (shell) shell.classList.toggle('sidebar-hidden', adminSidebarCollapsed);
+  const btn = document.querySelector('.admin-sidebar-toggle');
+  if (btn) btn.textContent = adminSidebarCollapsed ? '›' : '‹';
+}
 let activeView    = sessionStorage.getItem('sa_admin_view')    || 'tracker';
 
 // ── Storage helpers ──────────────────────────────────────
@@ -577,7 +599,8 @@ function renderAdmin() {
   }
 
   document.body.innerHTML = `
-    <div class="admin-shell">
+    <div class="admin-shell ${adminSidebarCollapsed?'sidebar-hidden':''}">
+      <button class="admin-sidebar-toggle" onclick="toggleAdminSidebar()" title="Toggle sidebar">${adminSidebarCollapsed?'›':'‹'}</button>
       <aside class="admin-sidebar">
         <div class="admin-logo">
           <img src="${LOGO_CIRCLE}" style="width:28px;height:28px;object-fit:contain">
@@ -603,7 +626,7 @@ function renderAdmin() {
           ${activeView !== 'addclient' ? `<span class="tag ${p.projectType === 'remodel' ? '' : 'ok'}" style="font-size:10px;margin-left:6px">${p.projectType === 'remodel' ? 'Remodel' : 'New Build'}</span>` : ''}
           <span style="font-size:11px;color:var(--charcoal-4)">Admin only</span>
         </div>
-        <div class="admin-content">
+        <div class="admin-content${activeView==='schedule'?' full-width':''}">
           ${activeView !== 'addclient' ? projectSelect : ''}
           ${mainContent}
         </div>
@@ -2452,6 +2475,12 @@ let schShowAddTask = false;
 let schFocusMode = false;      // Full-screen Gantt
 let schKpiExpanded = false;    // Expand compact KPI bar
 let schRippleMode = true;      // true = auto-CPM on drag; false = free move
+let schTblSort = { col: 'sequence', dir: 'asc' };  // Table sort state
+function schSetSort(col) {
+  if (schTblSort.col === col) schTblSort.dir = schTblSort.dir === 'asc' ? 'desc' : 'asc';
+  else { schTblSort.col = col; schTblSort.dir = 'asc'; }
+  renderAdmin();
+}
 
 function getSchDayWidth() {
   return schZoom === 'months' ? 1.5 : schZoom === 'weeks' ? 5 : 18;
@@ -2822,7 +2851,7 @@ function initGanttDrag() {
     ghost.classList.add('gantt-bar-ghost');
     bar.parentElement.appendChild(ghost);
 
-    // Create floating date tooltip
+    // Create floating tooltip
     _dragTip = document.createElement('div');
     _dragTip.className = 'gantt-drag-tip';
     _dragTip.textContent = '';
@@ -2833,25 +2862,46 @@ function initGanttDrag() {
       taskId: bar.dataset.taskId,
       origLeft: parseFloat(bar.dataset.originalLeft),
       startX: e.clientX + scroll.scrollLeft,
+      startY: e.clientY,
       scroll,
+      startTop: bar.closest('.gantt-row').getBoundingClientRect().top,
     };
   });
 
   document.addEventListener('mousemove', (e) => {
     if (!_dragState) return;
     window._dragMoved = true;
-    const { ghost, origLeft, startX, scroll } = _dragState;
-    // Free follow — no snapping during move, just track cursor
+    const { ghost, origLeft, startX, startY, scroll } = _dragState;
+    // Free follow — X and Y
     const dx = (e.clientX + scroll.scrollLeft) - startX;
+    const dy = e.clientY - startY;
     const newLeft = Math.max(0, origLeft + dx);
     ghost.style.left = newLeft + 'px';
+    ghost.style.transform = `translateY(${dy}px)`;
 
-    // Live tooltip: show the date the bar will snap to
+    // Detect hovered row for reorder feedback
+    const hoveredRow = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gantt-row');
+    const hoveredPhase = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gantt-phase');
+    _dragState.hoveredTaskId = hoveredRow?.dataset.taskId || null;
+    _dragState.hoveredPhaseId = hoveredPhase?.id || null;
+
+    // Highlight hovered row
+    document.querySelectorAll('.gantt-row').forEach(r => r.style.outline = '');
+    if (hoveredRow && hoveredRow.dataset.taskId && hoveredRow.dataset.taskId !== _dragState.taskId) {
+      hoveredRow.style.outline = '2px solid var(--green)';
+      hoveredRow.style.outlineOffset = '-2px';
+    }
+
+    // Live tooltip
     if (_dragTip) {
       const dw = getSchDayWidth();
       const snapped = Math.round(newLeft / dw) * dw;
       const d = schComputeDateFromLeft(snapped);
-      _dragTip.textContent = d ? new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '';
+      const dateStr = d ? new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '';
+      const overTask = _dragState.hoveredTaskId && _dragState.hoveredTaskId !== _dragState.taskId;
+      const cache = scheduleCache[activeProject];
+      const hoveredTask = overTask && cache ? cache.tasks.find(t => t.id === _dragState.hoveredTaskId) : null;
+      _dragTip.innerHTML = `${dateStr}${hoveredTask?`<br><span style="font-size:9px;opacity:.8">↔ reorder before "${hoveredTask.taskName}"</span>`:''}`;
       _dragTip.style.left = (e.clientX + 14) + 'px';
       _dragTip.style.top = (e.clientY + 14) + 'px';
     }
@@ -2859,33 +2909,56 @@ function initGanttDrag() {
 
   document.addEventListener('mouseup', async (e) => {
     if (!_dragState) return;
-    const { ghost, taskId, origLeft, startX, scroll } = _dragState;
+    const { ghost, taskId, origLeft, startX, startY, scroll, hoveredTaskId, hoveredPhaseId } = _dragState;
     _dragState = null;
     ghost.remove();
     if (_dragTip) { _dragTip.remove(); _dragTip = null; }
+    document.querySelectorAll('.gantt-row').forEach(r => r.style.outline = '');
 
     if (!window._dragMoved) return;
 
-    const dw = getSchDayWidth();
     const dx = (e.clientX + scroll.scrollLeft) - startX;
-    const rawLeft = Math.max(0, origLeft + dx);
-    // Snap to nearest day on drop
-    const snappedLeft = Math.round(rawLeft / dw) * dw;
-    const newStartDate = schComputeDateFromLeft(snappedLeft);
-    if (!newStartDate) return;
+    const dy = e.clientY - startY;
+    const dw = getSchDayWidth();
+    const cache = scheduleCache[activeProject];
+    if (!cache) return;
 
-    const endpoint = schRippleMode ? 'update-task' : 'move-task';
-    const msg = schRippleMode ? 'Rescheduled & recalculated' : 'Moved';
+    // Dominant axis: Y (reorder) or X (reschedule)?
+    const REORDER_THRESHOLD = 20; // px vertical before treating as reorder
+    const isReorder = Math.abs(dy) > REORDER_THRESHOLD && hoveredTaskId && hoveredTaskId !== taskId;
+
     try {
-      schShowToast(schRippleMode ? 'Rescheduling…' : 'Moving…','');
-      await scheduleAPI(activeProject, endpoint, 'PATCH', { taskId, planned_start: newStartDate });
-      if (schRippleMode) {
-        schShowToast(msg,'success');
+      if (isReorder) {
+        // REORDER: move this task to the sequence position of the hovered task
+        const draggedTask = cache.tasks.find(t => t.id === taskId);
+        const targetTask = cache.tasks.find(t => t.id === hoveredTaskId);
+        if (!draggedTask || !targetTask) return;
+
+        const patch = { taskId, sequence_order: targetTask.sequenceOrder };
+        // If target is in a different phase, also change phase
+        if (targetTask.phase && targetTask.phase !== draggedTask.phase) {
+          patch.phase = targetTask.phase;
+        }
+
+        schShowToast('Reordering…','');
+        await scheduleAPI(activeProject, 'update-task', 'PATCH', patch);
+        schShowToast('Reordered & recalculated','success');
         renderAdmin();
       } else {
-        // Free mode — update cache locally without full re-fetch
-        const cache = scheduleCache[activeProject];
-        if (cache) {
+        // RESCHEDULE (horizontal move)
+        const rawLeft = Math.max(0, origLeft + dx);
+        const snappedLeft = Math.round(rawLeft / dw) * dw;
+        const newStartDate = schComputeDateFromLeft(snappedLeft);
+        if (!newStartDate) return;
+
+        const endpoint = schRippleMode ? 'update-task' : 'move-task';
+        const msg = schRippleMode ? 'Rescheduled & recalculated' : 'Moved';
+        schShowToast(schRippleMode ? 'Rescheduling…' : 'Moving…','');
+        await scheduleAPI(activeProject, endpoint, 'PATCH', { taskId, planned_start: newStartDate });
+        if (schRippleMode) {
+          schShowToast(msg,'success');
+          renderAdmin();
+        } else {
           const t = cache.tasks.find(x => x.id === taskId);
           if (t) {
             t.plannedStart = newStartDate;
@@ -2893,9 +2966,9 @@ function initGanttDrag() {
             d.setUTCDate(d.getUTCDate() + (t.durationDays||1));
             t.plannedFinish = d.toISOString().split('T')[0];
           }
+          schShowToast(msg,'success');
+          renderAdmin();
         }
-        schShowToast(msg,'success');
-        renderAdmin();
       }
     } catch(err) { schShowToast(err.message, 'error'); }
   });
@@ -2907,66 +2980,107 @@ function renderScheduleTable(tasks, projectId) {
     `<option value="${s}" ${s===cur?'selected':''}>${l}</option>`
   ).join('');
 
-  const phaseMap = groupTasksByPhase(tasks);
-  let html = '';
-
-  for (const [phaseName, phaseTasks] of phaseMap) {
-    if (phaseTasks.length === 0) continue;
-    const pi = PHASE_ORDER.indexOf(phaseName);
-    const isCollapsed = schCollapsed[pi];
-    const done = phaseTasks.filter(t => t.status === 'complete').length;
-
-    html += `<tr><td colspan="8" style="padding:0">
-      <div class="gantt-phase-hd" onclick="schTogglePhase(${pi})" id="sch-tbl-phase-${pi}">
-        <svg viewBox="0 0 10 10" style="width:10px;height:10px;transition:transform .15s;${isCollapsed?'transform:rotate(-90deg)':''}"><path d="M3 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
-        ${phaseName} <span class="gantt-phase-count">${done}/${phaseTasks.length}</span>
-      </div>
-    </td></tr>`;
-
-    if (!isCollapsed) {
-      phaseTasks.forEach(t => {
-        const id = t.id;
-        const name = t.taskName || t.task_name;
-        const status = t.status || 'not_started';
-        const start = t.plannedStart || t.planned_start;
-        const finish = t.plannedFinish || t.planned_finish;
-        const contractor = t.assignedContractor || t.assigned_contractor || '';
-        const alert = t.alertLevel || t.alert_level || 'none';
-        const crit = t.isCritical;
-        const fl = t.float;
-        const checked = schBulkSelected.has(id);
-
-        const ws = t.workstream || 'both';
-        const wsTag = `<span class="tag ${ws==='interior'?'ok':ws==='exterior'?'neutral':'dark'}" style="font-size:8px">${ws.charAt(0).toUpperCase()+ws.slice(1)}</span>`;
-        const subName = t.subcontractorId && subsCache ? (subsCache.find(s=>s.id===t.subcontractorId)||{}).name||'—' : contractor || '—';
-        const dur = t.durationDays || t.duration_days || 1;
-
-        html += `<tr>
-          <td style="width:30px;text-align:center"><input type="checkbox" class="sch-chk" ${checked?'checked':''} onchange="schToggleBulk('${id}')"></td>
-          <td class="sch-tbl-name" title="${name}" onclick="toggleTaskEdit('${id}','${projectId}')" style="cursor:pointer">${name}</td>
-          <td><select class="sch-tbl-status" onchange="schQuickStatus('${projectId}','${id}',this.value)">${statusOpts(status)}</select></td>
-          <td class="sch-tbl-date">${schFmtDate(start)}</td>
-          <td class="sch-tbl-date">${schFmtDate(finish)}</td>
-          <td style="font-size:11px;text-align:center">${dur}d</td>
-          <td style="font-size:11px;color:var(--charcoal-3)">${subName}</td>
-          <td>${wsTag}</td>
-          <td style="text-align:center">${alert==='red'?'<span class="tag danger" style="font-size:8px">RED</span>':alert==='yellow'?'<span class="tag warn" style="font-size:8px">YLW</span>':crit?'<span class="tag dark" style="font-size:8px">CRIT</span>':''}</td>
-          <td style="font-size:10px;color:var(--charcoal-4);text-align:right">${fl!=null?fl+'d':''}</td>
-        </tr>
-        <tr id="sch-edit-${id}" style="display:none"><td colspan="10" style="padding:0"></td></tr>`;
-      });
+  // ── Sort tasks ──
+  const sortCol = schTblSort.col;
+  const dir = schTblSort.dir === 'asc' ? 1 : -1;
+  const getSubName = (t) => t.subcontractorId && subsCache ? (subsCache.find(s=>s.id===t.subcontractorId)||{}).name||'' : t.assignedContractor||'';
+  const sortedTasks = [...tasks].sort((a,b) => {
+    let av, bv;
+    switch(sortCol) {
+      case 'name': av=a.taskName||''; bv=b.taskName||''; break;
+      case 'phase': av=PHASE_ORDER.indexOf(a.phase); bv=PHASE_ORDER.indexOf(b.phase); break;
+      case 'status': av=a.status||''; bv=b.status||''; break;
+      case 'start': av=a.plannedStart||'9999'; bv=b.plannedStart||'9999'; break;
+      case 'finish': av=a.plannedFinish||'9999'; bv=b.plannedFinish||'9999'; break;
+      case 'duration': av=a.durationDays||0; bv=b.durationDays||0; break;
+      case 'contractor': av=getSubName(a).toLowerCase(); bv=getSubName(b).toLowerCase(); break;
+      case 'workstream': av=a.workstream||''; bv=b.workstream||''; break;
+      case 'float': av=a.float??9999; bv=b.float??9999; break;
+      case 'alert': { const rank={red:0,yellow:1,none:2}; av=rank[a.alertLevel]??3; bv=rank[b.alertLevel]??3; break; }
+      default: av=a.sequenceOrder||0; bv=b.sequenceOrder||0;
     }
+    if (av<bv) return -1*dir;
+    if (av>bv) return 1*dir;
+    return 0;
+  });
+
+  const sortArrow = (col) => sortCol === col ? (schTblSort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+  const th = (col, label, style='') => `<th style="cursor:pointer;user-select:none;${style}" onclick="schSetSort('${col}')">${label}${sortArrow(col)}</th>`;
+
+  // Group when sorted by sequence, otherwise flat
+  let html = '';
+  const groupByPhase = sortCol === 'sequence';
+
+  if (groupByPhase) {
+    const phaseMap = groupTasksByPhase(sortedTasks);
+    for (const [phaseName, phaseTasks] of phaseMap) {
+      if (phaseTasks.length === 0) continue;
+      const pi = PHASE_ORDER.indexOf(phaseName);
+      const isCollapsed = schCollapsed[pi];
+      const done = phaseTasks.filter(t => t.status === 'complete').length;
+      html += `<tr><td colspan="11" style="padding:0">
+        <div class="gantt-phase-hd" onclick="schTogglePhase(${pi})" id="sch-tbl-phase-${pi}">
+          <svg viewBox="0 0 10 10" style="width:10px;height:10px;transition:transform .15s;${isCollapsed?'transform:rotate(-90deg)':''}"><path d="M3 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          ${phaseName} <span class="gantt-phase-count">${done}/${phaseTasks.length}</span>
+        </div>
+      </td></tr>`;
+      if (!isCollapsed) {
+        phaseTasks.forEach(t => html += renderTableRow(t, projectId, statusOpts));
+      }
+    }
+  } else {
+    sortedTasks.forEach(t => html += renderTableRow(t, projectId, statusOpts));
   }
 
   return `<div class="card" style="overflow-x:auto;margin-bottom:1rem">
     <table class="sch-table">
       <thead><tr>
         <th style="width:30px"><input type="checkbox" class="sch-chk" onchange="this.checked?schSelectAll():schSelectNone()"></th>
-        <th>Task</th><th>Status</th><th>Start</th><th>Finish</th><th>Dur</th><th>Contractor</th><th>WS</th><th>Alert</th><th style="text-align:right">Float</th>
+        ${th('name','Task')}
+        ${th('phase','Phase')}
+        ${th('status','Status')}
+        ${th('start','Start')}
+        ${th('finish','Finish')}
+        ${th('duration','Dur')}
+        ${th('contractor','Contractor')}
+        ${th('workstream','WS')}
+        ${th('alert','Alert','text-align:center')}
+        ${th('float','Float','text-align:right')}
       </tr></thead>
       <tbody>${html}</tbody>
     </table>
   </div>`;
+}
+
+function renderTableRow(t, projectId, statusOpts) {
+  const id = t.id;
+  const name = t.taskName || t.task_name;
+  const status = t.status || 'not_started';
+  const start = t.plannedStart || t.planned_start;
+  const finish = t.plannedFinish || t.planned_finish;
+  const contractor = t.assignedContractor || t.assigned_contractor || '';
+  const alert = t.alertLevel || t.alert_level || 'none';
+  const crit = t.isCritical;
+  const fl = t.float;
+  const checked = schBulkSelected.has(id);
+  const ws = t.workstream || 'both';
+  const wsTag = `<span class="tag ${ws==='interior'?'ok':ws==='exterior'?'neutral':'dark'}" style="font-size:8px">${ws.charAt(0).toUpperCase()+ws.slice(1)}</span>`;
+  const subName = t.subcontractorId && subsCache ? (subsCache.find(s=>s.id===t.subcontractorId)||{}).name||'—' : contractor || '—';
+  const dur = t.durationDays || t.duration_days || 1;
+  return `<tr>
+    <td style="width:30px;text-align:center"><input type="checkbox" class="sch-chk" ${checked?'checked':''} onchange="schToggleBulk('${id}')"></td>
+    <td class="sch-tbl-name" title="${name}" onclick="toggleTaskEdit('${id}','${projectId}')" style="cursor:pointer">${name}</td>
+    <td style="font-size:10px;color:var(--charcoal-4)">${t.phase||'—'}</td>
+    <td><select class="sch-tbl-status" onchange="schQuickStatus('${projectId}','${id}',this.value)">${statusOpts(status)}</select></td>
+    <td class="sch-tbl-date">${schFmtDate(start)}</td>
+    <td class="sch-tbl-date">${schFmtDate(finish)}</td>
+    <td style="font-size:11px;text-align:center">${dur}d</td>
+    <td style="font-size:11px;color:var(--charcoal-3)">${subName}</td>
+    <td>${wsTag}</td>
+    <td style="text-align:center">${alert==='red'?'<span class="tag danger" style="font-size:8px">RED</span>':alert==='yellow'?'<span class="tag warn" style="font-size:8px">YLW</span>':crit?'<span class="tag dark" style="font-size:8px">CRIT</span>':''}</td>
+    <td style="font-size:10px;color:var(--charcoal-4);text-align:right">${fl!=null?fl+'d':''}</td>
+  </tr>
+  <tr id="sch-edit-${id}" style="display:none"><td colspan="11" style="padding:0"></td></tr>`;
 }
 
 let schEditOpen = null;
@@ -3098,6 +3212,134 @@ function renderGanttRow(task, tlStart, tlWidth) {
   <div id="sch-edit-${id}" style="display:none"></div>`;
 }
 
+// ══════════════════════════════════════════════════════
+//  CHARTS VIEW — visual dashboards
+// ══════════════════════════════════════════════════════
+function renderScheduleCharts(tasks, cache) {
+  if (!tasks || tasks.length === 0) return `<div class="card"><div style="padding:2rem;text-align:center;color:var(--charcoal-4)">No tasks to chart</div></div>`;
+
+  // Phase completion bars
+  const phaseStats = {};
+  PHASE_ORDER.forEach(p => phaseStats[p] = { total:0, complete:0, inProg:0, days:0 });
+  tasks.forEach(t => {
+    const p = t.phase || 'Other';
+    if (!phaseStats[p]) phaseStats[p] = { total:0, complete:0, inProg:0, days:0 };
+    phaseStats[p].total++;
+    phaseStats[p].days += (t.durationDays || 0);
+    if (t.status === 'complete') phaseStats[p].complete++;
+    if (t.status === 'in_progress') phaseStats[p].inProg++;
+  });
+
+  const phaseBars = Object.entries(phaseStats).filter(([,s])=>s.total>0).map(([name, s]) => {
+    const pct = s.total ? Math.round(s.complete/s.total*100) : 0;
+    const inProgPct = s.total ? Math.round(s.inProg/s.total*100) : 0;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
+        <span style="font-weight:600;color:var(--charcoal)">${name}</span>
+        <span style="color:var(--charcoal-4)">${s.complete}/${s.total} · ${s.days}d</span>
+      </div>
+      <div style="height:14px;background:var(--cream-2);border-radius:7px;overflow:hidden;display:flex">
+        <div style="width:${pct}%;background:var(--green);transition:width .3s"></div>
+        <div style="width:${inProgPct}%;background:#4a7fb5;transition:width .3s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Status donut (pseudo via horizontal bar)
+  const statusCounts = {};
+  tasks.forEach(t => { statusCounts[t.status] = (statusCounts[t.status]||0) + 1; });
+  const statusColors = { complete:'var(--green)', in_progress:'#4a7fb5', scheduled:'#6ba3c7', needs_scheduling:'#b0b0b0', waiting_on_client:'#c89200', on_hold:'#8b6bb5', not_ready:'#d4a574', skipped:'#ddd' };
+  const total = tasks.length;
+  const statusSegments = Object.entries(statusCounts).map(([s,c]) => ({
+    status: s, count: c, pct: Math.round(c/total*100), color: statusColors[s]||'#aaa'
+  })).sort((a,b) => b.count - a.count);
+
+  const statusStack = `<div style="display:flex;height:24px;border-radius:4px;overflow:hidden;margin-bottom:10px">
+    ${statusSegments.map(s => `<div style="width:${s.pct}%;background:${s.color};transition:width .3s" title="${STATUS_LABELS[s.status]||s.status}: ${s.count}"></div>`).join('')}
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11px">
+    ${statusSegments.map(s => `<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:${s.color}"></div>${STATUS_LABELS[s.status]||s.status} <strong>${s.count}</strong></div>`).join('')}
+  </div>`;
+
+  // Workstream split
+  const wsCounts = { interior:0, exterior:0, both:0 };
+  const wsDays = { interior:0, exterior:0, both:0 };
+  tasks.forEach(t => {
+    const w = t.workstream || 'both';
+    if (wsCounts[w] !== undefined) { wsCounts[w]++; wsDays[w] += (t.durationDays||0); }
+  });
+  const wsTotal = wsCounts.interior + wsCounts.exterior + wsCounts.both || 1;
+  const wsBars = `<div style="display:flex;gap:12px">
+    ${['interior','exterior','both'].map(w => {
+      const pct = Math.round(wsCounts[w]/wsTotal*100);
+      const color = w==='interior'?'var(--green)':w==='exterior'?'#6ba3c7':'var(--charcoal-3)';
+      return `<div style="flex:1;text-align:center">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--charcoal-4);font-weight:700;margin-bottom:4px">${w}</div>
+        <div style="font-size:24px;font-weight:700;color:${color}">${wsCounts[w]}</div>
+        <div style="font-size:10px;color:var(--charcoal-4)">${pct}% · ${wsDays[w]}d work</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  // Subcontractor workload
+  const subWorkload = {};
+  tasks.forEach(t => {
+    if (t.subcontractorId) {
+      const sub = (subsCache||[]).find(s => s.id === t.subcontractorId);
+      const name = sub ? sub.name : 'Unknown';
+      if (!subWorkload[name]) subWorkload[name] = { count:0, days:0, complete:0 };
+      subWorkload[name].count++;
+      subWorkload[name].days += (t.durationDays || 0);
+      if (t.status === 'complete') subWorkload[name].complete++;
+    }
+  });
+  const subList = Object.entries(subWorkload).sort((a,b) => b[1].days - a[1].days);
+  const maxDays = subList.length ? subList[0][1].days : 1;
+  const subBars = subList.length === 0
+    ? `<div style="font-size:12px;color:var(--charcoal-4);padding:1rem;text-align:center;font-style:italic">No subcontractors assigned yet</div>`
+    : subList.map(([name, s]) => `<div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+          <span style="font-weight:600">${name}</span>
+          <span style="color:var(--charcoal-4)">${s.count} tasks · ${s.days}d${s.complete?` · ${s.complete} done`:''}</span>
+        </div>
+        <div style="height:10px;background:var(--cream-2);border-radius:5px;overflow:hidden">
+          <div style="width:${Math.round(s.days/maxDays*100)}%;height:100%;background:var(--charcoal)"></div>
+        </div>
+      </div>`).join('');
+
+  // Critical path timeline
+  const critical = tasks.filter(t => t.isCritical);
+  const critHTML = critical.length === 0
+    ? `<div style="font-size:12px;color:var(--charcoal-4);font-style:italic">No critical path tasks</div>`
+    : critical.slice(0, 10).map(t => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px">
+        <span style="font-weight:600">${t.taskName}</span>
+        <span style="color:var(--charcoal-4)">${schFmtDate(t.plannedStart)} → ${schFmtDate(t.plannedFinish)}</span>
+      </div>`).join('');
+
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px">
+    <div class="card">
+      <div class="sh"><div class="sh-title">Phase Progress</div><span style="font-size:10px;color:var(--charcoal-4)">${tasks.length} tasks total</span></div>
+      ${phaseBars}
+    </div>
+    <div class="card">
+      <div class="sh"><div class="sh-title">Status Breakdown</div></div>
+      ${statusStack}
+    </div>
+    <div class="card">
+      <div class="sh"><div class="sh-title">Workstream Split</div></div>
+      ${wsBars}
+    </div>
+    <div class="card">
+      <div class="sh"><div class="sh-title">Subcontractor Workload</div><span style="font-size:10px;color:var(--charcoal-4)">${subList.length} active</span></div>
+      ${subBars}
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <div class="sh"><div class="sh-title">Critical Path Tasks</div><span class="tag ${critical.length?'danger':'ok'}" style="font-size:9px">${critical.length} zero-float</span></div>
+      ${critHTML}
+    </div>
+  </div>`;
+}
+
 function renderScheduleView(p) {
   const cache = scheduleCache[p.id];
 
@@ -3169,6 +3411,7 @@ function renderScheduleView(p) {
     <div class="sch-view-toggle">
       <button class="sch-view-btn ${schViewMode==='gantt'?'active':''}" onclick="schSetView('gantt')">Gantt</button>
       <button class="sch-view-btn ${schViewMode==='table'?'active':''}" onclick="schSetView('table')">Table</button>
+      <button class="sch-view-btn ${schViewMode==='charts'?'active':''}" onclick="schSetView('charts')">Charts</button>
     </div>
     ${schViewMode==='gantt' ? `
     <div class="sch-view-toggle" style="margin-left:4px">
@@ -3301,9 +3544,11 @@ function renderScheduleView(p) {
 
   // ── E: Table view ──
   const tableHTML = renderScheduleTable(viewTasks, p.id);
+  // ── F: Charts view ──
+  const chartsHTML = renderScheduleCharts(viewTasks, cache);
 
   // Choose view
-  const mainView = schViewMode === 'table' ? tableHTML : ganttHTML;
+  const mainView = schViewMode === 'table' ? tableHTML : schViewMode === 'charts' ? chartsHTML : ganttHTML;
 
   // Auto-scroll + drag init after render
   if (schViewMode === 'gantt') {

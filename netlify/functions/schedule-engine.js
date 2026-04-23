@@ -504,7 +504,7 @@ async function handleUpdateTask(projectId, body) {
     'status', 'actual_start', 'actual_finish', 'contractor_confirmed', 'duration_days',
     'planned_start', 'subcontractor_id', 'assigned_contractor',
     'client_note', 'internal_note', 'definition_of_done',
-    'task_name', 'phase', 'trade', 'workstream',
+    'task_name', 'phase', 'trade', 'workstream', 'sequence_order',
     'perf_schedule', 'perf_invoice', 'perf_communication', 'perf_scope', 'perf_cleanliness', 'perf_notes',
   ];
   const patch = {};
