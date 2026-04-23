@@ -226,6 +226,10 @@
   <a class="toc-link" href="#selections-export">Exporting Selections</a>
   <a class="toc-link" href="#design-book">Design Book</a>
 
+  <div class="toc-title">Selections Roadmap</div>
+  <a class="toc-link" href="#roadmap-overview">What the Roadmap Is</a>
+  <a class="toc-link" href="#roadmap-vendors">Managing Vendors</a>
+
   <div class="toc-title">Decisions</div>
   <a class="toc-link" href="#decisions">Managing Decisions</a>
 
@@ -683,6 +687,52 @@
 </div>
 
 <!-- ═══════════════════════════════════════════ -->
+<h2 id="roadmap-overview">Selections Roadmap — What It Is</h2>
+
+<p>The Selections Roadmap is a vendor-appointment checklist. Clients see it as a separate tab (<strong>Selections Roadmap</strong>) in their portal sidebar. It walks them through the 13 vendor visits that lock a SAB build — Wave 1 Structure (fireplace, appliances, windows, exterior, roof), Wave 2 The Shell (cabinets, flooring, tile), and Wave 3 The Jewelry (plumbing, lighting, countertops, hardware, paint).</p>
+
+<p>For each stop, the client sees 2–3 recommended vendor options, picks one, logs their appointment date and notes, and checks it off. Wave progress rings and an overall progress bar keep them oriented.</p>
+
+<h3>Roadmap vs. Selections — how they differ</h3>
+<ul>
+  <li><strong>Selections</strong> (Wave Selections app) captures <em>what</em> the client chose — product names, colors, photos, fixtures.</li>
+  <li><strong>Roadmap</strong> captures <em>who</em> they visited and <em>when</em> — the vendor appointments that lead to those selections.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════ -->
+<h2 id="roadmap-vendors">Managing Roadmap Vendors</h2>
+
+<p>Vendor options on the client-facing Roadmap are managed from the admin portal under <strong>Roadmap Vendors</strong> (in the left sidebar, between Selections and Documents).</p>
+
+<h3>Two modes: Global defaults vs. per-client overrides</h3>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Global defaults</span>
+  <div class="step-body">The base list of vendors every client sees by default. Edit under the <strong>Global defaults</strong> tab at the top of the Roadmap Vendors view. Every admin can see and edit these — any change affects every client who does not have an override for that stop. Add, rename, tag (Recommended / Premium / Value), reorder with the sort-order field, or remove vendors. Click <strong>Save changes to defaults</strong> when done.</div>
+</div>
+
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Per-client overrides</span>
+  <div class="step-body">On the <strong>This client</strong> tab, each stop shows whether it's using Global defaults or a custom vendor list for the selected client. Click <strong>Customize for this client</strong> on any stop to seed an override with the current defaults, then edit/add/remove vendors just for that project. Click <strong>Save for [Client]</strong> when done. To wipe a single stop back to defaults, click <strong>Reset to global</strong>. To wipe all overrides for a client at once, use <strong>Clear all overrides</strong>.</div>
+</div>
+
+<h3>Vendor tags</h3>
+<ul>
+  <li><span style="background:#e8f5e9;color:#2e7d32;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700">Recommended</span> — your default recommendation, usually the first option.</li>
+  <li><span style="background:#fff8e1;color:#f57f17;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700">Premium</span> — upmarket / luxury option.</li>
+  <li><span style="background:#e3f2fd;color:#1565c0;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700">Value</span> — budget-conscious option.</li>
+  <li>No tag — just another option, no editorial label.</li>
+</ul>
+
+<div class="callout callout-tip">
+  <strong>Tip:</strong> Use overrides sparingly. If a vendor is consistently better, update the <em>global defaults</em> so every future client benefits. Overrides are best for one-off situations — e.g. a client wants a specific out-of-area showroom, or a vendor has a relationship with that family.
+</div>
+
+<div class="callout callout-warn">
+  <strong>Heads up:</strong> Changes to global defaults apply immediately to every client without an override for that stop — including clients who haven't opened the Roadmap yet. There's no "draft" mode, so double-check before saving.
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
 <h2 id="decisions">Managing Decisions</h2>
 
 <p>Decisions are action items that require client input. They appear prominently on the client's command center with an alert badge.</p>
@@ -860,6 +910,9 @@
     <a class="toc-link mob-toc-link" href="#selections-overview">Viewing Progress</a>
     <a class="toc-link mob-toc-link" href="#selections-export">Exporting Selections</a>
     <a class="toc-link mob-toc-link" href="#design-book">Design Book</a>
+    <div class="toc-title">Selections Roadmap</div>
+    <a class="toc-link mob-toc-link" href="#roadmap-overview">What the Roadmap Is</a>
+    <a class="toc-link mob-toc-link" href="#roadmap-vendors">Managing Vendors</a>
     <div class="toc-title">Decisions</div>
     <a class="toc-link mob-toc-link" href="#decisions">Managing Decisions</a>
     <div class="toc-title">Documents &amp; Photos</div>

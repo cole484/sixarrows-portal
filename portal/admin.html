@@ -356,6 +356,7 @@ function renderAdmin() {
     { key:'budget',    icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x=".5" y="1.5" width="13" height="11" rx="1"/><line x1=".5" y1="5" x2="13.5" y2="5"/><line x1="4.5" y1="5" x2="4.5" y2="12.5"/></svg>`, label:'Budget & Change Orders' },
     { key:'project',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="4" r="2.5"/><path d="M1 12c0-3 2.7-5 6-5s6 2 6 5"/></svg>`, label:'Project Info'    },
     { key:'selections',icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3.5l2 2 2.5-2.5"/><line x1="7" y1="4.5" x2="13" y2="4.5"/><path d="M1 9l2 2 2.5-2.5"/><line x1="7" y1="10" x2="13" y2="10"/></svg>`, label:'Selections'       },
+    { key:'roadmap',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4l4-1.5 4 1.5 2-1v8l-2 1-4-1.5-4 1.5z"/><line x1="7" y1="2.5" x2="7" y2="12.5"/></svg>`, label:'Roadmap Vendors'  },
     { key:'documents', icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1h5.5L11 3.5V13H3V1z"/><polyline points="8.5,1 8.5,4 11,4"/></svg>`, label:'Documents'       },
     { key:'photos',    icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="1"/><circle cx="5" cy="6" r="1.5"/><path d="M1 11l3-3 2.5 2.5L10 7l3 4"/></svg>`, label:'Build Photos'    },
   ].map(n => `<div class="admin-nav-link ${activeView===n.key?'active':''}" onclick="activeView='${n.key}';sessionStorage.setItem('sa_admin_view','${n.key}');renderAdmin()">${n.icon}${n.label}</div>`).join('');
@@ -409,6 +410,11 @@ function renderAdmin() {
   // ── SELECTIONS VIEW ───────────────────────────────────
   else if (activeView === 'selections') {
     mainContent = renderSelectionsView(p);
+  }
+
+  // ── ROADMAP VENDORS VIEW ──────────────────────────────
+  else if (activeView === 'roadmap') {
+    mainContent = renderRoadmapView(p);
   }
 
   // ── DOCUMENTS VIEW ────────────────────────────────────
@@ -1858,6 +1864,349 @@ async function reopenSelQuestion(ck, catId){
         .then(sj => el.innerHTML = buildSelectionsContent(ck, p, (sj?.data)||{}, answers));
     }
   } catch(e) { console.error('reopen failed:', e); }
+}
+
+// ════════════════════════════════════════════════════════
+//  SELECTIONS ROADMAP — vendor management
+// ════════════════════════════════════════════════════════
+
+// Stop metadata mirrors portal/roadmap.html so admin can reason about stops.
+const ROADMAP_STOPS = [
+  { wave:0, id:'fireplace',   name:'Fireplace & Hearth'        },
+  { wave:0, id:'appliances',  name:'Appliances'                },
+  { wave:0, id:'windows',     name:'Windows & Exterior Doors'  },
+  { wave:0, id:'exterior',    name:'Exterior Finishes'         },
+  { wave:0, id:'roof',        name:'Roofing Material'          },
+  { wave:1, id:'cabinets',    name:'Cabinet Design Studio'     },
+  { wave:1, id:'flooring',    name:'Flooring'                  },
+  { wave:1, id:'tile',        name:'Tile Selections'           },
+  { wave:2, id:'plumbing',    name:'Plumbing Fixtures'         },
+  { wave:2, id:'lighting',    name:'Lighting Fixtures'         },
+  { wave:2, id:'countertops', name:'Countertop Slab Selection' },
+  { wave:2, id:'hardware',    name:'Hardware'                  },
+  { wave:2, id:'paint',       name:'Paint & Stain Colors'      },
+];
+const ROADMAP_WAVE_LABELS = ['Wave 1 — Structure', 'Wave 2 — The Shell', 'Wave 3 — The Jewelry'];
+const ROADMAP_TAG_OPTS    = ['', 'recommended', 'premium', 'budget'];
+
+// In-memory state for the admin view (reloaded on every view mount)
+let ROADMAP_ADMIN = {
+  defaults:   [],   // raw rows from roadmap_vendor_defaults
+  overrides:  {},   // stop_id → [ {name, detail, tag, sort_order} ]
+  mode:       'client', // 'client' | 'defaults'
+};
+
+function renderRoadmapView(p) {
+  const ck = p.selectionsClientKey || p.id;
+
+  // Lazy-load data on mount
+  setTimeout(async () => {
+    try {
+      const [defRes, ovRes] = await Promise.all([
+        fetch(`/.netlify/functions/roadmap-vendors?defaults=1`),
+        fetch(`/.netlify/functions/selections-storage?clientKey=${ck}&suffix=rdm_vendors`),
+      ]);
+      ROADMAP_ADMIN.defaults  = defRes.ok ? (await defRes.json()).rows || [] : [];
+      const ovJson = ovRes.ok ? await ovRes.json() : null;
+      ROADMAP_ADMIN.overrides = (ovJson && ovJson.data && typeof ovJson.data === 'object') ? ovJson.data : {};
+      const wrap = document.getElementById('rmadm-content');
+      if (wrap) wrap.innerHTML = buildRoadmapAdminContent(ck, p);
+    } catch (e) {
+      console.error('roadmap admin load failed:', e);
+      const wrap = document.getElementById('rmadm-content');
+      if (wrap) wrap.innerHTML = `<div class="card"><p style="font-size:12px;color:var(--charcoal-3)">Could not load roadmap vendors. Check your connection.</p></div>`;
+    }
+  }, 0);
+
+  return `
+    <div class="card dark" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--green);margin-bottom:3px">Selections Roadmap</div>
+          <div style="font-size:15px;font-weight:700;color:var(--cream)">Vendor options for ${p.clientName}</div>
+          <div style="font-size:12px;color:rgba(235,233,222,.55);margin-top:3px">Client sees global defaults by default. Override any stop to give this client a tailored vendor list.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="adm-btn ${ROADMAP_ADMIN.mode==='client'?'adm-btn-green':''}" onclick="switchRoadmapMode('client')">This client</button>
+          <button class="adm-btn ${ROADMAP_ADMIN.mode==='defaults'?'adm-btn-green':''}" onclick="switchRoadmapMode('defaults')">Global defaults</button>
+        </div>
+      </div>
+    </div>
+    <div id="rmadm-content">
+      <div class="card" style="text-align:center;padding:2rem">
+        <div style="font-size:12px;color:var(--charcoal-4)">Loading roadmap vendors…</div>
+      </div>
+    </div>`;
+}
+
+function switchRoadmapMode(mode) {
+  ROADMAP_ADMIN.mode = mode;
+  const p  = PROJECTS[activeProject];
+  const ck = p.selectionsClientKey || p.id;
+  const wrap = document.getElementById('rmadm-content');
+  if (wrap) wrap.innerHTML = buildRoadmapAdminContent(ck, p);
+  // Refresh top mode toggle styling
+  document.querySelectorAll('.card.dark button').forEach(b => {
+    if (b.textContent.trim() === 'This client' || b.textContent.trim() === 'Global defaults') {
+      const active = (b.textContent.trim() === 'This client' && mode === 'client')
+                  || (b.textContent.trim() === 'Global defaults' && mode === 'defaults');
+      b.classList.toggle('adm-btn-green', active);
+    }
+  });
+}
+
+function defaultsForStop(stopId) {
+  return (ROADMAP_ADMIN.defaults || [])
+    .filter(r => r.stop_id === stopId)
+    .sort((a,b) => (a.sort_order||0) - (b.sort_order||0));
+}
+
+function buildRoadmapAdminContent(ck, p) {
+  if (ROADMAP_ADMIN.mode === 'defaults') return buildRoadmapDefaultsEditor();
+  return buildRoadmapClientEditor(ck, p);
+}
+
+// ── Per-client override editor ──────────────────────────
+function buildRoadmapClientEditor(ck, p) {
+  const waves = [0,1,2].map(wi => {
+    const stops = ROADMAP_STOPS.filter(s => s.wave === wi);
+    const rows = stops.map(stop => {
+      const override = ROADMAP_ADMIN.overrides[stop.id];
+      const hasOverride = Array.isArray(override) && override.length >= 0 && ROADMAP_ADMIN.overrides.hasOwnProperty(stop.id);
+      const list = hasOverride ? override : defaultsForStop(stop.id);
+      const sourceBadge = hasOverride
+        ? `<span class="tag" style="font-size:9px;background:#fff3e0;color:#b06000">Custom for ${p.clientName}</span>`
+        : `<span class="tag ok" style="font-size:9px">Global defaults</span>`;
+
+      const vendorRows = list.map((v, idx) => `
+        <div class="rmadm-row">
+          <input class="adm-inp" placeholder="Vendor name" value="${(v.name||'').replace(/"/g,'&quot;')}"
+            oninput="rmadmEditOverride('${stop.id}',${idx},'name',this.value)">
+          <input class="adm-inp" placeholder="Short detail / description" value="${(v.detail||'').replace(/"/g,'&quot;')}"
+            oninput="rmadmEditOverride('${stop.id}',${idx},'detail',this.value)">
+          <select class="adm-inp adm-sel" onchange="rmadmEditOverride('${stop.id}',${idx},'tag',this.value)">
+            ${ROADMAP_TAG_OPTS.map(t => `<option value="${t}" ${((v.tag||'')===t)?'selected':''}>${t?t[0].toUpperCase()+t.slice(1):'— no tag —'}</option>`).join('')}
+          </select>
+          <input class="adm-inp" type="number" min="0" step="1" style="width:60px" value="${v.sort_order??idx+1}"
+            oninput="rmadmEditOverride('${stop.id}',${idx},'sort_order',parseInt(this.value)||0)">
+          <button class="adm-btn adm-btn-danger" style="padding:4px 10px;font-size:11px" onclick="rmadmRemoveOverride('${stop.id}',${idx})">×</button>
+        </div>`).join('');
+
+      return `
+        <div style="padding:14px 0;border-bottom:0.5px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--charcoal)">${stop.name}</div>
+              <div style="font-size:11px;color:var(--charcoal-4)">${list.length} vendor${list.length===1?'':'s'} shown · ${sourceBadge.replace(/<[^>]+>/g,'')}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${hasOverride
+                ? `<button class="adm-btn" style="font-size:11px;padding:5px 10px" onclick="rmadmResetStop('${stop.id}')">Reset to global</button>`
+                : `<button class="adm-btn" style="font-size:11px;padding:5px 10px" onclick="rmadmStartOverride('${stop.id}')">Customize for this client</button>`
+              }
+              ${hasOverride ? `<button class="adm-btn adm-btn-green" style="font-size:11px;padding:5px 10px" onclick="rmadmAddOverrideRow('${stop.id}')">+ Add vendor</button>` : ''}
+            </div>
+          </div>
+          ${hasOverride
+            ? (vendorRows || '<div style="font-size:12px;color:var(--charcoal-4);padding:8px 0">No vendors. Client will see a "no vendors configured" placeholder for this stop. Add one above.</div>')
+            : `<div style="font-size:12px;color:var(--charcoal-3);line-height:1.5">${list.length ? list.map(v => `<strong>${v.name}</strong>${v.detail?` — ${v.detail}`:''}${v.tag?` <span style="color:var(--charcoal-4)">(${v.tag})</span>`:''}`).join(' · ') : '<em style="color:var(--charcoal-4)">No global defaults configured for this stop.</em>'}</div>`
+          }
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="card" style="margin-bottom:1rem">
+        <div class="sh"><div class="sh-title">${ROADMAP_WAVE_LABELS[wi]}</div></div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  const anyOverrides = Object.keys(ROADMAP_ADMIN.overrides || {}).length > 0;
+  const saveBar = `
+    <div class="card" style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--charcoal)">${anyOverrides ? 'Unsaved customizations' : 'No customizations yet for this client'}</div>
+        <div style="font-size:11px;color:var(--charcoal-4);margin-top:2px">Changes here do not affect other clients or the global defaults.</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="adm-btn adm-btn-green" onclick="rmadmSaveOverrides('${ck}')">Save for ${(p.clientName||'').split(' ')[0]||'client'}</button>
+        ${anyOverrides ? `<button class="adm-btn adm-btn-danger" onclick="rmadmClearAllOverrides('${ck}')">Clear all overrides</button>` : ''}
+      </div>
+    </div>`;
+
+  return saveBar + waves + `
+    <style>
+      .rmadm-row { display:grid; grid-template-columns: 1.4fr 1.6fr 130px 70px 40px; gap:6px; margin-bottom:6px; align-items:center; }
+      @media (max-width:720px) { .rmadm-row { grid-template-columns: 1fr; } }
+    </style>`;
+}
+
+// ── Global defaults editor ──────────────────────────────
+function buildRoadmapDefaultsEditor() {
+  const waves = [0,1,2].map(wi => {
+    const stops = ROADMAP_STOPS.filter(s => s.wave === wi);
+    const rows = stops.map(stop => {
+      const vendors = defaultsForStop(stop.id);
+      const vendorRows = vendors.map(v => `
+        <div class="rmadm-row">
+          <input class="adm-inp" value="${(v.name||'').replace(/"/g,'&quot;')}" data-id="${v.id}" data-field="name"
+            oninput="rmadmEditDefault(${v.id},'name',this.value)">
+          <input class="adm-inp" value="${(v.detail||'').replace(/"/g,'&quot;')}" data-id="${v.id}" data-field="detail"
+            oninput="rmadmEditDefault(${v.id},'detail',this.value)">
+          <select class="adm-inp adm-sel" onchange="rmadmEditDefault(${v.id},'tag',this.value||null)">
+            ${ROADMAP_TAG_OPTS.map(t => `<option value="${t}" ${((v.tag||'')===t)?'selected':''}>${t?t[0].toUpperCase()+t.slice(1):'— no tag —'}</option>`).join('')}
+          </select>
+          <input class="adm-inp" type="number" min="0" step="1" style="width:60px" value="${v.sort_order??0}"
+            oninput="rmadmEditDefault(${v.id},'sort_order',parseInt(this.value)||0)">
+          <button class="adm-btn adm-btn-danger" style="padding:4px 10px;font-size:11px" onclick="rmadmDeleteDefault(${v.id})">×</button>
+        </div>`).join('');
+      return `
+        <div style="padding:14px 0;border-bottom:0.5px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:700;color:var(--charcoal)">${stop.name}</div>
+            <button class="adm-btn adm-btn-green" style="font-size:11px;padding:5px 10px" onclick="rmadmAddDefault('${stop.id}')">+ Add vendor</button>
+          </div>
+          ${vendorRows || '<div style="font-size:12px;color:var(--charcoal-4);padding:8px 0">No default vendors yet. Add one above.</div>'}
+        </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:1rem"><div class="sh"><div class="sh-title">${ROADMAP_WAVE_LABELS[wi]}</div></div>${rows}</div>`;
+  }).join('');
+
+  return `
+    <div class="card" style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--charcoal)">Global defaults affect every client</div>
+        <div style="font-size:11px;color:var(--charcoal-4);margin-top:2px">These are what every client sees unless a per-client override has been set.</div>
+      </div>
+      <button class="adm-btn adm-btn-green" onclick="rmadmSaveDefaults()">Save changes to defaults</button>
+    </div>
+    ${waves}
+    <style>
+      .rmadm-row { display:grid; grid-template-columns: 1.4fr 1.6fr 130px 70px 40px; gap:6px; margin-bottom:6px; align-items:center; }
+      @media (max-width:720px) { .rmadm-row { grid-template-columns: 1fr; } }
+    </style>`;
+}
+
+// ── Per-client override mutations (buffered in memory, saved on click) ────
+function rmadmStartOverride(stopId) {
+  // Seed override with a deep copy of current defaults
+  const seed = defaultsForStop(stopId).map((v,i) => ({
+    name: v.name, detail: v.detail||'', tag: v.tag||null, sort_order: v.sort_order ?? (i+1),
+  }));
+  ROADMAP_ADMIN.overrides[stopId] = seed;
+  rerenderRoadmapClientEditor();
+}
+function rmadmAddOverrideRow(stopId) {
+  if (!Array.isArray(ROADMAP_ADMIN.overrides[stopId])) ROADMAP_ADMIN.overrides[stopId] = [];
+  ROADMAP_ADMIN.overrides[stopId].push({ name:'', detail:'', tag:null, sort_order: (ROADMAP_ADMIN.overrides[stopId].length+1) });
+  rerenderRoadmapClientEditor();
+}
+function rmadmEditOverride(stopId, idx, field, val) {
+  if (!Array.isArray(ROADMAP_ADMIN.overrides[stopId])) return;
+  ROADMAP_ADMIN.overrides[stopId][idx][field] = (field === 'tag' && !val) ? null : val;
+}
+function rmadmRemoveOverride(stopId, idx) {
+  if (!Array.isArray(ROADMAP_ADMIN.overrides[stopId])) return;
+  ROADMAP_ADMIN.overrides[stopId].splice(idx, 1);
+  rerenderRoadmapClientEditor();
+}
+function rmadmResetStop(stopId) {
+  if (!confirm('Reset this stop to global defaults? The client will lose any custom vendors set here.')) return;
+  delete ROADMAP_ADMIN.overrides[stopId];
+  rerenderRoadmapClientEditor();
+  // Persist immediately so the "reset" actually takes effect
+  const p = PROJECTS[activeProject]; const ck = p.selectionsClientKey || p.id;
+  rmadmSaveOverrides(ck, /*silent*/ true);
+}
+async function rmadmSaveOverrides(ck, silent) {
+  try {
+    const res = await fetch(`/.netlify/functions/roadmap-vendors?clientKey=${ck}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ overrides: ROADMAP_ADMIN.overrides }),
+    });
+    if (!res.ok) throw new Error('save failed '+res.status);
+    if (!silent) alert('Saved. The client will see these vendors the next time they open the Roadmap.');
+  } catch(e) { console.error(e); if (!silent) alert('Save failed. Check your connection and try again.'); }
+}
+async function rmadmClearAllOverrides(ck) {
+  if (!confirm('Remove ALL vendor overrides for this client? Every stop will revert to global defaults.')) return;
+  try {
+    const res = await fetch(`/.netlify/functions/roadmap-vendors?clientKey=${ck}`, { method:'DELETE' });
+    if (!res.ok) throw new Error('delete failed '+res.status);
+    ROADMAP_ADMIN.overrides = {};
+    rerenderRoadmapClientEditor();
+  } catch(e) { console.error(e); alert('Clear failed.'); }
+}
+function rerenderRoadmapClientEditor() {
+  const p = PROJECTS[activeProject]; const ck = p.selectionsClientKey || p.id;
+  const wrap = document.getElementById('rmadm-content');
+  if (wrap) wrap.innerHTML = buildRoadmapAdminContent(ck, p);
+}
+
+// ── Global defaults mutations ───────────────────────────
+// Buffered edits are applied to ROADMAP_ADMIN.defaults, then saved in one POST.
+let _rmadmDirtyIds = new Set();
+let _rmadmNewRows  = [];  // { stop_id, name, detail, tag, sort_order }
+let _rmadmDeletes  = [];
+
+function rmadmEditDefault(id, field, val) {
+  const row = ROADMAP_ADMIN.defaults.find(r => r.id === id);
+  if (!row) return;
+  row[field] = (field === 'tag' && !val) ? null : val;
+  _rmadmDirtyIds.add(id);
+}
+function rmadmAddDefault(stopId) {
+  const newRow = { stop_id: stopId, name:'New vendor', detail:'', tag:null, sort_order: defaultsForStop(stopId).length + 1, is_active:true };
+  // Temporary UI-only id
+  const tmpId = -1 * (Date.now() + Math.floor(Math.random()*999));
+  ROADMAP_ADMIN.defaults.push({ ...newRow, id: tmpId, _new: true });
+  _rmadmNewRows.push({ tmpId, ...newRow });
+  const wrap = document.getElementById('rmadm-content');
+  if (wrap) wrap.innerHTML = buildRoadmapDefaultsEditor();
+}
+async function rmadmDeleteDefault(id) {
+  if (!confirm('Delete this default vendor? Clients currently using it will fall back to whatever defaults remain for that stop.')) return;
+  if (id < 0) {
+    // Unsaved new row — just drop it locally
+    ROADMAP_ADMIN.defaults = ROADMAP_ADMIN.defaults.filter(r => r.id !== id);
+    _rmadmNewRows = _rmadmNewRows.filter(r => r.tmpId !== id);
+  } else {
+    try {
+      const res = await fetch(`/.netlify/functions/roadmap-vendors?defaults=1&delete=${id}`, { method:'POST' });
+      if (!res.ok) throw new Error('delete failed');
+      ROADMAP_ADMIN.defaults = ROADMAP_ADMIN.defaults.filter(r => r.id !== id);
+      _rmadmDirtyIds.delete(id);
+    } catch(e) { alert('Delete failed.'); return; }
+  }
+  const wrap = document.getElementById('rmadm-content');
+  if (wrap) wrap.innerHTML = buildRoadmapDefaultsEditor();
+}
+async function rmadmSaveDefaults() {
+  // Build rows array: updates (with id) + inserts (no id)
+  const updates = ROADMAP_ADMIN.defaults
+    .filter(r => !r._new && _rmadmDirtyIds.has(r.id))
+    .map(r => ({ id:r.id, stop_id:r.stop_id, name:r.name, detail:r.detail||'', tag:r.tag||null, sort_order:r.sort_order||0, is_active:r.is_active!==false }));
+  const inserts = _rmadmNewRows.map(r => ({ stop_id:r.stop_id, name:r.name, detail:r.detail||'', tag:r.tag||null, sort_order:r.sort_order||0, is_active:true }));
+  // Pull fresh values from current state for inserts (since the user may have edited them)
+  const newIdsFromState = ROADMAP_ADMIN.defaults.filter(r => r._new);
+  const finalInserts = newIdsFromState.map(r => ({ stop_id:r.stop_id, name:r.name, detail:r.detail||'', tag:r.tag||null, sort_order:r.sort_order||0, is_active:true }));
+  const rows = [...updates, ...finalInserts];
+  if (!rows.length) { alert('No changes to save.'); return; }
+  try {
+    const res = await fetch(`/.netlify/functions/roadmap-vendors?defaults=1`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ rows }),
+    });
+    if (!res.ok) throw new Error('save failed '+res.status);
+    alert('Saved. Reloading defaults…');
+    _rmadmDirtyIds.clear();
+    _rmadmNewRows = [];
+    // Reload fresh from the server
+    const defRes = await fetch(`/.netlify/functions/roadmap-vendors?defaults=1`);
+    ROADMAP_ADMIN.defaults = defRes.ok ? (await defRes.json()).rows || [] : [];
+    const wrap = document.getElementById('rmadm-content');
+    if (wrap) wrap.innerHTML = buildRoadmapDefaultsEditor();
+  } catch(e) { console.error(e); alert('Save failed. Check your connection and try again.'); }
 }
 
 // ════════════════════════════════════════════════════════

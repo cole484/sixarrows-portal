@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Selections Roadmap — Six Arrows</title>
+<link rel="stylesheet" href="style.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
+<script src="data.js"></script>
+<script src="app.js"></script>
+<style>
+/* ─── Roadmap page (scoped to .rm-root) ──────────────────────── */
+.rm-root {
+  --w1: #4a5e45;
+  --w2: #5a6e7a;
+  --w3: #7a5a4a;
+  --sage:    #4a5e45;
+  --sage-lt: #7a9474;
+  --sage-xs: #edf1ec;
+  --ink:     #1c1c1a;
+  --ink-50:  #8a8a84;
+  --ink-20:  #d4d4ce;
+  --warm:    #fdfcfa;
+  --cream:   #f8f5f0;
+  --border:  #e6e2db;
+  --gold:    #b8973e;
+}
+
+.rm-root h1,
+.rm-root .rm-serif { font-family:'Playfair Display', serif; }
+
+/* Overall progress strip */
+.rm-overall { margin-bottom:22px; }
+.rm-op-track { height:4px; background:var(--ink-20); border-radius:2px; overflow:hidden; margin-bottom:7px; }
+.rm-op-fill  { height:100%; background:linear-gradient(90deg,var(--sage),var(--sage-lt));
+               border-radius:2px; width:0%; transition:width .5s cubic-bezier(.4,0,.2,1); }
+.rm-op-label { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-50); }
+.rm-op-label strong { color:var(--sage); }
+
+/* Print / action bar */
+.rm-bar { display:flex; gap:10px; margin-bottom:24px; flex-wrap:wrap; }
+.rm-btn {
+  padding:8px 18px; border-radius:8px; border:1px solid var(--border);
+  background:var(--warm); font-size:13px; font-weight:500; cursor:pointer; color:var(--ink);
+  transition:all .15s;
+}
+.rm-btn:hover { border-color:var(--sage-lt); background:var(--sage-xs); color:var(--sage); }
+.rm-btn.primary { background:var(--sage); color:#fff; border-color:var(--sage); }
+.rm-btn.primary:hover { background:var(--sage-lt); }
+.rm-save-status { font-size:11px; color:var(--ink-50); align-self:center; }
+
+/* Waves */
+.rm-waves { display:flex; flex-direction:column; gap:24px; }
+.rm-wave {
+  border-radius:14px; overflow:hidden; background:var(--warm);
+  border:1px solid var(--border); box-shadow:0 2px 12px rgba(0,0,0,.05);
+  animation: rmSlideUp .35s ease both;
+}
+@keyframes rmSlideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+.rm-wave:nth-child(1) { animation-delay:.04s; }
+.rm-wave:nth-child(2) { animation-delay:.10s; }
+.rm-wave:nth-child(3) { animation-delay:.16s; }
+
+.rm-wave-hd {
+  padding:20px 24px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+}
+.rm-wave.w1 .rm-wave-hd { background:linear-gradient(135deg,#f0f3ef,var(--warm)); }
+.rm-wave.w2 .rm-wave-hd { background:linear-gradient(135deg,#eef1f3,var(--warm)); }
+.rm-wave.w3 .rm-wave-hd { background:linear-gradient(135deg,#f3f0ee,var(--warm)); }
+
+.rm-wave-num { font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; margin-bottom:3px; }
+.rm-wave.w1 .rm-wave-num { color:var(--w1); }
+.rm-wave.w2 .rm-wave-num { color:var(--w2); }
+.rm-wave.w3 .rm-wave-num { color:var(--w3); }
+.rm-wave-title { font-family:'Playfair Display', serif; font-size:21px; font-weight:500; color:var(--ink); margin-bottom:4px; }
+.rm-wave-desc  { font-size:12px; color:var(--ink-50); font-weight:400; line-height:1.6; max-width:420px; }
+
+.rm-wave-ring svg { transform:rotate(-90deg); }
+.rm-ring-track { fill:none; stroke:var(--ink-20); stroke-width:3; }
+.rm-ring-fill  { fill:none; stroke-width:3; stroke-linecap:round; transition:stroke-dashoffset .5s ease; }
+.rm-wave.w1 .rm-ring-fill { stroke:var(--w1); }
+.rm-wave.w2 .rm-ring-fill { stroke:var(--w2); }
+.rm-wave.w3 .rm-ring-fill { stroke:var(--w3); }
+.rm-ring-count { font-size:11px; font-weight:700; fill:var(--ink); dominant-baseline:central; text-anchor:middle; }
+
+/* Stops */
+.rm-stops { padding:4px 0; }
+.rm-stop  { border-bottom:1px solid var(--border); transition:background .15s; }
+.rm-stop:last-child { border-bottom:none; }
+.rm-stop.done { background:var(--sage-xs); }
+
+.rm-stop-row {
+  display:grid; grid-template-columns:56px 1fr auto;
+  align-items:center; padding:14px 24px 14px 0; cursor:pointer; gap:10px;
+}
+.rm-stop-row:hover { background:rgba(0,0,0,.018); }
+.rm-stop.done .rm-stop-row:hover { background:rgba(74,94,69,.06); }
+
+.rm-check-col { display:flex; justify-content:center; }
+.rm-check {
+  width:26px; height:26px; border-radius:50%;
+  border:2px solid var(--ink-20); background:var(--warm);
+  display:flex; align-items:center; justify-content:center;
+  transition:all .2s; cursor:pointer; flex-shrink:0;
+}
+.rm-stop.done .rm-check { border-color:var(--sage); background:var(--sage); }
+.rm-check-ico {
+  opacity:0; transform:scale(.5);
+  transition:all .2s cubic-bezier(.34,1.56,.64,1);
+  color:#fff; font-size:13px;
+}
+.rm-stop.done .rm-check-ico { opacity:1; transform:scale(1); }
+
+.rm-stop-body { min-width:0; }
+.rm-stop-name { font-size:14px; font-weight:600; color:var(--ink); margin-bottom:2px; transition:color .15s; }
+.rm-stop.done .rm-stop-name {
+  color:var(--sage); text-decoration:line-through; text-decoration-color:var(--sage-lt);
+}
+.rm-stop-type { font-size:11px; color:var(--ink-50); font-weight:400; }
+
+.rm-stop-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.rm-touch-badge {
+  font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+  padding:3px 8px; border-radius:20px; white-space:nowrap;
+}
+.rm-touch-yes { background:#fff3e0; color:#b06000; }
+.rm-touch-rec { background:#e8f0fe; color:#3050a0; }
+.rm-touch-dig { background:var(--sage-xs); color:var(--sage); }
+
+.rm-expand-arrow { font-size:11px; color:var(--ink-50); transition:transform .2s; line-height:1; }
+.rm-stop.open .rm-expand-arrow { transform:rotate(180deg); }
+
+/* Expanded panel */
+.rm-stop-panel { display:none; padding:0 24px 18px 56px; animation:rmFadeIn .18s ease; }
+@keyframes rmFadeIn { from { opacity:0; } to { opacity:1; } }
+.rm-stop.open .rm-stop-panel { display:block; }
+
+.rm-why {
+  font-size:12px; color:var(--ink-50); line-height:1.7; font-weight:400;
+  padding:10px 12px; background:var(--cream); border-radius:7px;
+  border-left:2px solid var(--ink-20); margin-bottom:16px;
+}
+
+.rm-vendor-lbl {
+  font-size:10px; text-transform:uppercase; letter-spacing:.12em;
+  color:var(--ink-50); font-weight:700; margin-bottom:10px;
+}
+
+.rm-vendor-options { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.rm-vendor-opt {
+  display:flex; align-items:center; gap:12px; padding:10px 14px;
+  border:1px solid var(--border); border-radius:9px; background:var(--warm);
+  cursor:pointer; transition:all .15s;
+}
+.rm-vendor-opt:hover { border-color:var(--sage-lt); background:var(--sage-xs); }
+.rm-vendor-opt.selected {
+  border-color:var(--sage); background:var(--sage-xs);
+  box-shadow:inset 0 0 0 1px var(--sage);
+}
+.rm-vendor-radio {
+  width:16px; height:16px; border-radius:50%;
+  border:2px solid var(--ink-20);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition:all .15s;
+}
+.rm-vendor-opt.selected .rm-vendor-radio { border-color:var(--sage); background:var(--sage); }
+.rm-vendor-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:#fff; opacity:0; transform:scale(0);
+  transition:all .15s cubic-bezier(.34,1.56,.64,1);
+}
+.rm-vendor-opt.selected .rm-vendor-dot { opacity:1; transform:scale(1); }
+
+.rm-vendor-info   { flex:1; min-width:0; }
+.rm-vendor-name   { font-size:13px; font-weight:600; color:var(--ink); margin-bottom:1px; }
+.rm-vendor-detail { font-size:11px; color:var(--ink-50); font-weight:400; }
+
+.rm-vendor-tag {
+  font-size:10px; font-weight:700; padding:2px 7px;
+  border-radius:12px; letter-spacing:.05em; text-transform:uppercase;
+}
+.rm-tag-recommended { background:#e8f5e9; color:#2e7d32; }
+.rm-tag-premium     { background:#fff8e1; color:#f57f17; }
+.rm-tag-budget      { background:#e3f2fd; color:#1565c0; }
+
+.rm-appt-row   { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+.rm-appt-field { flex:1; min-width:160px; }
+.rm-appt-field label {
+  display:block; font-size:10px; text-transform:uppercase; letter-spacing:.1em;
+  color:var(--ink-50); font-weight:700; margin-bottom:5px;
+}
+.rm-appt-field input {
+  width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:7px;
+  font-family:inherit; font-size:13px; font-weight:400;
+  background:var(--warm); color:var(--ink); transition:border-color .15s;
+}
+.rm-appt-field input:focus { outline:none; border-color:var(--sage-lt); }
+
+.rm-stop-sv { font-size:11px; color:var(--sage); font-weight:600; margin-top:2px; }
+.rm-stop-sv::before { content:'→ '; }
+
+.rm-wave-complete {
+  display:none; align-items:center; gap:10px; padding:12px 24px;
+  background:var(--sage-xs); border-top:1px solid #cddecb;
+  font-size:13px; color:var(--sage); font-weight:600;
+}
+.rm-wave-complete.show { display:flex; }
+
+.rm-empty { padding:32px; text-align:center; color:var(--ink-50); font-size:13px; }
+.rm-empty strong { color:var(--sage); }
+
+@media (max-width: 640px) {
+  .rm-stop-row { grid-template-columns:46px 1fr auto; padding-right:14px; }
+  .rm-stop-panel { padding:0 14px 14px 46px; }
+  .rm-wave-hd { padding:16px 16px 14px; }
+}
+
+@media print {
+  .rm-bar, .topbar, .sidebar, .mobile-nav { display:none !important; }
+  .rm-stop-panel { display:block !important; }
+  .rm-stop { break-inside:avoid; }
+}
+</style>
+</head>
+<body>
+<script>
+// ─── Auth + state bootstrap ─────────────────────────────────────────────
+const p = AUTH.requireAuth();
+const CLIENT_KEY = p ? (p.selectionsClientKey || p.id) : null;
+
+// Stop metadata (same across all clients; only vendors are dynamic)
+const STOPS = [
+  // Wave 1 — Structure
+  { wave:0, id:'fireplace',   name:'Fireplace & Hearth',        type:'Hearth Showroom',              touch:'yes',
+    why:'Firebox dimensions and gas line locations affect framing. These must be locked before framing begins — changes after framing are expensive.' },
+  { wave:0, id:'appliances',  name:'Appliances',                type:'Appliance Dealer',             touch:'rec',
+    why:'Appliance dimensions drive cabinet opening sizes and utility rough-in locations. Selecting early prevents costly cabinet and rough-in corrections.' },
+  { wave:0, id:'windows',     name:'Windows & Exterior Doors',  type:'Window & Door Showroom',       touch:'yes',
+    why:'Windows have a 10–14 week lead time and their dimensions lock the framing package. This is always the first critical appointment — no exceptions.' },
+  { wave:0, id:'exterior',    name:'Exterior Finishes',         type:'Masonry & Siding Supplier',    touch:'yes',
+    why:'Brick, stone, and siding affect framing details, flashing specs, and drainage plane design. Exterior framing cannot close without these locked.' },
+  { wave:0, id:'roof',        name:'Roofing Material',          type:'Roofing Supplier',             touch:'rec',
+    why:'Roof type affects structural load and truss design. Changes after the truss package is engineered create re-engineering fees.' },
+  // Wave 2 — The Shell
+  { wave:1, id:'cabinets',    name:'Cabinet Design Studio',     type:'Cabinet Company',              touch:'yes',
+    why:'Custom cabinets take 10–14 weeks to fabricate. Kitchen and bath rough-in locations cannot be confirmed until the cabinet layout is finalized.' },
+  { wave:1, id:'flooring',    name:'Flooring',                  type:'Flooring Showroom',            touch:'yes',
+    why:'Flooring type and thickness determine subfloor preparation, transitions, and threshold heights throughout the home.' },
+  { wave:1, id:'tile',        name:'Tile Selections',           type:'Tile Showroom',                touch:'yes',
+    why:'Shower pan design and backer board spec depend on tile weight and format. Grout lines and texture don\'t translate from photos — must be seen in person.' },
+  // Wave 3 — The Jewelry
+  { wave:2, id:'plumbing',    name:'Plumbing Fixtures',         type:'Plumbing Fixture Showroom',    touch:'rec',
+    why:'Rough-in locations are set before walls close. Moving plumbing rough-in after framing is one of the most expensive corrections in a build.' },
+  { wave:2, id:'lighting',    name:'Lighting Fixtures',         type:'Lighting Showroom',            touch:'rec',
+    why:'Electrical rough-in box locations and switch placements depend on fixture selections. Scale and finish don\'t come through in photos.' },
+  { wave:2, id:'countertops', name:'Countertop Slab Selection', type:'Stone Fabricator / Slab Yard', touch:'yes',
+    why:'Every slab is unique — photos cannot replace walking the yard. Template happens after cabinet install. Reserve your slab early so it doesn\'t sell.' },
+  { wave:2, id:'hardware',    name:'Hardware',                  type:'Hardware Showroom or Online',  touch:'dig',
+    why:'Door hardware, cabinet pulls, and bath accessories. Many great options online once your finish direction is set from plumbing selections.' },
+  { wave:2, id:'paint',       name:'Paint & Stain Colors',      type:'Paint Consultation',           touch:'dig',
+    why:'Large color boards read very differently from small chips. Coordinate after flooring and countertops so all colors work together.' },
+];
+
+const WAVE_META = [
+  { idx:0, cls:'w1', num:'Wave 1', title:'Structure',   desc:'The big decisions that affect framing, lead times, and structural documents. Start these on Day 1.' },
+  { idx:1, cls:'w2', num:'Wave 2', title:'The Shell',   desc:'The surfaces that define the feel of every room. Long lead times make these time-sensitive.' },
+  { idx:2, cls:'w3', num:'Wave 3', title:'The Jewelry', desc:'Fixtures, finishes, and final details. These complete the home and express your style.' },
+];
+
+let STATE   = {};                             // { stop_id: { done, vendorIdx, date, notes } }
+let VENDORS = {};                             // { stop_id: [ {name, detail, tag}, ... ] }
+let _saveTimer = null;
+let _saving    = false;
+
+function getSt(id) { return STATE[id] || { done:false, vendorIdx:-1, date:'', notes:'' }; }
+function setSt(id, key, val) {
+  if (!STATE[id]) STATE[id] = { done:false, vendorIdx:-1, date:'', notes:'' };
+  STATE[id][key] = val;
+  queueSave();
+}
+
+// Debounced persist to Supabase (selections table, suffix = rdm_state)
+function queueSave() {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  const status = document.getElementById('rm-save-status');
+  if (status) status.textContent = 'Saving…';
+  _saveTimer = setTimeout(persistState, 450);
+}
+async function persistState() {
+  if (!CLIENT_KEY) return;
+  _saving = true;
+  try {
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${CLIENT_KEY}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ suffix:'rdm_state', data: STATE }),
+    });
+    const status = document.getElementById('rm-save-status');
+    if (status) status.textContent = res.ok ? 'Saved' : 'Save failed';
+    if (res.ok) {
+      setTimeout(() => { if (status && status.textContent==='Saved') status.textContent=''; }, 1500);
+    }
+  } catch (e) {
+    console.error('roadmap save failed:', e);
+    const status = document.getElementById('rm-save-status');
+    if (status) status.textContent = 'Save failed';
+  } finally { _saving = false; }
+}
+
+async function loadState() {
+  if (!CLIENT_KEY) return;
+  try {
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${CLIENT_KEY}&suffix=rdm_state`);
+    if (!res.ok) return;
+    const j = await res.json();
+    if (j?.data && typeof j.data === 'object') STATE = j.data;
+  } catch(e) { console.error('roadmap state load failed:', e); }
+}
+
+async function loadVendors() {
+  try {
+    const res = await fetch(`/.netlify/functions/roadmap-vendors?clientKey=${CLIENT_KEY}`);
+    if (!res.ok) throw new Error('vendor fetch failed');
+    const j = await res.json();
+    VENDORS = j?.vendorsByStop || {};
+  } catch(e) {
+    console.error('roadmap vendor load failed:', e);
+    VENDORS = {};
+  }
+}
+
+function vendorsFor(stopId) { return VENDORS[stopId] || []; }
+
+// ─── Render helpers ─────────────────────────────────────────────────────
+function touchBadge(t) {
+  if (t==='yes') return '<span class="rm-touch-badge rm-touch-yes">Must Touch</span>';
+  if (t==='rec') return '<span class="rm-touch-badge rm-touch-rec">Recommended</span>';
+  return '<span class="rm-touch-badge rm-touch-dig">Digital OK</span>';
+}
+function tagHtml(tag) {
+  if (!tag) return '';
+  const labels = { recommended:'Recommended', premium:'Premium', budget:'Value' };
+  return `<span class="rm-vendor-tag rm-tag-${tag}">${labels[tag]||tag}</span>`;
+}
+function esc(s) { return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderStop(stop) {
+  const st = getSt(stop.id);
+  const vendors = vendorsFor(stop.id);
+  const sel = st.vendorIdx >= 0 && vendors[st.vendorIdx] ? vendors[st.vendorIdx] : null;
+
+  const vendorsHtml = vendors.length
+    ? vendors.map((v, i) => `
+      <div class="rm-vendor-opt ${st.vendorIdx===i?'selected':''}"
+           onclick="event.stopPropagation(); rmSelectVendor('${stop.id}', ${i})">
+        <div class="rm-vendor-radio"><div class="rm-vendor-dot"></div></div>
+        <div class="rm-vendor-info">
+          <div class="rm-vendor-name">${esc(v.name)}</div>
+          <div class="rm-vendor-detail">${esc(v.detail||'')}</div>
+        </div>
+        ${tagHtml(v.tag)}
+      </div>`).join('')
+    : '<div style="font-size:12px;color:var(--ink-50);padding:8px 0">No vendors configured for this stop yet. Your Six Arrows team will add options here.</div>';
+
+  return `
+  <div class="rm-stop ${st.done?'done':''}" id="rm-stop-${stop.id}">
+    <div class="rm-stop-row" onclick="rmToggleOpen('${stop.id}')">
+      <div class="rm-check-col">
+        <div class="rm-check" onclick="event.stopPropagation(); rmToggleDone('${stop.id}')">
+          <span class="rm-check-ico">✓</span>
+        </div>
+      </div>
+      <div class="rm-stop-body">
+        <div class="rm-stop-name">${esc(stop.name)}</div>
+        <div class="rm-stop-type">${esc(stop.type)}</div>
+        ${sel?`<div class="rm-stop-sv">${esc(sel.name)}</div>`:''}
+      </div>
+      <div class="rm-stop-right">
+        ${touchBadge(stop.touch)}
+        <span class="rm-expand-arrow">▾</span>
+      </div>
+    </div>
+    <div class="rm-stop-panel">
+      <div class="rm-why">${esc(stop.why)}</div>
+      <div class="rm-vendor-lbl">Choose your vendor</div>
+      <div class="rm-vendor-options">${vendorsHtml}</div>
+      <div class="rm-appt-row">
+        <div class="rm-appt-field">
+          <label>Appointment Date</label>
+          <input type="date" value="${esc(st.date||'')}"
+            onclick="event.stopPropagation()"
+            onchange="event.stopPropagation(); setSt('${stop.id}','date',this.value)">
+        </div>
+        <div class="rm-appt-field">
+          <label>Notes</label>
+          <input type="text" placeholder="Ask about lead times, bring floor plan..." value="${esc(st.notes||'')}"
+            onclick="event.stopPropagation()"
+            onchange="event.stopPropagation(); setSt('${stop.id}','notes',this.value)">
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderWave(meta) {
+  const stops = STOPS.filter(s => s.wave === meta.idx);
+  const total = stops.length;
+  const doneCount = stops.filter(s => getSt(s.id).done).length;
+  const circ = 2 * Math.PI * 18;
+  const offset = circ * (1 - (total ? doneCount/total : 0));
+  const complete = doneCount === total && total > 0;
+
+  return `
+  <div class="rm-wave ${meta.cls}" id="rm-wave-${meta.idx}">
+    <div class="rm-wave-hd">
+      <div>
+        <div class="rm-wave-num">${meta.num}</div>
+        <div class="rm-wave-title">${meta.title}</div>
+        <div class="rm-wave-desc">${meta.desc}</div>
+      </div>
+      <div class="rm-wave-ring" style="flex-shrink:0;width:48px;height:48px">
+        <svg viewBox="0 0 44 44" width="48" height="48">
+          <circle class="rm-ring-track" cx="22" cy="22" r="18"/>
+          <circle class="rm-ring-fill" id="rm-ring-${meta.idx}" cx="22" cy="22" r="18"
+            stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
+          <text class="rm-ring-count" x="22" y="22" id="rm-count-${meta.idx}">${doneCount}/${total}</text>
+        </svg>
+      </div>
+    </div>
+    <div class="rm-stops">${stops.map(renderStop).join('')}</div>
+    <div class="rm-wave-complete ${complete?'show':''}" id="rm-wc-${meta.idx}">
+      <span>✦</span>
+      <span>${meta.num} complete — all ${total} stops done</span>
+    </div>
+  </div>`;
+}
+
+function renderWaves() {
+  const wrap = document.getElementById('rm-waves');
+  if (!wrap) return;
+  wrap.innerHTML = WAVE_META.map(renderWave).join('');
+  updateOverall();
+}
+function updateOverall() {
+  const total = STOPS.length;
+  const done  = STOPS.filter(s => getSt(s.id).done).length;
+  const pct   = total ? (done/total*100) : 0;
+  const fill  = document.getElementById('rm-op-fill');
+  const lbl   = document.getElementById('rm-op-label');
+  if (fill) fill.style.width = pct.toFixed(1) + '%';
+  if (lbl)  lbl.innerHTML = `<strong>${done}</strong> of ${total} stops complete`;
+}
+function updateWaveRing(stopId) {
+  const stop = STOPS.find(s => s.id === stopId);
+  if (!stop) return;
+  const meta = WAVE_META[stop.wave];
+  const stops = STOPS.filter(s => s.wave === meta.idx);
+  const total = stops.length;
+  const done  = stops.filter(s => getSt(s.id).done).length;
+  const circ = 2 * Math.PI * 18;
+  const offset = circ * (1 - (total ? done/total : 0));
+  const ring  = document.getElementById('rm-ring-'+meta.idx);
+  const count = document.getElementById('rm-count-'+meta.idx);
+  const wc    = document.getElementById('rm-wc-'+meta.idx);
+  if (ring)  ring.setAttribute('stroke-dashoffset', offset);
+  if (count) count.textContent = done+'/'+total;
+  if (wc)    wc.classList.toggle('show', done === total && total > 0);
+}
+
+// ─── Interactions ────────────────────────────────────────────────────────
+window.rmToggleOpen = function(id) {
+  const el = document.getElementById('rm-stop-'+id);
+  if (el) el.classList.toggle('open');
+};
+window.rmToggleDone = function(id) {
+  const st = getSt(id);
+  setSt(id, 'done', !st.done);
+  const el = document.getElementById('rm-stop-'+id);
+  if (el) el.classList.toggle('done', getSt(id).done);
+  updateWaveRing(id);
+  updateOverall();
+};
+window.rmSelectVendor = function(id, idx) {
+  const st = getSt(id);
+  const newIdx = st.vendorIdx === idx ? -1 : idx;
+  setSt(id, 'vendorIdx', newIdx);
+  const panel = document.querySelector(`#rm-stop-${id} .rm-vendor-options`);
+  if (panel) panel.querySelectorAll('.rm-vendor-opt').forEach((el, i) => el.classList.toggle('selected', i === newIdx));
+  // Update collapsed-row selected vendor display
+  const body = document.querySelector(`#rm-stop-${id} .rm-stop-body`);
+  const vendors = vendorsFor(id);
+  if (body) {
+    let sv = body.querySelector('.rm-stop-sv');
+    if (newIdx >= 0 && vendors[newIdx]) {
+      if (!sv) { sv = document.createElement('div'); sv.className='rm-stop-sv'; body.appendChild(sv); }
+      sv.textContent = vendors[newIdx].name;
+    } else if (sv) { sv.remove(); }
+  }
+};
+window.rmReset = async function() {
+  if (!confirm('Reset all progress, vendor selections, appointment dates, and notes?\nThis cannot be undone.')) return;
+  STATE = {};
+  await persistState();
+  renderWaves();
+};
+
+// ─── Boot ───────────────────────────────────────────────────────────────
+const contentHtml = `
+  <div class="rm-root">
+    <div class="page-eyebrow">Six Arrows Blueprint™</div>
+    <div class="page-title">Your Selections Roadmap</div>
+    <p class="page-sub">Every place you need to visit, in the right order. We've curated 2–3 vendor options for each stop. Pick one, book your appointment, and check it off.</p>
+
+    <div class="rm-overall">
+      <div class="rm-op-track"><div class="rm-op-fill" id="rm-op-fill"></div></div>
+      <div class="rm-op-label" id="rm-op-label">0 of ${STOPS.length} stops complete</div>
+    </div>
+
+    <div class="rm-bar">
+      <button class="rm-btn primary" onclick="window.print()">Print Roadmap</button>
+      <button class="rm-btn" onclick="rmReset()">Reset progress</button>
+      <span class="rm-save-status" id="rm-save-status"></span>
+    </div>
+
+    <div class="rm-waves" id="rm-waves">
+      <div class="rm-empty">Loading your roadmap…</div>
+    </div>
+  </div>
+`;
+
+if (p) {
+  mountLayout('roadmap', 'Selections Roadmap', contentHtml, {});
+  (async () => {
+    await Promise.all([loadState(), loadVendors()]);
+    renderWaves();
+  })();
+}
+</script>
+</body>
+</html>
