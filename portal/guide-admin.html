@@ -732,6 +732,42 @@
   <strong>Heads up:</strong> Changes to global defaults apply immediately to every client without an override for that stop — including clients who haven't opened the Roadmap yet. There's no "draft" mode, so double-check before saving.
 </div>
 
+<h3>Stop settings — touch requirement and "why this matters"</h3>
+
+<p>On top of vendors, each stop has two global settings you can control from the <strong>Stop settings</strong> tab:</p>
+
+<ul>
+  <li><strong>Touch requirement</strong> — controls the colored pill on the right side of each stop card:
+    <ul>
+      <li><span style="background:#fff3e0;color:#b06000;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700">Must Touch</span> — the client really should see this in person before framing</li>
+      <li><span style="background:#e8f0fe;color:#3050a0;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700">Recommended</span> — an in-person visit is strongly advised</li>
+      <li><span style="background:#e8f5e9;color:#2e7d32;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700">Digital OK</span> — can be selected online without a showroom visit</li>
+    </ul>
+  </li>
+  <li><strong>Why this matters</strong> — the short explainer the client sees when they expand a stop. Keep it to 1–3 sentences describing the consequence of <em>not</em> visiting that vendor early (lead times, rough-in corrections, framing dependencies, etc.).</li>
+</ul>
+
+<div class="step-card">
+  <span class="step-num">1</span><span class="step-title">Open the Stop settings tab</span>
+  <div class="step-body">From Roadmap Vendors, click <strong>Stop settings</strong> at the top. Every stop is shown grouped by Wave.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">2</span><span class="step-title">Set the touch requirement</span>
+  <div class="step-body">Click one of the three buttons (Must Touch / Recommended / Digital OK) next to the stop name. The selected button stays highlighted.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">3</span><span class="step-title">Edit the "Why this matters" copy</span>
+  <div class="step-body">Rewrite the textarea with a message that makes sense for your build process. This is the single best place to coach clients on <em>why</em> they can't skip a particular vendor visit.</div>
+</div>
+<div class="step-card">
+  <span class="step-num">4</span><span class="step-title">Click "Save stop settings"</span>
+  <div class="step-body">One button saves every edited stop in a single batch. Clients see the updates immediately on their next Roadmap page load.</div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>Tip:</strong> If you ever want to revert a stop to its original defaults, just re-run <code>supabase/add-roadmap-stop-settings.sql</code> after deleting the row for that stop from the <code>roadmap_stop_settings</code> table.
+</div>
+
 <!-- ═══════════════════════════════════════════ -->
 <h2 id="decisions">Managing Decisions</h2>
 

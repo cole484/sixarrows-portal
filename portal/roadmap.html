@@ -269,8 +269,9 @@ const WAVE_META = [
   { idx:2, cls:'w3', num:'Wave 3', title:'The Jewelry', desc:'Fixtures, finishes, and final details. These complete the home and express your style.' },
 ];
 
-let STATE   = {};                             // { stop_id: { done, vendorIdx, date, notes } }
-let VENDORS = {};                             // { stop_id: [ {name, detail, tag}, ... ] }
+let STATE    = {};                            // { stop_id: { done, vendorIdx, date, notes } }
+let VENDORS  = {};                            // { stop_id: [ {name, detail, tag}, ... ] }
+let SETTINGS = {};                            // { stop_id: { touch, why } } — overrides hardcoded STOPS
 let _saveTimer = null;
 let _saving    = false;
 
@@ -324,11 +325,23 @@ async function loadVendors() {
     const res = await fetch(`/.netlify/functions/roadmap-vendors?clientKey=${CLIENT_KEY}`);
     if (!res.ok) throw new Error('vendor fetch failed');
     const j = await res.json();
-    VENDORS = j?.vendorsByStop || {};
+    VENDORS  = j?.vendorsByStop || {};
+    SETTINGS = j?.stopSettings  || {};
   } catch(e) {
     console.error('roadmap vendor load failed:', e);
-    VENDORS = {};
+    VENDORS  = {};
+    SETTINGS = {};
   }
+}
+
+// Return effective stop data, preferring DB settings over hardcoded fallbacks.
+function stopData(stop) {
+  const s = SETTINGS[stop.id] || {};
+  return {
+    ...stop,
+    touch: s.touch || stop.touch,
+    why:   (s.why && s.why.trim()) ? s.why : stop.why,
+  };
 }
 
 function vendorsFor(stopId) { return VENDORS[stopId] || []; }
@@ -346,7 +359,8 @@ function tagHtml(tag) {
 }
 function esc(s) { return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function renderStop(stop) {
+function renderStop(stopRaw) {
+  const stop = stopData(stopRaw);
   const st = getSt(stop.id);
   const vendors = vendorsFor(stop.id);
   const sel = st.vendorIdx >= 0 && vendors[st.vendorIdx] ? vendors[st.vendorIdx] : null;

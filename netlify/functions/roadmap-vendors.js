@@ -10,6 +10,11 @@
 // POST /?clientKey=<id>           → upsert per-client overrides. body: { overrides: { stop_id: [ {name, detail, tag, sort_order}, ... ] } }
 //                                   Pass an empty array for a stop to fall back to defaults for that stop.
 // DELETE /?clientKey=<id>         → wipe overrides for a client (revert to defaults)
+//
+// ── Stop-level settings (touch requirement + why-this-matters copy) ──
+// GET  /?stopSettings=1           → all rows from roadmap_stop_settings
+// POST /?stopSettings=1           → upsert one or more stop settings.
+//                                   body: { rows: [{stop_id, touch, why}] }
 
 import { respond, corsHeaders } from './lib/supabase-client.js';
 
@@ -84,31 +89,70 @@ export const handler = async (event) => {
   }
 
   const qs = event.queryStringParameters || {};
-  const isDefaultsMode = qs.defaults === '1';
+  const isDefaultsMode     = qs.defaults === '1';
+  const isStopSettingsMode = qs.stopSettings === '1';
   const clientKey = qs.clientKey || null;
 
   try {
     // ── GET ──────────────────────────────────────────────────────
     if (event.httpMethod === 'GET') {
+      if (isStopSettingsMode) {
+        const url = `${SB_URL()}/rest/v1/roadmap_stop_settings?select=*&order=stop_id`;
+        const res = await fetch(url, { headers: sbHeaders() });
+        if (!res.ok) throw new Error(`stop_settings GET: ${res.status} ${await res.text()}`);
+        const rows = await res.json();
+        return respond(200, { rows });
+      }
       if (isDefaultsMode) {
         const rows = await fetchDefaults();
         return respond(200, { rows });
       }
       if (!clientKey) return respond(400, { error: 'clientKey or defaults=1 required' });
 
-      const [rows, overrides] = await Promise.all([fetchDefaults(), fetchOverrides(clientKey)]);
+      const [rows, overrides, settingsRes] = await Promise.all([
+        fetchDefaults(),
+        fetchOverrides(clientKey),
+        fetch(`${SB_URL()}/rest/v1/roadmap_stop_settings?select=*`, { headers: sbHeaders() }),
+      ]);
       const defaultsByStop = groupDefaults(rows);
       const merged = mergeVendors(defaultsByStop, overrides);
+      const stopSettings = {};
+      if (settingsRes.ok) {
+        const sRows = await settingsRes.json();
+        (sRows || []).forEach(r => { stopSettings[r.stop_id] = { touch: r.touch, why: r.why || '' }; });
+      }
       return respond(200, {
         clientKey,
         vendorsByStop: merged,
         overrideStopIds: Object.keys(overrides || {}),
+        stopSettings,
       });
     }
 
     // ── POST ─────────────────────────────────────────────────────
     if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
+
+      // Stop settings edit (admin)
+      if (isStopSettingsMode) {
+        const rows = body.rows || (body.row ? [body.row] : []);
+        if (!rows.length) return respond(400, { error: 'rows required' });
+        // Upsert each (stop_id is PK)
+        const upUrl = `${SB_URL()}/rest/v1/roadmap_stop_settings?on_conflict=stop_id`;
+        const payload = rows.map(r => ({
+          stop_id: r.stop_id,
+          touch:   (r.touch || 'rec'),
+          why:     r.why || '',
+          updated_at: new Date().toISOString(),
+        }));
+        const res = await fetch(upUrl, {
+          method: 'POST',
+          headers: { ...sbHeaders(), 'Prefer': 'return=minimal,resolution=merge-duplicates' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`stop_settings upsert: ${res.status} ${await res.text()}`);
+        return respond(200, { success: true, saved: payload.length });
+      }
 
       // Defaults edit (admin)
       if (isDefaultsMode) {

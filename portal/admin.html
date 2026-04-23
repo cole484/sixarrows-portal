@@ -1891,9 +1891,10 @@ const ROADMAP_TAG_OPTS    = ['', 'recommended', 'premium', 'budget'];
 
 // In-memory state for the admin view (reloaded on every view mount)
 let ROADMAP_ADMIN = {
-  defaults:   [],   // raw rows from roadmap_vendor_defaults
-  overrides:  {},   // stop_id → [ {name, detail, tag, sort_order} ]
-  mode:       'client', // 'client' | 'defaults'
+  defaults:  [],     // raw rows from roadmap_vendor_defaults
+  overrides: {},     // stop_id → [ {name, detail, tag, sort_order} ]
+  settings:  {},     // stop_id → { touch, why } (from roadmap_stop_settings)
+  mode:      'client', // 'client' | 'defaults' | 'settings'
 };
 
 function renderRoadmapView(p) {
@@ -1902,13 +1903,17 @@ function renderRoadmapView(p) {
   // Lazy-load data on mount
   setTimeout(async () => {
     try {
-      const [defRes, ovRes] = await Promise.all([
+      const [defRes, ovRes, setRes] = await Promise.all([
         fetch(`/.netlify/functions/roadmap-vendors?defaults=1`),
         fetch(`/.netlify/functions/selections-storage?clientKey=${ck}&suffix=rdm_vendors`),
+        fetch(`/.netlify/functions/roadmap-vendors?stopSettings=1`),
       ]);
       ROADMAP_ADMIN.defaults  = defRes.ok ? (await defRes.json()).rows || [] : [];
       const ovJson = ovRes.ok ? await ovRes.json() : null;
       ROADMAP_ADMIN.overrides = (ovJson && ovJson.data && typeof ovJson.data === 'object') ? ovJson.data : {};
+      const setRows = setRes.ok ? (await setRes.json()).rows || [] : [];
+      ROADMAP_ADMIN.settings = {};
+      setRows.forEach(r => { ROADMAP_ADMIN.settings[r.stop_id] = { touch: r.touch, why: r.why || '' }; });
       const wrap = document.getElementById('rmadm-content');
       if (wrap) wrap.innerHTML = buildRoadmapAdminContent(ck, p);
     } catch (e) {
@@ -1926,9 +1931,10 @@ function renderRoadmapView(p) {
           <div style="font-size:15px;font-weight:700;color:var(--cream)">Vendor options for ${p.clientName}</div>
           <div style="font-size:12px;color:rgba(235,233,222,.55);margin-top:3px">Client sees global defaults by default. Override any stop to give this client a tailored vendor list.</div>
         </div>
-        <div style="display:flex;gap:8px;flex-shrink:0">
+        <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">
           <button class="adm-btn ${ROADMAP_ADMIN.mode==='client'?'adm-btn-green':''}" onclick="switchRoadmapMode('client')">This client</button>
           <button class="adm-btn ${ROADMAP_ADMIN.mode==='defaults'?'adm-btn-green':''}" onclick="switchRoadmapMode('defaults')">Global defaults</button>
+          <button class="adm-btn ${ROADMAP_ADMIN.mode==='settings'?'adm-btn-green':''}" onclick="switchRoadmapMode('settings')">Stop settings</button>
         </div>
       </div>
     </div>
@@ -1946,12 +1952,10 @@ function switchRoadmapMode(mode) {
   const wrap = document.getElementById('rmadm-content');
   if (wrap) wrap.innerHTML = buildRoadmapAdminContent(ck, p);
   // Refresh top mode toggle styling
+  const labelToMode = { 'This client':'client', 'Global defaults':'defaults', 'Stop settings':'settings' };
   document.querySelectorAll('.card.dark button').forEach(b => {
-    if (b.textContent.trim() === 'This client' || b.textContent.trim() === 'Global defaults') {
-      const active = (b.textContent.trim() === 'This client' && mode === 'client')
-                  || (b.textContent.trim() === 'Global defaults' && mode === 'defaults');
-      b.classList.toggle('adm-btn-green', active);
-    }
+    const m = labelToMode[b.textContent.trim()];
+    if (m) b.classList.toggle('adm-btn-green', m === mode);
   });
 }
 
@@ -1963,7 +1967,80 @@ function defaultsForStop(stopId) {
 
 function buildRoadmapAdminContent(ck, p) {
   if (ROADMAP_ADMIN.mode === 'defaults') return buildRoadmapDefaultsEditor();
+  if (ROADMAP_ADMIN.mode === 'settings') return buildRoadmapSettingsEditor();
   return buildRoadmapClientEditor(ck, p);
+}
+
+// ── Stop settings editor (touch requirement + why-this-matters copy) ────
+function buildRoadmapSettingsEditor() {
+  const TOUCH_OPTS = [
+    { val:'yes', label:'Must Touch',  tagCls:'tag danger', tagStyle:'background:#fff3e0;color:#b06000' },
+    { val:'rec', label:'Recommended', tagCls:'tag warn',   tagStyle:'background:#e8f0fe;color:#3050a0' },
+    { val:'dig', label:'Digital OK',  tagCls:'tag ok',     tagStyle:'' },
+  ];
+  const waves = [0,1,2].map(wi => {
+    const stops = ROADMAP_STOPS.filter(s => s.wave === wi);
+    const rows = stops.map(stop => {
+      const s = ROADMAP_ADMIN.settings[stop.id] || { touch:'rec', why:'' };
+      const touchButtons = TOUCH_OPTS.map(opt => {
+        const sel = s.touch === opt.val;
+        return `<button class="adm-btn" style="font-size:11px;padding:5px 10px;${sel?'background:var(--charcoal);color:var(--cream);border-color:var(--charcoal)':''}" onclick="rmadmEditSetting('${stop.id}','touch','${opt.val}')">${opt.label}</button>`;
+      }).join('');
+      return `
+        <div style="padding:14px 0;border-bottom:0.5px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+            <div style="font-size:13px;font-weight:700;color:var(--charcoal)">${stop.name}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">${touchButtons}</div>
+          </div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:5px">Why this matters</div>
+          <textarea class="adm-inp" style="width:100%;min-height:72px;font-family:inherit;font-size:12px;line-height:1.55;resize:vertical"
+            placeholder="Shown to the client in an expanded stop panel. Keep it short — 1–3 sentences of why this vendor visit matters."
+            oninput="rmadmEditSetting('${stop.id}','why',this.value)">${(s.why||'').replace(/</g,'&lt;')}</textarea>
+        </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:1rem"><div class="sh"><div class="sh-title">${ROADMAP_WAVE_LABELS[wi]}</div></div>${rows}</div>`;
+  }).join('');
+
+  return `
+    <div class="card" style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--charcoal)">Stop-level settings apply to every client</div>
+        <div style="font-size:11px;color:var(--charcoal-4);margin-top:2px;max-width:540px;line-height:1.5">
+          <strong>Must Touch</strong>: the client needs to see this in person before framing. <strong>Recommended</strong>: an in-person visit is strongly advised. <strong>Digital OK</strong>: can be done online. The "Why this matters" text shows inside each stop when the client expands it.
+        </div>
+      </div>
+      <button class="adm-btn adm-btn-green" onclick="rmadmSaveSettings()">Save stop settings</button>
+    </div>
+    ${waves}`;
+}
+
+let _rmadmSettingsDirty = new Set();
+function rmadmEditSetting(stopId, field, val) {
+  if (!ROADMAP_ADMIN.settings[stopId]) ROADMAP_ADMIN.settings[stopId] = { touch:'rec', why:'' };
+  ROADMAP_ADMIN.settings[stopId][field] = val;
+  _rmadmSettingsDirty.add(stopId);
+  if (field === 'touch') {
+    // Re-render to update the selected touch button visuals
+    const wrap = document.getElementById('rmadm-content');
+    if (wrap) wrap.innerHTML = buildRoadmapSettingsEditor();
+  }
+}
+async function rmadmSaveSettings() {
+  const rows = Array.from(_rmadmSettingsDirty).map(stop_id => ({
+    stop_id,
+    touch: ROADMAP_ADMIN.settings[stop_id]?.touch || 'rec',
+    why:   ROADMAP_ADMIN.settings[stop_id]?.why   || '',
+  }));
+  if (!rows.length) { alert('No changes to save.'); return; }
+  try {
+    const res = await fetch(`/.netlify/functions/roadmap-vendors?stopSettings=1`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ rows }),
+    });
+    if (!res.ok) throw new Error('save failed '+res.status);
+    _rmadmSettingsDirty.clear();
+    alert('Saved. Clients will see the updated stop settings the next time they open the Roadmap.');
+  } catch(e) { console.error(e); alert('Save failed. Check your connection and try again.'); }
 }
 
 // ── Per-client override editor ──────────────────────────
