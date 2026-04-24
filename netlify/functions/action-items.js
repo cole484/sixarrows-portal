@@ -50,7 +50,6 @@ export const handler = async (event) => {
     const projectId = params.projectId;
 
     if (event.httpMethod === 'GET') {
-      if (!projectId) return respond(400, { error: 'projectId required' });
       const status = params.status || 'open';
 
       // Auto-unsnooze: any snoozed items whose snoozed_until has passed become open again.
@@ -60,8 +59,12 @@ export const handler = async (event) => {
         { method: 'PATCH', body: JSON.stringify({ status: 'open', snoozed_until: null }), prefer: 'return=minimal' }
       );
 
+      // projectId=all (or missing) → cross-project list; otherwise filter by one project
+      const filter = (projectId && projectId !== 'all')
+        ? `project_id=eq.${encodeURIComponent(projectId)}&`
+        : '';
       const items = await sbFetch(
-        `action_items?project_id=eq.${encodeURIComponent(projectId)}&status=eq.${status}&order=priority.asc,created_at.desc`
+        `action_items?${filter}status=eq.${status}&order=priority.asc,created_at.desc`
       );
       return respond(200, { items: items || [] });
     }

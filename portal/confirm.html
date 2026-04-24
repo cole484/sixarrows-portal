@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schedule Confirmation — Six Arrows Construction</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { background: var(--cream-pale, #f5f2e9); min-height: 100vh; padding: 0; margin: 0; font-family: 'Work Sans', sans-serif; }
+    .confirm-shell { max-width: 560px; margin: 0 auto; padding: 24px 16px 40px; }
+    .confirm-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 0.5px solid rgba(0,0,0,.08); }
+    .confirm-hd-logo { width: 34px; height: 34px; object-fit: contain; }
+    .confirm-hd-title { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: #292826; margin: 0; }
+    .confirm-hd-sub { font-size: 10px; color: #6e6b63; letter-spacing: .08em; text-transform: uppercase; }
+    .confirm-card { background: white; border: 1px solid rgba(0,0,0,.08); border-radius: 10px; padding: 18px 18px 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+    .confirm-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #6e6b63; margin-bottom: 4px; }
+    .confirm-value { font-size: 15px; font-weight: 600; color: #292826; margin-bottom: 10px; }
+    .confirm-value:last-child { margin-bottom: 0; }
+    .confirm-task-name { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 500; color: #292826; margin: 0 0 4px; line-height: 1.15; }
+    .confirm-task-sub { font-size: 12px; color: #6e6b63; margin-bottom: 14px; }
+    .confirm-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+    .confirm-scope { margin-top: 12px; padding-top: 12px; border-top: 0.5px solid rgba(0,0,0,.08); font-size: 13px; color: #454441; line-height: 1.5; white-space: pre-wrap; }
+    .confirm-btns { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 4px; }
+    .confirm-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 13px 16px; font-size: 15px; font-weight: 600; border-radius: 8px; cursor: pointer; border: none; font-family: inherit; transition: opacity .12s, transform .05s; }
+    .confirm-btn:active { transform: scale(.99); }
+    .confirm-btn-confirm { background: #5a7f4a; color: white; }
+    .confirm-btn-alt     { background: white; color: #292826; border: 1px solid rgba(0,0,0,.18); }
+    .confirm-btn-decline { background: white; color: #a14242; border: 1px solid rgba(161,66,66,.3); }
+    .confirm-alt-panel { display: none; margin-top: 10px; padding: 14px; background: #f9f6ed; border: 1px solid rgba(0,0,0,.08); border-radius: 8px; }
+    .confirm-alt-panel.open { display: block; }
+    .confirm-alt-panel label { display: block; font-size: 11px; font-weight: 600; color: #454441; margin-bottom: 4px; margin-top: 6px; }
+    .confirm-alt-panel input, .confirm-alt-panel textarea { width: 100%; padding: 8px 10px; border: 1px solid rgba(0,0,0,.15); border-radius: 6px; font-size: 14px; font-family: inherit; box-sizing: border-box; background: white; }
+    .confirm-alt-panel textarea { min-height: 60px; resize: vertical; }
+    .confirm-msg { padding: 24px 16px; text-align: center; font-size: 14px; color: #454441; }
+    .confirm-msg.success { color: #5a7f4a; font-weight: 600; }
+    .confirm-msg.error { color: #a14242; font-weight: 600; }
+    .confirm-loading { padding: 50px 20px; text-align: center; color: #6e6b63; font-size: 13px; }
+    @media (max-width: 420px) {
+      .confirm-meta-grid { grid-template-columns: 1fr; }
+      .confirm-task-name { font-size: 21px; }
+    }
+  </style>
+</head>
+<body>
+<div class="confirm-shell">
+  <div class="confirm-hd">
+    <img class="confirm-hd-logo" src="assets/logo-mark.svg" onerror="this.style.display='none'">
+    <div>
+      <div class="confirm-hd-sub">Six Arrows Construction</div>
+      <h1 class="confirm-hd-title">Schedule Confirmation</h1>
+    </div>
+  </div>
+  <div id="confirm-body">
+    <div class="confirm-loading">Loading…</div>
+  </div>
+</div>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get('token');
+const API = '/.netlify/functions/contractor-messages';
+
+function fmtDate(d) {
+  if (!d) return 'TBD';
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function init() {
+  const el = document.getElementById('confirm-body');
+  if (!TOKEN) { el.innerHTML = `<div class="confirm-msg error">Missing token. Please use the link from your text.</div>`; return; }
+
+  try {
+    const res = await fetch(`${API}?token=${encodeURIComponent(TOKEN)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load');
+
+    const { message, task, client } = data;
+    if (message.status === 'responded') {
+      el.innerHTML = renderAlreadyResponded(message);
+      return;
+    }
+    el.innerHTML = renderForm(message, task, client);
+    attachHandlers(message);
+  } catch (err) {
+    el.innerHTML = `<div class="confirm-msg error">${esc(err.message)}</div>`;
+  }
+}
+
+function renderAlreadyResponded(message) {
+  const label = message.response === 'confirmed' ? 'already confirmed' :
+                message.response === 'declined'  ? 'declined'           :
+                message.response === 'alternate_proposed' ? 'responded with an alternate date' : 'responded';
+  return `<div class="confirm-card">
+    <div class="confirm-msg success">Thank you — you've ${label} this job.</div>
+    <div style="text-align:center;font-size:11px;color:#6e6b63">If this looks wrong, please contact your PM directly.</div>
+  </div>`;
+}
+
+function renderForm(message, task, client) {
+  const duration = task.duration_days ? `${task.duration_days} day${task.duration_days === 1 ? '' : 's'}` : 'TBD';
+  const scope = task.contractor_scope || task.definition_of_done || '';
+  return `
+    <div class="confirm-card">
+      <div class="confirm-task-sub">${esc(client?.client_name || '')}${client?.address ? ' — ' + esc(client.address) : ''}</div>
+      <h2 class="confirm-task-name">${esc(task.task_name)}</h2>
+      ${task.trade ? `<div class="confirm-task-sub">${esc(task.trade)}</div>` : ''}
+      <div class="confirm-meta-grid">
+        <div>
+          <div class="confirm-label">Start</div>
+          <div class="confirm-value">${fmtDate(task.planned_start)}</div>
+        </div>
+        <div>
+          <div class="confirm-label">Duration</div>
+          <div class="confirm-value">${duration}</div>
+        </div>
+      </div>
+      ${scope ? `<div class="confirm-scope">${esc(scope)}</div>` : ''}
+    </div>
+
+    <div class="confirm-btns">
+      <button class="confirm-btn confirm-btn-confirm" data-action="confirmed">✓ Confirm this job</button>
+      <button class="confirm-btn confirm-btn-alt"     data-action="alternate_proposed">Propose a different start date</button>
+      <button class="confirm-btn confirm-btn-decline" data-action="declined">Decline this job</button>
+    </div>
+
+    <div class="confirm-alt-panel" id="alt-panel">
+      <label>Proposed start date</label>
+      <input type="date" id="alt-date">
+      <label>Notes (optional)</label>
+      <textarea id="alt-notes" placeholder="Any context for the PM…"></textarea>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="confirm-btn confirm-btn-confirm" style="padding:10px 14px;font-size:14px" id="alt-submit">Submit proposal</button>
+        <button class="confirm-btn confirm-btn-alt"     style="padding:10px 14px;font-size:14px" id="alt-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function attachHandlers(message) {
+  document.querySelectorAll('.confirm-btn[data-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      if (action === 'alternate_proposed') {
+        document.getElementById('alt-panel').classList.add('open');
+        document.getElementById('alt-date').focus();
+        return;
+      }
+      if (action === 'declined' && !confirm('Decline this job? Your PM will be notified and will reassign.')) return;
+      await submit(action);
+    });
+  });
+  document.getElementById('alt-cancel')?.addEventListener('click', () => {
+    document.getElementById('alt-panel').classList.remove('open');
+  });
+  document.getElementById('alt-submit')?.addEventListener('click', async () => {
+    const proposed = document.getElementById('alt-date').value;
+    const notes = document.getElementById('alt-notes').value.trim();
+    if (!proposed) { alert('Please pick a proposed start date.'); return; }
+    await submit('alternate_proposed', { proposed_start: proposed, proposed_notes: notes });
+  });
+}
+
+async function submit(response, extra = {}) {
+  const el = document.getElementById('confirm-body');
+  el.innerHTML = `<div class="confirm-loading">Submitting…</div>`;
+  try {
+    const res = await fetch(`${API}?token=${encodeURIComponent(TOKEN)}&action=respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ response, ...extra }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to submit');
+
+    const msg = response === 'confirmed' ? 'Confirmed — thank you! Your PM has been notified.' :
+                response === 'declined'  ? 'Declined. Your PM will reach out shortly.' :
+                                           'Proposal sent. Your PM will review and respond.';
+    el.innerHTML = `<div class="confirm-card">
+      <div class="confirm-msg success">✓ ${esc(msg)}</div>
+    </div>`;
+  } catch (err) {
+    el.innerHTML = `<div class="confirm-msg error">${esc(err.message)}</div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

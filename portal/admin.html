@@ -3236,8 +3236,9 @@ function toggleTaskEdit(taskId, projectId) {
       <button class="adm-btn adm-btn-ghost" style="padding:4px 10px;font-size:10px" onclick="schAddNote('${projectId}','${taskId}')">Post</button>
     </div>
 
-    <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:0.5px solid var(--border)">
+    <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:0.5px solid var(--border);flex-wrap:wrap">
       <button class="adm-btn adm-btn-green" onclick="saveTaskUpdate('${projectId}','${taskId}')">Save & Recalculate</button>
+      <button class="adm-btn" style="background:#4a7fb5;color:white" onclick="draftContractorText('${projectId}','${taskId}')" title="Create a contractor confirmation draft in Today">📨 Draft contractor text</button>
       <button class="adm-btn adm-btn-ghost" onclick="toggleTaskEdit('${taskId}','${projectId}')">Cancel</button>
     </div>
   </div>`;
@@ -3405,7 +3406,8 @@ function renderScheduleCharts(tasks, cache) {
 //  TODAY VIEW — the PM's action queue
 // ══════════════════════════════════════════════════════
 
-let actionItemsCache = {}; // projectId → array
+let actionItemsCache = {}; // scopeKey ('all' | projectId) → array
+let todayScope = 'all';     // current filter scope
 
 const KIND_LABELS = {
   approve_contractor_text: 'Approve contractor message',
@@ -3416,16 +3418,30 @@ const KIND_LABELS = {
   manual:                  'Manual',
 };
 
+function projectNameById(id) {
+  const p = PROJECTS[id];
+  return p ? (p.clientName || p.projectName || id) : id;
+}
+
 function renderTodayView(p) {
+  const stored = sessionStorage.getItem('sa_today_scope');
+  if (stored) todayScope = stored;
+  const projectOpts = Object.values(PROJECTS).map(pr =>
+    `<option value="${pr.id}" ${pr.id===todayScope?'selected':''}>${pr.clientName}</option>`
+  ).join('');
   return `
     <div class="sch-hd" style="margin-bottom:12px">
       <div>
-        <div class="sh-title" style="font-size:18px">Today — ${p.clientName}</div>
-        <div style="font-size:11px;color:var(--charcoal-4)">Everything that needs your attention. The system will fill this queue automatically as rules are added.</div>
+        <div class="sh-title" style="font-size:18px">Today</div>
+        <div style="font-size:11px;color:var(--charcoal-4)">Everything that needs your attention across every active project.</div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="adm-btn adm-btn-ghost" onclick="loadActionItems('${p.id}')" title="Refresh">↻ Refresh</button>
-        <button class="adm-btn adm-btn-ghost" onclick="openManualItemForm('${p.id}')">+ Add manual item</button>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select class="adm-inp adm-sel" style="font-size:12px;padding:5px 8px;width:auto" onchange="setTodayScope(this.value)" title="Filter by project">
+          <option value="all" ${todayScope==='all'?'selected':''}>All projects</option>
+          ${projectOpts}
+        </select>
+        <button class="adm-btn adm-btn-ghost" onclick="loadActionItems(todayScope)" title="Refresh">↻ Refresh</button>
+        <button class="adm-btn adm-btn-ghost" onclick="openManualItemForm(todayScope==='all' ? '${p.id}' : todayScope)">+ Add manual item</button>
       </div>
     </div>
     <div id="manual-item-form" style="display:none;margin-bottom:12px"></div>
@@ -3435,31 +3451,39 @@ function renderTodayView(p) {
   `;
 }
 
-async function loadActionItems(projectId) {
+function setTodayScope(scope) {
+  todayScope = scope;
+  sessionStorage.setItem('sa_today_scope', scope);
+  loadActionItems(scope);
+}
+
+async function loadActionItems(scope) {
   const el = document.getElementById('today-queue');
   if (!el) return;
+  scope = scope || todayScope || 'all';
   try {
-    const res = await fetch(`/.netlify/functions/action-items?projectId=${encodeURIComponent(projectId)}&status=open`, {
+    const res = await fetch(`/.netlify/functions/action-items?projectId=${encodeURIComponent(scope)}&status=open`, {
       headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load');
-    actionItemsCache[projectId] = data.items || [];
-    renderTodayQueue(projectId);
+    actionItemsCache[scope] = data.items || [];
+    renderTodayQueue(scope);
   } catch (err) {
     el.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--danger);font-size:12px">Error: ${err.message}</div>`;
   }
 }
 
-function renderTodayQueue(projectId) {
+function renderTodayQueue(scope) {
   const el = document.getElementById('today-queue');
   if (!el) return;
-  const items = actionItemsCache[projectId] || [];
+  const items = actionItemsCache[scope] || [];
   if (items.length === 0) {
+    const scopeLabel = scope === 'all' ? 'across all projects' : `for ${projectNameById(scope)}`;
     el.innerHTML = `<div class="card" style="padding:2.5rem;text-align:center">
       <div style="font-size:32px;margin-bottom:8px">✓</div>
       <div style="font-size:14px;font-weight:600;color:var(--charcoal)">All clear</div>
-      <div style="font-size:11px;color:var(--charcoal-4);margin-top:4px">Nothing needs your attention right now.</div>
+      <div style="font-size:11px;color:var(--charcoal-4);margin-top:4px">Nothing needs your attention ${scopeLabel}.</div>
     </div>`;
     return;
   }
@@ -3470,33 +3494,42 @@ function renderTodayQueue(projectId) {
     ['yellow', 'This week',  '#c89200'],
     ['normal', 'Normal',     'var(--charcoal-3)'],
   ];
+  const showProjectLabel = scope === 'all';
   el.innerHTML = order.map(([pri, label, color]) => {
     if (!byPri[pri].length) return '';
     return `<div style="margin-bottom:16px">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${color};margin-bottom:6px">${label} · ${byPri[pri].length}</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        ${byPri[pri].map(renderActionCard).join('')}
+        ${byPri[pri].map(it => renderActionCard(it, showProjectLabel)).join('')}
       </div>
     </div>`;
   }).join('');
 }
 
-function renderActionCard(it) {
+function renderActionCard(it, showProjectLabel) {
   const kindLabel = KIND_LABELS[it.kind] || it.kind;
   const borderColor = it.priority === 'red' ? 'var(--danger)' : it.priority === 'yellow' ? '#c89200' : 'var(--border-2)';
   const age = timeAgo(it.created_at);
+  const projectLabel = showProjectLabel ? `<span style="display:inline-block;padding:1px 6px;margin-right:5px;background:var(--cream-2);color:var(--charcoal-3);border-radius:3px;font-size:10px;font-weight:600">${escapeHtml(projectNameById(it.project_id))}</span>` : '';
+
+  // Kind-specific primary action
+  let primaryBtn = `<button class="adm-btn adm-btn-green" style="padding:5px 10px;font-size:11px" onclick="completeActionItem('${it.id}')" title="Mark done">✓ Done</button>`;
+  if (it.kind === 'approve_contractor_text' && it.related_entity_id) {
+    primaryBtn = `<button class="adm-btn" style="padding:5px 10px;font-size:11px;background:#4a7fb5;color:white" onclick="openApproveTextModal('${it.related_entity_id}','${it.id}')" title="Preview and approve the draft">📨 Review & Send</button>`;
+  }
+
   return `<div class="card" style="padding:12px;border-left:3px solid ${borderColor}">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--charcoal-4);font-weight:700;margin-bottom:3px">${kindLabel}</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--charcoal-4);font-weight:700;margin-bottom:3px">${projectLabel}${kindLabel}</div>
         <div style="font-size:13px;font-weight:600;color:var(--charcoal);margin-bottom:2px">${escapeHtml(it.title)}</div>
         ${it.body ? `<div style="font-size:11px;color:var(--charcoal-3);margin-top:4px;line-height:1.4">${escapeHtml(it.body)}</div>` : ''}
         <div style="font-size:10px;color:var(--charcoal-4);margin-top:6px">Created ${age}${it.due_at?` · Due ${new Date(it.due_at).toLocaleDateString()}`:''}</div>
       </div>
-      <div style="display:flex;gap:4px;flex-shrink:0">
-        <button class="adm-btn adm-btn-green" style="padding:5px 10px;font-size:11px" onclick="completeActionItem('${it.id}','${it.project_id}')" title="Mark done">✓ Done</button>
-        <button class="adm-btn adm-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="snoozeActionItem('${it.id}','${it.project_id}')" title="Snooze 24h">⏱ Snooze</button>
-        <button class="adm-btn adm-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="dismissActionItem('${it.id}','${it.project_id}')" title="Dismiss">✕</button>
+      <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+        ${primaryBtn}
+        <button class="adm-btn adm-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="snoozeActionItem('${it.id}')" title="Snooze 24h">⏱ Snooze</button>
+        <button class="adm-btn adm-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="dismissActionItem('${it.id}')" title="Dismiss">✕</button>
       </div>
     </div>
   </div>`;
@@ -3513,28 +3546,30 @@ function timeAgo(iso) {
   return `${Math.floor(s/86400)}d ago`;
 }
 
-async function patchActionItem(id, projectId, action, extra = '') {
+async function patchActionItem(id, action, extra = '') {
   const res = await fetch(`/.netlify/functions/action-items?id=${id}&action=${action}${extra}`, {
     method: 'PATCH',
     headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
   });
   if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || `HTTP ${res.status}`); }
-  // Optimistic: remove locally and re-render
-  actionItemsCache[projectId] = (actionItemsCache[projectId] || []).filter(it => it.id !== id);
-  renderTodayQueue(projectId);
+  // Optimistic: remove from whichever scope caches contain it, then re-render current
+  Object.keys(actionItemsCache).forEach(scope => {
+    actionItemsCache[scope] = (actionItemsCache[scope] || []).filter(it => it.id !== id);
+  });
+  renderTodayQueue(todayScope);
 }
 
-async function completeActionItem(id, projectId) {
-  try { await patchActionItem(id, projectId, 'complete'); schShowToast('Marked done','success'); }
-  catch (e) { schShowToast(e.message,'error'); loadActionItems(projectId); }
+async function completeActionItem(id) {
+  try { await patchActionItem(id, 'complete'); schShowToast('Marked done','success'); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(todayScope); }
 }
-async function snoozeActionItem(id, projectId) {
-  try { await patchActionItem(id, projectId, 'snooze'); schShowToast('Snoozed 24h',''); }
-  catch (e) { schShowToast(e.message,'error'); loadActionItems(projectId); }
+async function snoozeActionItem(id) {
+  try { await patchActionItem(id, 'snooze'); schShowToast('Snoozed 24h',''); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(todayScope); }
 }
-async function dismissActionItem(id, projectId) {
-  try { await patchActionItem(id, projectId, 'dismiss'); schShowToast('Dismissed',''); }
-  catch (e) { schShowToast(e.message,'error'); loadActionItems(projectId); }
+async function dismissActionItem(id) {
+  try { await patchActionItem(id, 'dismiss'); schShowToast('Dismissed',''); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(todayScope); }
 }
 
 function openManualItemForm(projectId) {
@@ -3555,6 +3590,133 @@ function openManualItemForm(projectId) {
     </div>
   </div>`;
   setTimeout(() => document.getElementById('mi-title')?.focus(), 30);
+}
+
+// ── Contractor text drafting + approval modal ─────────────
+
+async function draftContractorText(projectId, taskId) {
+  schShowToast('Drafting…','');
+  try {
+    const res = await fetch(`/.netlify/functions/contractor-messages?action=draft`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ projectId, taskId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    schShowToast('Draft created — see Today','success');
+  } catch (e) { schShowToast(e.message,'error'); }
+}
+
+function openApproveTextModal(messageId, actionItemId) {
+  // Fetch the message via admin list + find the one we want (simple for now)
+  const backdrop = document.createElement('div');
+  backdrop.id = 'approve-text-backdrop';
+  backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  backdrop.innerHTML = `<div style="background:white;border-radius:var(--r-md);max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:var(--sh-lg)">
+    <div style="padding:16px 18px;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:700;color:var(--charcoal)">Review contractor text</div>
+      <button class="adm-btn adm-btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeApproveTextModal()">✕</button>
+    </div>
+    <div id="approve-text-body" style="padding:18px">
+      <div style="text-align:center;color:var(--charcoal-4);font-size:12px;padding:2rem">Loading draft…</div>
+    </div>
+  </div>`;
+  document.body.appendChild(backdrop);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeApproveTextModal(); });
+  loadApproveTextBody(messageId, actionItemId);
+}
+
+function closeApproveTextModal() {
+  document.getElementById('approve-text-backdrop')?.remove();
+}
+
+async function loadApproveTextBody(messageId, actionItemId) {
+  const el = document.getElementById('approve-text-body');
+  if (!el) return;
+  // Find the item in our cache for context
+  let item = null;
+  Object.values(actionItemsCache).forEach(arr => {
+    const found = (arr || []).find(it => it.related_entity_id === messageId);
+    if (found) item = found;
+  });
+  if (!item) {
+    el.innerHTML = `<div style="color:var(--danger);font-size:12px">Could not find the action item. Refresh and try again.</div>`;
+    return;
+  }
+
+  // Pull the full message list for this project, pick ours
+  try {
+    const res = await fetch(`/.netlify/functions/contractor-messages?projectId=${encodeURIComponent(item.project_id)}`, {
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    const msg = (data.messages || []).find(m => m.id === messageId);
+    if (!msg) throw new Error('Message not found');
+
+    const confirmUrl = `${location.origin}/confirm.html?token=${msg.confirm_token}`;
+    el.innerHTML = `
+      <div style="font-size:11px;color:var(--charcoal-4);margin-bottom:6px">
+        To: <strong style="color:var(--charcoal)">${escapeHtml(msg.contact_name || 'Contractor')}</strong>
+        ${msg.contact_phone ? ` · ${escapeHtml(msg.contact_phone)}` : ''}
+        ${msg.contact_email ? ` · ${escapeHtml(msg.contact_email)}` : ''}
+      </div>
+      <div style="font-size:10px;color:var(--charcoal-4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Message</div>
+      <textarea id="approve-text-body-input" class="adm-inp adm-textarea" style="min-height:200px;font-family:'Work Sans',sans-serif;font-size:13px;line-height:1.5;white-space:pre-wrap">${escapeHtml(msg.body)}</textarea>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="adm-btn adm-btn-ghost" style="flex:0 0 auto" onclick="copyApproveText()">📋 Copy message</button>
+        <button class="adm-btn adm-btn-ghost" style="flex:0 0 auto" onclick="copyApproveUrl('${msg.confirm_token}')">🔗 Copy confirm link</button>
+        <div style="flex:1"></div>
+        <button class="adm-btn" style="background:#4a7fb5;color:white" onclick="approveTextAndClose('${msg.id}','${actionItemId}')">Mark as Sent</button>
+      </div>
+      <div style="font-size:10px;color:var(--charcoal-4);margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border);line-height:1.5">
+        <strong style="color:var(--charcoal-3)">How to use:</strong> Copy the message, paste into a text or email to the contractor. They tap the link, pick Confirm/Decline/Propose. When their response lands, Today updates automatically.
+        <br>Confirm URL: <span style="color:var(--charcoal-3);word-break:break-all">${escapeHtml(confirmUrl)}</span>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="color:var(--danger);font-size:12px">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function copyApproveText() {
+  const ta = document.getElementById('approve-text-body-input');
+  if (!ta) return;
+  navigator.clipboard.writeText(ta.value).then(
+    () => schShowToast('Message copied','success'),
+    () => schShowToast('Copy failed — select and copy manually','error')
+  );
+}
+
+function copyApproveUrl(token) {
+  const url = `${location.origin}/confirm.html?token=${token}`;
+  navigator.clipboard.writeText(url).then(
+    () => schShowToast('Link copied','success'),
+    () => schShowToast('Copy failed','error')
+  );
+}
+
+async function approveTextAndClose(messageId, actionItemId) {
+  const ta = document.getElementById('approve-text-body-input');
+  const editedBody = ta?.value || null;
+  try {
+    const res = await fetch(`/.netlify/functions/contractor-messages?id=${messageId}&action=approve`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' },
+      body: JSON.stringify(editedBody ? { body: editedBody } : {}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    schShowToast('Marked sent — waiting on contractor','success');
+    closeApproveTextModal();
+    // Optimistic: drop from cache
+    Object.keys(actionItemsCache).forEach(scope => {
+      actionItemsCache[scope] = (actionItemsCache[scope] || []).filter(it => it.id !== actionItemId);
+    });
+    renderTodayQueue(todayScope);
+  } catch (err) {
+    schShowToast(err.message, 'error');
+  }
 }
 
 async function submitManualItem(projectId) {
