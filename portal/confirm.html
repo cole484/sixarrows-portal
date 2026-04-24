@@ -103,7 +103,7 @@ function renderForm(message, task, client) {
   const scope = task.contractor_scope || task.definition_of_done || '';
   return `
     <div class="confirm-card">
-      <div class="confirm-task-sub">${esc(client?.client_name || '')}${client?.address ? ' — ' + esc(client.address) : ''}</div>
+      <div class="confirm-task-sub">${esc(client?.client_name || '')}${client?.location ? ' — ' + esc(client.location) : ''}</div>
       <h2 class="confirm-task-name">${esc(task.task_name)}</h2>
       ${task.trade ? `<div class="confirm-task-sub">${esc(task.trade)}</div>` : ''}
       <div class="confirm-meta-grid">

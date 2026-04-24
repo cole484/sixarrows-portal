@@ -113,8 +113,8 @@ async function handleDraft(body) {
   const bodyText = buildMessageBody({
     contractor_name: contactName,
     task_name: task.task_name,
-    client_name: client.client_name || client.clientName,
-    address: client.address,
+    client_name: client.client_name,
+    address: client.location,
     planned_start: task.planned_start,
     duration_days: task.duration_days,
     confirm_url: confirmUrl,
@@ -207,7 +207,7 @@ async function handleGetByToken(token) {
 
   const [task, client] = await Promise.all([
     sbFetch(`project_schedule?id=eq.${message.task_id}&select=id,task_name,phase,trade,planned_start,planned_finish,duration_days,contractor_scope,definition_of_done`).then(r => r?.[0]),
-    sbFetch(`clients?id=eq.${encodeURIComponent(message.project_id)}&select=client_name,address`).then(r => r?.[0]),
+    sbFetch(`clients?id=eq.${encodeURIComponent(message.project_id)}&select=client_name,location`).then(r => r?.[0]),
   ]);
 
   return respond(200, { message, task, client });

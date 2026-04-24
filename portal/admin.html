@@ -3238,7 +3238,7 @@ function toggleTaskEdit(taskId, projectId) {
 
     <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:0.5px solid var(--border);flex-wrap:wrap">
       <button class="adm-btn adm-btn-green" onclick="saveTaskUpdate('${projectId}','${taskId}')">Save & Recalculate</button>
-      <button class="adm-btn" style="background:#4a7fb5;color:white" onclick="draftContractorText('${projectId}','${taskId}')" title="Create a contractor confirmation draft in Today">📨 Draft contractor text</button>
+      <button class="adm-btn" style="background:#4a7fb5;color:white;transition:all .15s" onclick="draftContractorText('${projectId}','${taskId}',event)" title="Create a contractor confirmation draft in Today">📨 Draft contractor text</button>
       <button class="adm-btn adm-btn-ghost" onclick="toggleTaskEdit('${taskId}','${projectId}')">Cancel</button>
     </div>
   </div>`;
@@ -3594,7 +3594,16 @@ function openManualItemForm(projectId) {
 
 // ── Contractor text drafting + approval modal ─────────────
 
-async function draftContractorText(projectId, taskId) {
+async function draftContractorText(projectId, taskId, evt) {
+  const btn = (evt && evt.currentTarget) || (window.event && window.event.currentTarget);
+  if (btn) {
+    if (btn.dataset.busy === '1') return; // prevent double-fire
+    btn.dataset.busy = '1';
+    btn.dataset.originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Drafting…';
+    btn.style.opacity = '.7';
+    btn.disabled = true;
+  }
   schShowToast('Drafting…','');
   try {
     const res = await fetch(`/.netlify/functions/contractor-messages?action=draft`, {
@@ -3604,8 +3613,28 @@ async function draftContractorText(projectId, taskId) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    schShowToast('Draft created — see Today','success');
-  } catch (e) { schShowToast(e.message,'error'); }
+    schShowToast('✓ Draft created — see Today','success');
+    if (btn) {
+      btn.innerHTML = '✓ Drafted — see Today';
+      btn.style.background = 'var(--green)';
+      btn.style.opacity = '1';
+      setTimeout(() => {
+        if (!btn.isConnected) return;
+        btn.innerHTML = btn.dataset.originalText || '📨 Draft contractor text';
+        btn.style.background = '#4a7fb5';
+        btn.dataset.busy = '0';
+        btn.disabled = false;
+      }, 2000);
+    }
+  } catch (e) {
+    schShowToast(e.message,'error');
+    if (btn) {
+      btn.innerHTML = btn.dataset.originalText || '📨 Draft contractor text';
+      btn.style.opacity = '1';
+      btn.dataset.busy = '0';
+      btn.disabled = false;
+    }
+  }
 }
 
 function openApproveTextModal(messageId, actionItemId) {
