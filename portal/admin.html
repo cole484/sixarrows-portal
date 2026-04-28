@@ -547,7 +547,10 @@ function renderAdmin() {
   // ── TODAY VIEW ────────────────────────────────────────
   if (activeView === 'today') {
     mainContent = renderTodayView(p);
-    setTimeout(() => loadActionItems(p.id), 50);
+    // Honor the persisted scope ('all' by default) instead of forcing the
+    // active project on first render — fixes the "have to click refresh
+    // to see All projects data" bug.
+    setTimeout(() => loadActionItems(sessionStorage.getItem('sa_today_scope') || 'all'), 50);
   }
 
   // ── TRACKER VIEW ──────────────────────────────────────
