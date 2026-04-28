@@ -14,7 +14,19 @@
   width:220px; flex-shrink:0; background:var(--charcoal);
   padding:1.25rem 1rem; display:flex; flex-direction:column; gap:1.25rem;
   position:sticky; top:0; height:100vh; overflow-y:auto;
+  transition:width .2s ease, padding .2s ease;
 }
+.admin-shell.sidebar-hidden .admin-sidebar { width:0; padding:0; overflow:hidden; }
+.admin-sidebar-toggle {
+  position:fixed; top:14px; z-index:20; width:26px; height:26px;
+  background:var(--charcoal); color:var(--cream); border:none; border-radius:0 6px 6px 0;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  font-size:14px; font-family:'Work Sans',sans-serif;
+  transition:left .2s ease; opacity:.85;
+}
+.admin-sidebar-toggle:hover { opacity:1; }
+.admin-shell:not(.sidebar-hidden) .admin-sidebar-toggle { left:220px; }
+.admin-shell.sidebar-hidden .admin-sidebar-toggle { left:0; border-radius:0 6px 6px 0; }
 .admin-logo { display:flex; align-items:center; gap:9px; }
 .admin-logo img { width:28px; height:28px; object-fit:contain; }
 .admin-logo-text { font-size:11px; font-weight:700; color:var(--cream); letter-spacing:.05em; text-transform:uppercase; }
@@ -41,6 +53,7 @@
 }
 .admin-topbar-title { font-size:13px; font-weight:600; color:var(--charcoal); }
 .admin-content { padding:1.5rem; max-width:900px; }
+.admin-content.full-width { max-width:none; padding:1rem 1.25rem; }
 
 /* Project tabs */
 .project-tabs { display:flex; gap:6px; margin-bottom:1.25rem; flex-wrap:wrap; }
@@ -125,6 +138,145 @@
 .adm-msg { font-size:12px; padding:8px 12px; border-radius:var(--r-md); margin-top:8px; display:none; }
 .adm-msg.success { background:var(--green-lt); color:var(--green-deep); }
 .adm-msg.error   { background:var(--danger-lt); color:var(--danger); }
+
+/* ── Schedule Dashboard & Gantt ──────────────────────── */
+.sch-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:1rem; }
+/* Compact KPI bar (default) */
+.sch-kpi-compact { display:flex; align-items:center; gap:14px; padding:8px 14px; background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); margin-bottom:8px; font-size:12px; flex-wrap:wrap; }
+.sch-kpi-compact .sch-kpi-stat { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.sch-kpi-compact .sch-kpi-stat-lbl { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--charcoal-4); font-weight:700; }
+.sch-kpi-compact .sch-kpi-stat-val { font-weight:700; color:var(--charcoal); }
+.sch-kpi-compact .sch-kpi-expand { margin-left:auto; font-size:10px; color:var(--charcoal-4); cursor:pointer; background:none; border:none; font-family:'Work Sans',sans-serif; }
+.sch-kpi-compact .sch-kpi-expand:hover { color:var(--charcoal); }
+
+/* Focus mode — hide everything except Gantt */
+.sch-focus-active .sch-kpi-row,
+.sch-focus-active .sch-kpi-compact,
+.sch-focus-active .sch-alerts,
+.sch-focus-active .sch-queue-tabs { display:none !important; }
+.sch-focus-active .sch-action-bar { padding:6px 10px; margin-bottom:6px; }
+.sch-focus-active .gantt-wrap { min-height:calc(100vh - 180px); }
+
+/* Drag tooltip */
+.gantt-drag-tip { position:fixed; z-index:50; background:var(--charcoal); color:var(--cream); padding:5px 10px; border-radius:var(--r-md); font-size:11px; font-weight:600; pointer-events:none; white-space:nowrap; box-shadow:var(--sh-md); }
+.sch-kpi-card { background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); padding:14px 16px; }
+.sch-action-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:1rem; padding:10px 14px; background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); }
+.sch-toast { font-size:12px; padding:6px 12px; border-radius:var(--r-md); margin-left:auto; transition:opacity .3s; }
+.sch-toast.success { background:var(--green-lt); color:var(--green-deep); }
+.sch-toast.error { background:var(--danger-lt); color:var(--danger); }
+
+.gantt-wrap { background:white; border:0.5px solid var(--border-2); border-radius:var(--r-md); overflow:hidden; margin-bottom:1rem; }
+.gantt-scroll { overflow-x:auto; overflow-y:visible; position:relative; }
+.gantt-header { display:flex; position:sticky; top:0; z-index:3; background:var(--cream-pale); border-bottom:0.5px solid var(--border-2); height:28px; align-items:center; }
+.gantt-week-mark { flex-shrink:0; font-size:8px; font-weight:600; color:var(--charcoal-4); text-transform:uppercase; letter-spacing:.04em; text-align:center; border-right:0.5px solid var(--border); height:100%; display:flex; align-items:center; justify-content:center; }
+.gantt-phase { border-bottom:0.5px solid var(--border); }
+.gantt-phase-hd { display:flex; align-items:center; gap:6px; padding:5px 12px; background:var(--cream-2); cursor:pointer; user-select:none; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--charcoal-3); }
+.gantt-phase-hd svg { width:10px; height:10px; transition:transform .15s; }
+.gantt-phase.collapsed .gantt-phase-hd svg { transform:rotate(-90deg); }
+.gantt-phase.collapsed .gantt-phase-body { display:none; }
+.gantt-phase-count { font-weight:400; color:var(--charcoal-4); margin-left:auto; font-size:9px; }
+.gantt-row { position:relative; height:26px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; }
+.gantt-row:hover { background:var(--cream-pale); }
+.gantt-row-label { width:180px; flex-shrink:0; padding:0 8px; font-size:11px; color:var(--charcoal-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-right:0.5px solid var(--border); position:sticky; left:0; z-index:2; background:inherit; }
+.gantt-row:hover .gantt-row-label { background:var(--cream-pale); }
+.gantt-row-track { flex:1; position:relative; min-width:0; height:100%; }
+.gantt-bar { position:absolute; top:4px; height:18px; border-radius:3px; cursor:pointer; font-size:8px; color:white; font-weight:600; display:flex; align-items:center; padding:0 5px; white-space:nowrap; overflow:hidden; transition:opacity .15s; min-width:4px; z-index:2; }
+.gantt-bar:hover { opacity:.82; }
+.gantt-bar.complete { background:var(--green); }
+.gantt-bar.in_progress { background:#4a7fb5; }
+.gantt-bar.scheduled { background:#6ba3c7; }
+.gantt-bar.needs_scheduling { background:#b0b0b0; }
+.gantt-bar.not_started { background:#b0b0b0; }
+.gantt-bar.not_ready { background:#d4a574; }
+.gantt-bar.waiting_on_client { background:#c89200; }
+.gantt-bar.on_hold { background:#8b6bb5; }
+.gantt-bar.skipped { background:#ddd; color:#999; }
+/* Workstream indicators on bars */
+.gantt-bar.ws-interior { border-left:3px solid var(--green); }
+.gantt-bar.ws-exterior { border-left:3px solid #6ba3c7; }
+.gantt-bar.ws-both { border-left:3px solid var(--charcoal-3); }
+.gantt-bar.critical { box-shadow:0 0 0 1.5px var(--charcoal); }
+.gantt-bar.alert-red { box-shadow:0 0 0 2px var(--danger); }
+.gantt-bar.alert-yellow { box-shadow:0 0 0 2px #c89200; }
+.gantt-today { position:absolute; top:0; bottom:0; width:1.5px; background:var(--danger); z-index:1; pointer-events:none; }
+.gantt-today::before { content:'Today'; position:absolute; top:2px; left:3px; font-size:7px; color:var(--danger); font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+
+.sch-edit-panel { background:white; border:1px solid var(--border-2); border-radius:var(--r-md); padding:16px; margin:0 0 4px; box-shadow:var(--sh-md); }
+.sch-edit-hd { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.sch-edit-title { font-size:14px; font-weight:700; color:var(--charcoal); }
+.sch-edit-meta { font-size:11px; color:var(--charcoal-4); margin-top:2px; }
+
+.sch-alert-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:0.5px solid var(--border); font-size:12px; }
+.sch-alert-row:last-child { border-bottom:none; }
+.sch-gate-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:6px; margin-top:8px; }
+.sch-gate-item { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--cream-pale); border:0.5px solid var(--border); border-radius:var(--r-md); font-size:11px; }
+
+/* ── Dependency arrows ───────────────────────────────── */
+.gantt-dep-svg { position:absolute; top:0; left:180px; pointer-events:none; z-index:1; overflow:visible; }
+.gantt-dep-svg line { stroke:var(--charcoal-4); stroke-width:1; opacity:.35; }
+.gantt-dep-svg polygon { fill:var(--charcoal-4); opacity:.35; }
+
+/* ── Zoom toggle ─────────────────────────────────────── */
+.sch-zoom-toggle { display:inline-flex; border:0.5px solid var(--border-2); border-radius:var(--r-md); overflow:hidden; margin-left:8px; }
+.sch-zoom-btn { padding:5px 10px; font-size:10px; font-weight:600; cursor:pointer; background:white; color:var(--charcoal-3); border:none; font-family:'Work Sans',sans-serif; transition:all .15s; }
+.sch-zoom-btn.active { background:var(--charcoal); color:var(--cream); }
+
+/* ── Gantt drag ──────────────────────────────────────── */
+.gantt-bar[data-draggable] { cursor:grab; }
+.gantt-bar[data-draggable]:active { cursor:grabbing; }
+.gantt-bar-ghost { opacity:.45; pointer-events:none; z-index:10; border:1.5px dashed var(--charcoal); }
+
+/* ── Queue sub-tabs ──────────────────────────────────── */
+.sch-queue-tabs { display:flex; gap:4px; margin-bottom:10px; }
+.sch-queue-tab { padding:5px 12px; font-size:11px; font-weight:600; cursor:pointer; background:white; color:var(--charcoal-3); border:0.5px solid var(--border-2); border-radius:999px; font-family:'Work Sans',sans-serif; transition:all .15s; }
+.sch-queue-tab.active { background:var(--charcoal); color:var(--cream); border-color:var(--charcoal); }
+.sch-queue-count { display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:rgba(0,0,0,.1); font-size:8px; font-weight:700; margin-left:3px; }
+.sch-queue-tab.active .sch-queue-count { background:rgba(255,255,255,.2); }
+
+/* ── Add task modal ──────────────────────────────────── */
+.sch-add-modal { background:white; border:1px solid var(--border-2); border-radius:var(--r-md); padding:16px; margin-bottom:1rem; box-shadow:var(--sh-md); }
+
+/* ── Task notes ──────────────────────────────────────── */
+.sch-note-item { display:flex; gap:8px; padding:8px 0; border-bottom:0.5px solid var(--border); font-size:12px; }
+.sch-note-item:last-child { border-bottom:none; }
+.sch-note-meta { font-size:10px; color:var(--charcoal-4); margin-bottom:2px; }
+.sch-note-type { font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:2px 6px; border-radius:999px; }
+.sch-note-type.instruction { background:var(--green-lt); color:var(--green-deep); }
+.sch-note-type.punchlist { background:var(--danger-lt); color:var(--danger); }
+.sch-note-type.observation { background:var(--warning-lt); color:var(--warning); }
+.sch-note-type.general { background:var(--cream-2); color:var(--charcoal-3); }
+
+/* ── Workstream lane accents ─────────────────────────── */
+.gantt-phase-hd.ws-interior { border-left:3px solid var(--green); }
+.gantt-phase-hd.ws-exterior { border-left:3px solid #6ba3c7; }
+.gantt-phase-hd.ws-both { border-left:3px solid var(--charcoal-3); }
+
+/* ── View toggle (Gantt / Table) ──────────────────────── */
+.sch-view-toggle { display:inline-flex; border:0.5px solid var(--border-2); border-radius:var(--r-md); overflow:hidden; margin-left:auto; }
+.sch-view-btn { padding:6px 14px; font-size:11px; font-weight:600; cursor:pointer; background:white; color:var(--charcoal-3); border:none; font-family:'Work Sans',sans-serif; transition:all .15s; }
+.sch-view-btn.active { background:var(--charcoal); color:var(--cream); }
+
+/* ── Task table view ─────────────────────────────────── */
+.sch-table { width:100%; border-collapse:collapse; font-size:12px; }
+.sch-table th { text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:var(--charcoal-4); font-weight:600; padding:8px 6px; border-bottom:1px solid var(--border-2); white-space:nowrap; }
+.sch-table td { padding:7px 6px; border-bottom:0.5px solid var(--border); vertical-align:middle; }
+.sch-table tr:hover td { background:var(--cream-pale); }
+.sch-table .sch-tbl-name { font-weight:600; color:var(--charcoal); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sch-table .sch-tbl-phase { color:var(--charcoal-3); font-size:11px; }
+.sch-table .sch-tbl-date { font-size:11px; color:var(--charcoal-3); white-space:nowrap; }
+.sch-table select.sch-tbl-status { font-size:11px; padding:3px 6px; border:0.5px solid var(--border-2); border-radius:var(--r-sm); background:white; font-family:'Work Sans',sans-serif; cursor:pointer; }
+
+/* ── Bulk selection ──────────────────────────────────── */
+.sch-bulk-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; background:var(--charcoal); color:var(--cream); border-radius:var(--r-md); margin-bottom:8px; font-size:12px; }
+.sch-bulk-bar .adm-btn { font-size:11px; padding:5px 12px; }
+.sch-chk { width:15px; height:15px; cursor:pointer; accent-color:var(--green); }
+
+@media(max-width:768px) {
+  .sch-kpi-row { grid-template-columns:repeat(2,1fr); }
+  .gantt-row-label { width:120px; font-size:10px; }
+  .sch-edit-panel { padding:12px; }
+  .sch-table { font-size:11px; }
+}
 </style>
 </head>
 <body>
@@ -139,6 +291,15 @@ const SUPABASE_DIRECT_URL = 'https://mtvcahscwpralmlqlnzg.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10dmNhaHNjd3ByYWxtbHFsbnpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTY4ODEsImV4cCI6MjA5MDM5Mjg4MX0.givpTh-YxG16vYZmn0KLBCPG0ivxYbjh-i8Q87eCNnk';
 let adminAuthed  = false;
 let activeProject = sessionStorage.getItem('sa_admin_project') || Object.keys(PROJECTS)[0];
+let adminSidebarCollapsed = sessionStorage.getItem('sa_admin_sidebar_collapsed') === '1';
+function toggleAdminSidebar() {
+  adminSidebarCollapsed = !adminSidebarCollapsed;
+  sessionStorage.setItem('sa_admin_sidebar_collapsed', adminSidebarCollapsed ? '1' : '0');
+  const shell = document.querySelector('.admin-shell');
+  if (shell) shell.classList.toggle('sidebar-hidden', adminSidebarCollapsed);
+  const btn = document.querySelector('.admin-sidebar-toggle');
+  if (btn) btn.textContent = adminSidebarCollapsed ? '›' : '‹';
+}
 let activeView    = sessionStorage.getItem('sa_admin_view')    || 'tracker';
 
 // ── Storage helpers ──────────────────────────────────────
@@ -257,6 +418,10 @@ async function loadAllClientsFromSupabase() {
         projectType:         client.project_type || 'new_build',
         notionTimelineDbId:  client.notion_timeline_db_id || null,
         photoFolders:        Array.isArray(client.photo_folders) ? client.photo_folders : [],
+        buildStartDate:      client.build_start_date || null,
+        targetEndDate:       client.target_end_date || null,
+        computedEndDate:     client.computed_end_date || null,
+        activeWorkstreams:   client.active_workstreams || ['exterior','interior'],
         budgetCategories:    budgetCats,
         updates:             updates.length ? updates : (existing.updates || []),
         timeline:            timeline.length ? timeline : (existing.timeline || []),
@@ -350,6 +515,8 @@ function showMsg(id, type, text, duration=2800) {
 function renderAdmin() {
   const p   = PROJECTS[activeProject];
   const nav = [
+    { key:'today',     icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="6"/><polyline points="7,3.5 7,7 9.5,8.5"/></svg>`, label:'Today'            },
+    { key:'lookahead', icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 2h12v10H1z"/><path d="M1 5h12"/><path d="M4 2v10"/><path d="M8 2v10"/><circle cx="11" cy="8.5" r="1.2" fill="currentColor" stroke="none"/></svg>`, label:'Lookahead (8w)' },
     { key:'tracker',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="3.5" x2="13" y2="3.5"/><line x1="1" y1="7" x2="9" y2="7"/><line x1="1" y1="10.5" x2="11" y2="10.5"/></svg>`, label:'SAB Tracker'     },
     { key:'updates',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 10V3a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H4L1 12V10z"/></svg>`, label:'Project Updates' },
     { key:'timeline',  icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="2.5" cy="3.5" r="1.5"/><line x1="5" y1="3.5" x2="13" y2="3.5"/><circle cx="2.5" cy="7" r="1.5"/><line x1="5" y1="7" x2="13" y2="7"/></svg>`, label:'Milestones'        },
@@ -359,6 +526,7 @@ function renderAdmin() {
     { key:'roadmap',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4l4-1.5 4 1.5 2-1v8l-2 1-4-1.5-4 1.5z"/><line x1="7" y1="2.5" x2="7" y2="12.5"/></svg>`, label:'Roadmap Vendors'  },
     { key:'documents', icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1h5.5L11 3.5V13H3V1z"/><polyline points="8.5,1 8.5,4 11,4"/></svg>`, label:'Documents'       },
     { key:'photos',    icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="1"/><circle cx="5" cy="6" r="1.5"/><path d="M1 11l3-3 2.5 2.5L10 7l3 4"/></svg>`, label:'Build Photos'    },
+    { key:'schedule',  icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="12" height="10" rx="1"/><line x1="1" y1="5.5" x2="13" y2="5.5"/><line x1="4" y1="5.5" x2="4" y2="12"/><line x1="4" y1="7.5" x2="9" y2="7.5"/><line x1="4" y1="9.5" x2="7" y2="9.5"/></svg>`, label:'Build Schedule' },
   ].map(n => `<div class="admin-nav-link ${activeView===n.key?'active':''}" onclick="activeView='${n.key}';sessionStorage.setItem('sa_admin_view','${n.key}');renderAdmin()">${n.icon}${n.label}</div>`).join('');
 
   const projectSelect = `
@@ -378,8 +546,23 @@ function renderAdmin() {
 
   let mainContent = '';
 
+  // ── TODAY VIEW ────────────────────────────────────────
+  if (activeView === 'today') {
+    mainContent = renderTodayView(p);
+    // Honor the persisted scope ('all' by default) instead of forcing the
+    // active project on first render — fixes the "have to click refresh
+    // to see All projects data" bug.
+    setTimeout(() => loadActionItems(sessionStorage.getItem('sa_today_scope') || 'all'), 50);
+  }
+
+  // ── LOOKAHEAD VIEW ────────────────────────────────────
+  else if (activeView === 'lookahead') {
+    mainContent = renderLookaheadView(p);
+    setTimeout(() => loadLookahead(sessionStorage.getItem('sa_lookahead_scope') || 'all'), 50);
+  }
+
   // ── TRACKER VIEW ──────────────────────────────────────
-  if (activeView === 'tracker') {
+  else if (activeView === 'tracker') {
     mainContent = renderTrackerView(p);
   }
 
@@ -427,13 +610,20 @@ function renderAdmin() {
     mainContent = renderPhotosView(p);
   }
 
+  // ── SCHEDULE VIEW ─────────────────────────────────────
+  else if (activeView === 'schedule') {
+    mainContent = renderScheduleView(p);
+    setTimeout(() => { if (!scheduleCache[p.id]) loadSchedule(p.id); }, 100);
+  }
+
   // ── ADD CLIENT VIEW ───────────────────────────────────
   else if (activeView === 'addclient') {
     mainContent = renderAddClientView();
   }
 
   document.body.innerHTML = `
-    <div class="admin-shell">
+    <div class="admin-shell ${adminSidebarCollapsed?'sidebar-hidden':''}">
+      <button class="admin-sidebar-toggle" onclick="toggleAdminSidebar()" title="Toggle sidebar">${adminSidebarCollapsed?'›':'‹'}</button>
       <aside class="admin-sidebar">
         <div class="admin-logo">
           <img src="${LOGO_CIRCLE}" style="width:28px;height:28px;object-fit:contain">
@@ -459,7 +649,7 @@ function renderAdmin() {
           ${activeView !== 'addclient' ? `<span class="tag ${p.projectType === 'remodel' ? '' : 'ok'}" style="font-size:10px;margin-left:6px">${p.projectType === 'remodel' ? 'Remodel' : 'New Build'}</span>` : ''}
           <span style="font-size:11px;color:var(--charcoal-4)">Admin only</span>
         </div>
-        <div class="admin-content">
+        <div class="admin-content${activeView==='schedule'?' full-width':''}">
           ${activeView !== 'addclient' ? projectSelect : ''}
           ${mainContent}
         </div>
@@ -2811,6 +3001,1726 @@ async function createClientDirect() {
   } catch(e) {
     if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'Error: ' + e.message; }
   }
+}
+
+// ════════════════════════════════════════════════════════
+//  BUILD SCHEDULE VIEW v2
+// ════════════════════════════════════════════════════════
+
+let scheduleCache = {};
+let schViewMode = 'gantt';
+let schCollapsed = {};
+let schBulkSelected = new Set();
+let schSubView = 'all';
+let schGroupBy = 'phase'; // 'phase' or 'workstream'
+let schZoom = 'days';
+let subsCache = null;
+let schShowAddTask = false;
+let schFocusMode = false;      // Full-screen Gantt
+let schKpiExpanded = false;    // Expand compact KPI bar
+let schRippleMode = true;      // true = auto-CPM on drag; false = free move
+let schTblSort = { col: 'sequence', dir: 'asc' };  // Table sort state
+function schSetSort(col) {
+  if (schTblSort.col === col) schTblSort.dir = schTblSort.dir === 'asc' ? 'desc' : 'asc';
+  else { schTblSort.col = col; schTblSort.dir = 'asc'; }
+  renderAdmin();
+}
+
+function getSchDayWidth() {
+  return schZoom === 'months' ? 1.5 : schZoom === 'weeks' ? 5 : 18;
+}
+
+const PHASE_ORDER = [
+  'Preconstruction','Sitework','Foundation','Framing & Dry-in',
+  'MEP Rough-ins','Insulation & Drywall','Interior Finishes',
+  'Exterior Finishes','Closeout'
+];
+
+const STATUS_LABELS = {
+  not_ready:'Not Ready', needs_scheduling:'Needs Scheduling',
+  waiting_on_client:'Waiting on Client', on_hold:'On Hold',
+  scheduled:'Scheduled', in_progress:'In Progress',
+  complete:'Complete', skipped:'Skipped', not_started:'Not Started'
+};
+
+const TRADE_OPTIONS = [
+  'Planning','Surveying','Excavation','Concrete','Masonry','Framing','Roofing',
+  'Windows/Doors','Plumbing','Electric','HVAC','Insulation','Drywall','Painting',
+  'Flooring','Tile','Cabinets','Counters','Trim','Landscaping','Utilities',
+  'Inspection','Cleaning','Other','GC'
+];
+
+function schDaysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+function schBarLeft(taskStart, tlStart) { return schDaysBetween(tlStart, taskStart) * getSchDayWidth(); }
+function schBarWidth(dur) { return Math.max(dur * getSchDayWidth(), getSchDayWidth()); }
+function schFmtDate(d) { if (!d) return '—'; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+function schFmtDateFull(d) { if (!d) return '—'; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+function schAddDays(dateStr, days) { const d=new Date(dateStr+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().split('T')[0]; }
+
+async function scheduleAPI(projectId, action, method='GET', body=null, extra='') {
+  const url = `/.netlify/functions/schedule-engine?projectId=${encodeURIComponent(projectId)}&action=${action}${extra}`;
+  const opts = { method, headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `API error ${res.status}`);
+  if (data.tasks) scheduleCache[projectId] = data;
+  return data;
+}
+
+async function subsAPI(method='GET', id=null, body=null) {
+  const url = `/.netlify/functions/subcontractors${id ? '?id='+id : ''}`;
+  const opts = { method, headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  return await res.json();
+}
+
+async function loadSubcontractors() { subsCache = await subsAPI(); }
+
+async function loadSchedule(projectId) {
+  const el = document.getElementById('sch-loading');
+  if (el) el.textContent = 'Loading schedule…';
+  try {
+    await loadSubcontractors();
+    const sched = await scheduleAPI(projectId, 'schedule');
+    if (sched.tasks && sched.tasks.length > 0) {
+      await scheduleAPI(projectId, 'calculate');
+    } else {
+      scheduleCache[projectId] = sched;
+    }
+    renderAdmin();
+  } catch(e) {
+    if (el) { el.textContent = 'Error: ' + e.message; el.style.color = 'var(--danger)'; }
+  }
+}
+
+async function instantiateSchedule(projectId) {
+  schShowToast('Creating schedule from templates…','');
+  try {
+    await scheduleAPI(projectId, 'instantiate', 'POST');
+    schShowToast('Schedule created!','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+async function recalculateSchedule(projectId) {
+  schShowToast('Recalculating CPM…','');
+  try {
+    await scheduleAPI(projectId, 'calculate');
+    schShowToast('CPM updated','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+async function validateSchedule(projectId) {
+  try {
+    const r = await scheduleAPI(projectId, 'validate', 'POST');
+    if (r.valid) schShowToast(`All ${r.ruleCount} sequencing rules pass`,'success');
+    else schShowToast(`${r.violationCount} sequencing violation(s) found`,'error');
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+async function saveTaskUpdate(projectId, taskId) {
+  const g = id => document.getElementById(id);
+  const body = {
+    taskId,
+    status: g(`sch-e-status-${taskId}`)?.value || 'needs_scheduling',
+    duration_days: parseInt(g(`sch-e-dur-${taskId}`)?.value) || 1,
+    actual_start: g(`sch-e-astart-${taskId}`)?.value || null,
+    actual_finish: g(`sch-e-afin-${taskId}`)?.value || null,
+    subcontractor_id: g(`sch-e-sub-${taskId}`)?.value || null,
+    contractor_confirmed: g(`sch-e-conf-${taskId}`)?.checked || false,
+    client_note: g(`sch-e-cnote-${taskId}`)?.value || null,
+    internal_note: g(`sch-e-inote-${taskId}`)?.value || null,
+    definition_of_done: g(`sch-e-dod-${taskId}`)?.value || null,
+    task_name: g(`sch-e-name-${taskId}`)?.value || undefined,
+    phase: g(`sch-e-phase-${taskId}`)?.value || undefined,
+    trade: g(`sch-e-trade-${taskId}`)?.value || undefined,
+    workstream: g(`sch-e-ws-${taskId}`)?.value || undefined,
+    perf_schedule: g(`sch-e-psch-${taskId}`)?.value || null,
+    perf_invoice: g(`sch-e-pinv-${taskId}`)?.value || null,
+    perf_communication: g(`sch-e-pcom-${taskId}`)?.value || null,
+    perf_scope: g(`sch-e-psco-${taskId}`)?.value || null,
+    perf_cleanliness: g(`sch-e-pcln-${taskId}`)?.value || null,
+    perf_notes: g(`sch-e-pnotes-${taskId}`)?.value || null,
+  };
+  // Remove undefined keys
+  Object.keys(body).forEach(k => { if (body[k] === undefined) delete body[k]; });
+  try {
+    await scheduleAPI(projectId, 'update-task', 'PATCH', body);
+    schShowToast('Saved & recalculated','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+// ── Dependency management ──
+async function schAddDep(projectId, taskId, blockedByTaskId) {
+  try {
+    await scheduleAPI(projectId, 'add-dep', 'POST', { taskId, blockedByTaskId });
+    schShowToast('Dependency added','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+async function schRemoveDep(projectId, taskId, blockedByTaskId) {
+  try {
+    await scheduleAPI(projectId, 'remove-dep', 'POST', { taskId, blockedByTaskId });
+    schShowToast('Dependency removed','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+// ── Task CRUD ──
+async function schAddTask(projectId) {
+  const g = id => document.getElementById(id);
+  const body = {
+    task_name: g('sch-add-name')?.value,
+    phase: g('sch-add-phase')?.value || 'Closeout',
+    trade: g('sch-add-trade')?.value || null,
+    workstream: g('sch-add-ws')?.value || 'both',
+    duration_days: parseInt(g('sch-add-dur')?.value) || 1,
+    sequence_order: parseInt(g('sch-add-seq')?.value) || 999,
+    definition_of_done: g('sch-add-dod')?.value || null,
+    client_note: g('sch-add-cnote')?.value || null,
+  };
+  if (!body.task_name) { schShowToast('Task name required','error'); return; }
+  try {
+    await scheduleAPI(projectId, 'add-task', 'POST', body);
+    schShowAddTask = false;
+    schShowToast('Task added','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+async function schDeleteTask(projectId, taskId, taskName) {
+  if (!confirm(`Delete "${taskName}"? Dependencies will be removed.`)) return;
+  try {
+    await scheduleAPI(projectId, 'delete-task', 'POST', { taskId });
+    schShowToast('Task deleted','success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+
+// ── Task notes ──
+async function schAddNote(projectId, taskId) {
+  const g = id => document.getElementById(id);
+  const body = { taskId, body: g(`sch-note-body-${taskId}`)?.value, note_type: g(`sch-note-type-${taskId}`)?.value || 'general' };
+  if (!body.body) return;
+  try {
+    await scheduleAPI(projectId, 'add-note', 'POST', body);
+    schLoadNotes(projectId, taskId);
+    if (g(`sch-note-body-${taskId}`)) g(`sch-note-body-${taskId}`).value = '';
+  } catch(e) { schShowToast(e.message,'error'); }
+}
+async function schLoadNotes(projectId, taskId) {
+  const data = await scheduleAPI(projectId, 'get-notes', 'GET', null, `&taskId=${taskId}`);
+  const el = document.getElementById(`sch-notes-list-${taskId}`);
+  if (!el) return;
+  const notes = data.notes || [];
+  el.innerHTML = notes.length === 0 ? '<div style="font-size:11px;color:var(--charcoal-4);font-style:italic;padding:8px 0">No notes yet.</div>' :
+    notes.map(n => `<div class="sch-note-item">
+      <div style="flex:1"><div class="sch-note-meta">${n.author} · ${new Date(n.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+      <span class="sch-note-type ${n.note_type}">${n.note_type}</span> ${n.body}</div>
+    </div>`).join('');
+}
+
+function schShowToast(msg, type) {
+  const el = document.getElementById('sch-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'sch-toast' + (type ? ' '+type : '');
+  if (type) setTimeout(() => { el.className = 'sch-toast'; el.textContent = ''; }, 4000);
+}
+
+function generateTimeMarkers(start, end) {
+  const dw = getSchDayWidth();
+  const markers = [];
+  const d = new Date(start + 'T00:00:00');
+  const endD = new Date(end + 'T00:00:00');
+
+  if (schZoom === 'months') {
+    d.setUTCDate(1); // align to month start
+    while (d <= endD) {
+      const daysInMonth = new Date(d.getUTCFullYear(), d.getUTCMonth()+1, 0).getUTCDate();
+      markers.push({ label: d.toLocaleDateString('en-US',{month:'short',year:'2-digit',timeZone:'UTC'}), width: daysInMonth * dw });
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+  } else {
+    const day = d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
+    while (d <= endD) {
+      markers.push({ label: d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}), width: 7 * dw });
+      d.setUTCDate(d.getUTCDate() + 7);
+    }
+  }
+  return markers;
+}
+
+function groupTasksByPhase(tasks) {
+  const map = new Map();
+  PHASE_ORDER.forEach(p => map.set(p, []));
+  tasks.forEach(t => {
+    const phase = t.phase || 'Other';
+    if (!map.has(phase)) map.set(phase, []);
+    map.get(phase).push(t);
+  });
+  return map;
+}
+
+function groupTasksByWorkstream(tasks) {
+  const map = new Map([['Interior',[]],['Exterior',[]],['Both',[]]]);
+  tasks.forEach(t => {
+    const ws = (t.workstream||'both').charAt(0).toUpperCase() + (t.workstream||'both').slice(1);
+    if (!map.has(ws)) map.set(ws, []);
+    map.get(ws).push(t);
+  });
+  return map;
+}
+
+function filterQueue(tasks, queueKey) {
+  const now = new Date().toISOString().split('T')[0];
+  switch(queueKey) {
+    case 'next_to_schedule': {
+      const cutoff = schAddDays(now, 30);
+      return tasks.filter(t =>
+        (t.status === 'needs_scheduling' || t.status === 'not_ready') &&
+        (!t.plannedStart || t.plannedStart <= cutoff)
+      ).sort((a,b) => (a.sequenceOrder||0) - (b.sequenceOrder||0));
+    }
+    case 'long_lead':
+      return tasks.filter(t => t.isLongLead && t.status !== 'complete')
+        .sort((a,b) => (a.mustScheduleBy||'9999') < (b.mustScheduleBy||'9999') ? -1 : 1);
+    case 'waiting_hold':
+      return tasks.filter(t => t.status === 'waiting_on_client' || t.status === 'on_hold');
+    default: return tasks;
+  }
+}
+function countQueue(tasks, key) { return filterQueue(tasks, key).length; }
+
+// ── View / zoom / group toggles ──
+function schSetView(mode) { schViewMode = mode; renderAdmin(); }
+function schSetZoom(level) { schZoom = level; renderAdmin(); }
+function schSetGroupBy(mode) { schGroupBy = mode; renderAdmin(); }
+function schSetSubView(key) { schSubView = key; renderAdmin(); }
+
+// ── Phase collapse memory ──
+function schTogglePhase(pi) {
+  schCollapsed[pi] = !schCollapsed[pi];
+  const el = document.getElementById('sch-phase-' + pi);
+  if (el) el.classList.toggle('collapsed', schCollapsed[pi]);
+}
+
+// ── Bulk selection ──
+function schToggleBulk(taskId) {
+  if (schBulkSelected.has(taskId)) schBulkSelected.delete(taskId);
+  else schBulkSelected.add(taskId);
+  const countEl = document.getElementById('sch-bulk-count');
+  if (countEl) countEl.textContent = schBulkSelected.size + ' selected';
+  const bar = document.getElementById('sch-bulk-bar');
+  if (bar) bar.style.display = schBulkSelected.size > 0 ? 'flex' : 'none';
+}
+
+function schSelectAll() {
+  const cache = scheduleCache[activeProject];
+  if (!cache) return;
+  cache.tasks.forEach(t => { if (t.status !== 'complete' && t.status !== 'skipped') schBulkSelected.add(t.id); });
+  renderAdmin();
+}
+
+function schSelectNone() { schBulkSelected.clear(); renderAdmin(); }
+
+async function schBulkSetStatus(projectId, status) {
+  if (schBulkSelected.size === 0) return;
+  schShowToast(`Updating ${schBulkSelected.size} tasks…`, '');
+  try {
+    for (const taskId of schBulkSelected) {
+      const body = { taskId, status };
+      if (status === 'in_progress') body.actual_start = new Date().toISOString().split('T')[0];
+      if (status === 'complete') {
+        body.actual_start = body.actual_start || new Date().toISOString().split('T')[0];
+        body.actual_finish = new Date().toISOString().split('T')[0];
+      }
+      await scheduleAPI(projectId, 'update-task', 'PATCH', body);
+    }
+    schBulkSelected.clear();
+    schShowToast('Bulk update complete', 'success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message, 'error'); }
+}
+
+// ── Inline status change (table view) ──
+async function schQuickStatus(projectId, taskId, newStatus) {
+  const body = { taskId, status: newStatus };
+  if (newStatus === 'in_progress') body.actual_start = new Date().toISOString().split('T')[0];
+  if (newStatus === 'complete') body.actual_finish = new Date().toISOString().split('T')[0];
+  try {
+    await scheduleAPI(projectId, 'update-task', 'PATCH', body);
+    schShowToast('Updated', 'success');
+    renderAdmin();
+  } catch(e) { schShowToast(e.message, 'error'); }
+}
+
+// ── Auto-scroll to today ──
+function schAutoScrollToday() {
+  const scroll = document.querySelector('.gantt-scroll');
+  const today = document.querySelector('.gantt-today');
+  if (scroll && today) {
+    const todayLeft = parseInt(today.style.left) || 0;
+    scroll.scrollLeft = Math.max(0, todayLeft - 300);
+  }
+}
+
+// ── Drag-to-reschedule (smooth free-follow with live tooltip) ──
+let _dragState = null;
+let _dragTip = null;
+
+function schComputeDateFromLeft(leftPx) {
+  const cache = scheduleCache[activeProject];
+  if (!cache) return null;
+  const tlStart = cache.tasks.reduce((m,t) => { const s=t.plannedStart; return s&&(!m||s<m)?s:m; }, null) || cache.buildStart;
+  const dw = getSchDayWidth();
+  return schAddDays(tlStart, Math.round(leftPx / dw));
+}
+
+function initGanttDrag() {
+  const scroll = document.querySelector('.gantt-scroll');
+  if (!scroll || scroll.dataset.dragInit) return;
+  scroll.dataset.dragInit = '1';
+
+  scroll.addEventListener('mousedown', (e) => {
+    const bar = e.target.closest('.gantt-bar[data-draggable]');
+    if (!bar) return;
+    e.preventDefault();
+    window._dragMoved = false;
+    const ghost = bar.cloneNode(true);
+    ghost.classList.add('gantt-bar-ghost');
+    bar.parentElement.appendChild(ghost);
+
+    // Create floating tooltip
+    _dragTip = document.createElement('div');
+    _dragTip.className = 'gantt-drag-tip';
+    _dragTip.textContent = '';
+    document.body.appendChild(_dragTip);
+
+    _dragState = {
+      bar, ghost,
+      taskId: bar.dataset.taskId,
+      origLeft: parseFloat(bar.dataset.originalLeft),
+      startX: e.clientX + scroll.scrollLeft,
+      startY: e.clientY,
+      scroll,
+      startTop: bar.closest('.gantt-row').getBoundingClientRect().top,
+    };
+  });
+
+  // Robust row-at-point: elementFromPoint first, then nearest-row fallback by Y.
+  // Falls back because elementFromPoint may land on empty area (dep SVG, hidden
+  // edit panel, phase gap) where .closest('.gantt-row') returns null.
+  function schRowAtPoint(clientX, clientY) {
+    const el = document.elementFromPoint(clientX, clientY);
+    const row = el?.closest?.('.gantt-row');
+    if (row && row.dataset.taskId) return row;
+    let best = null, bestDist = Infinity;
+    document.querySelectorAll('.gantt-row[data-task-id]').forEach(r => {
+      const rect = r.getBoundingClientRect();
+      if (rect.height === 0) return;
+      const center = rect.top + rect.height / 2;
+      const dist = Math.abs(clientY - center);
+      if (dist < bestDist && dist < 60) { best = r; bestDist = dist; }
+    });
+    return best;
+  }
+
+  document.addEventListener('mousemove', (e) => {
+    if (!_dragState) return;
+    window._dragMoved = true;
+    const { ghost, origLeft, startX, startY, scroll, taskId } = _dragState;
+    // Free follow — X and Y
+    const dx = (e.clientX + scroll.scrollLeft) - startX;
+    const dy = e.clientY - startY;
+    const newLeft = Math.max(0, origLeft + dx);
+    ghost.style.left = newLeft + 'px';
+    ghost.style.transform = `translateY(${dy}px)`;
+
+    // Detect hovered row (ignore dragged task's own row)
+    const hoveredRow = schRowAtPoint(e.clientX, e.clientY);
+    const validTarget = hoveredRow && hoveredRow.dataset.taskId && hoveredRow.dataset.taskId !== taskId;
+    _dragState.hoveredTaskId = validTarget ? hoveredRow.dataset.taskId : null;
+
+    // Highlight hovered row
+    document.querySelectorAll('.gantt-row').forEach(r => r.style.outline = '');
+    if (validTarget) {
+      hoveredRow.style.outline = '2px solid var(--green)';
+      hoveredRow.style.outlineOffset = '-2px';
+    }
+
+    // Live tooltip
+    if (_dragTip) {
+      const isReorderIntent = Math.abs(dy) > 20;
+      const dw = getSchDayWidth();
+      const snapped = Math.round(newLeft / dw) * dw;
+      const d = schComputeDateFromLeft(snapped);
+      const dateStr = d ? new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '';
+      const cache = scheduleCache[activeProject];
+      const hoveredTask = _dragState.hoveredTaskId && cache ? cache.tasks.find(t => t.id === _dragState.hoveredTaskId) : null;
+      if (isReorderIntent && hoveredTask) {
+        _dragTip.innerHTML = `↕ reorder before "${hoveredTask.taskName}"`;
+      } else if (isReorderIntent) {
+        _dragTip.innerHTML = `<span style="opacity:.7">release on a row to reorder</span>`;
+      } else {
+        _dragTip.innerHTML = dateStr;
+      }
+      _dragTip.style.left = (e.clientX + 14) + 'px';
+      _dragTip.style.top = (e.clientY + 14) + 'px';
+    }
+  });
+
+  document.addEventListener('mouseup', async (e) => {
+    if (!_dragState) return;
+    const { ghost, taskId, origLeft, startX, startY, scroll } = _dragState;
+    _dragState = null;
+    ghost.remove();
+    if (_dragTip) { _dragTip.remove(); _dragTip = null; }
+    document.querySelectorAll('.gantt-row').forEach(r => r.style.outline = '');
+
+    if (!window._dragMoved) return;
+
+    const dx = (e.clientX + scroll.scrollLeft) - startX;
+    const dy = e.clientY - startY;
+    const dw = getSchDayWidth();
+    const cache = scheduleCache[activeProject];
+    if (!cache) return;
+
+    // Recompute drop target at release time (don't trust stale mousemove value).
+    const dropRow = schRowAtPoint(e.clientX, e.clientY);
+    const hoveredTaskId = (dropRow && dropRow.dataset.taskId && dropRow.dataset.taskId !== taskId)
+      ? dropRow.dataset.taskId : null;
+
+    // Intent: vertical drag above threshold means the user wants to reorder.
+    // If intent is reorder but no valid target, cancel silently — do NOT reschedule.
+    const REORDER_THRESHOLD = 20;
+    const reorderIntent = Math.abs(dy) > REORDER_THRESHOLD;
+    if (reorderIntent && !hoveredTaskId) {
+      schShowToast('Drop on a task row to reorder','');
+      return;
+    }
+    const isReorder = reorderIntent && hoveredTaskId;
+
+    try {
+      if (isReorder) {
+        // REORDER: insert dragged task immediately before the hovered task.
+        // Optimistic UI — reorder in-memory and re-render before the network round-trip.
+        const draggedTask = cache.tasks.find(t => t.id === taskId);
+        const targetTask = cache.tasks.find(t => t.id === hoveredTaskId);
+        if (!draggedTask || !targetTask) return;
+
+        const newPhase = (targetTask.phase && targetTask.phase !== draggedTask.phase) ? targetTask.phase : null;
+
+        // Snapshot for rollback
+        const snapshot = cache.tasks.map(t => ({ id: t.id, sequenceOrder: t.sequenceOrder, phase: t.phase }));
+
+        // In-memory reorder + renumber
+        const arr = cache.tasks.slice().sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+        const fromIdx = arr.findIndex(t => t.id === taskId);
+        if (fromIdx < 0) return;
+        const [moved] = arr.splice(fromIdx, 1);
+        const toIdx = arr.findIndex(t => t.id === hoveredTaskId);
+        arr.splice(toIdx, 0, moved);
+        if (newPhase) moved.phase = newPhase;
+        arr.forEach((t, i) => { t.sequenceOrder = i + 1; });
+        cache.tasks = arr;
+        renderAdmin();
+
+        // Fire server update in background
+        const patch = { taskId, targetTaskId: hoveredTaskId };
+        if (newPhase) patch.phase = newPhase;
+        scheduleAPI(activeProject, 'reorder-task', 'PATCH', patch)
+          .then(() => schShowToast('Reordered','success'))
+          .catch(err => {
+            // Roll back on failure
+            const byId = new Map(snapshot.map(s => [s.id, s]));
+            cache.tasks.forEach(t => { const s = byId.get(t.id); if (s) { t.sequenceOrder = s.sequenceOrder; t.phase = s.phase; } });
+            renderAdmin();
+            schShowToast('Reorder failed: ' + err.message, 'error');
+          });
+      } else {
+        // RESCHEDULE (horizontal move)
+        const rawLeft = Math.max(0, origLeft + dx);
+        const snappedLeft = Math.round(rawLeft / dw) * dw;
+        const newStartDate = schComputeDateFromLeft(snappedLeft);
+        if (!newStartDate) return;
+
+        const endpoint = schRippleMode ? 'update-task' : 'move-task';
+        const msg = schRippleMode ? 'Rescheduled & recalculated' : 'Moved';
+        schShowToast(schRippleMode ? 'Rescheduling…' : 'Moving…','');
+        await scheduleAPI(activeProject, endpoint, 'PATCH', { taskId, planned_start: newStartDate });
+        if (schRippleMode) {
+          schShowToast(msg,'success');
+          renderAdmin();
+        } else {
+          const t = cache.tasks.find(x => x.id === taskId);
+          if (t) {
+            t.plannedStart = newStartDate;
+            const d = new Date(newStartDate+'T00:00:00Z');
+            d.setUTCDate(d.getUTCDate() + (t.durationDays||1));
+            t.plannedFinish = d.toISOString().split('T')[0];
+          }
+          schShowToast(msg,'success');
+          renderAdmin();
+        }
+      }
+    } catch(err) { schShowToast(err.message, 'error'); }
+  });
+}
+
+// ── Table view renderer ──
+function renderScheduleTable(tasks, projectId) {
+  const statusOpts = (cur) => Object.entries(STATUS_LABELS).map(([s,l]) =>
+    `<option value="${s}" ${s===cur?'selected':''}>${l}</option>`
+  ).join('');
+
+  // ── Sort tasks ──
+  const sortCol = schTblSort.col;
+  const dir = schTblSort.dir === 'asc' ? 1 : -1;
+  const getSubName = (t) => t.subcontractorId && subsCache ? (subsCache.find(s=>s.id===t.subcontractorId)||{}).name||'' : t.assignedContractor||'';
+  const sortedTasks = [...tasks].sort((a,b) => {
+    let av, bv;
+    switch(sortCol) {
+      case 'name': av=a.taskName||''; bv=b.taskName||''; break;
+      case 'phase': av=PHASE_ORDER.indexOf(a.phase); bv=PHASE_ORDER.indexOf(b.phase); break;
+      case 'status': av=a.status||''; bv=b.status||''; break;
+      case 'start': av=a.plannedStart||'9999'; bv=b.plannedStart||'9999'; break;
+      case 'finish': av=a.plannedFinish||'9999'; bv=b.plannedFinish||'9999'; break;
+      case 'duration': av=a.durationDays||0; bv=b.durationDays||0; break;
+      case 'contractor': av=getSubName(a).toLowerCase(); bv=getSubName(b).toLowerCase(); break;
+      case 'workstream': av=a.workstream||''; bv=b.workstream||''; break;
+      case 'float': av=a.float??9999; bv=b.float??9999; break;
+      case 'alert': { const rank={red:0,yellow:1,none:2}; av=rank[a.alertLevel]??3; bv=rank[b.alertLevel]??3; break; }
+      default: av=a.sequenceOrder||0; bv=b.sequenceOrder||0;
+    }
+    if (av<bv) return -1*dir;
+    if (av>bv) return 1*dir;
+    return 0;
+  });
+
+  const sortArrow = (col) => sortCol === col ? (schTblSort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+  const th = (col, label, style='') => `<th style="cursor:pointer;user-select:none;${style}" onclick="schSetSort('${col}')">${label}${sortArrow(col)}</th>`;
+
+  // Group when sorted by sequence, otherwise flat
+  let html = '';
+  const groupByPhase = sortCol === 'sequence';
+
+  if (groupByPhase) {
+    const phaseMap = groupTasksByPhase(sortedTasks);
+    for (const [phaseName, phaseTasks] of phaseMap) {
+      if (phaseTasks.length === 0) continue;
+      const pi = PHASE_ORDER.indexOf(phaseName);
+      const isCollapsed = schCollapsed[pi];
+      const done = phaseTasks.filter(t => t.status === 'complete').length;
+      html += `<tr><td colspan="11" style="padding:0">
+        <div class="gantt-phase-hd" onclick="schTogglePhase(${pi})" id="sch-tbl-phase-${pi}">
+          <svg viewBox="0 0 10 10" style="width:10px;height:10px;transition:transform .15s;${isCollapsed?'transform:rotate(-90deg)':''}"><path d="M3 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          ${phaseName} <span class="gantt-phase-count">${done}/${phaseTasks.length}</span>
+        </div>
+      </td></tr>`;
+      if (!isCollapsed) {
+        phaseTasks.forEach(t => html += renderTableRow(t, projectId, statusOpts));
+      }
+    }
+  } else {
+    sortedTasks.forEach(t => html += renderTableRow(t, projectId, statusOpts));
+  }
+
+  return `<div class="card" style="overflow-x:auto;margin-bottom:1rem">
+    <table class="sch-table">
+      <thead><tr>
+        <th style="width:30px"><input type="checkbox" class="sch-chk" onchange="this.checked?schSelectAll():schSelectNone()"></th>
+        ${th('name','Task')}
+        ${th('phase','Phase')}
+        ${th('status','Status')}
+        ${th('start','Start')}
+        ${th('finish','Finish')}
+        ${th('duration','Dur')}
+        ${th('contractor','Contractor')}
+        ${th('workstream','WS')}
+        ${th('alert','Alert','text-align:center')}
+        ${th('float','Float','text-align:right')}
+      </tr></thead>
+      <tbody>${html}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderTableRow(t, projectId, statusOpts) {
+  const id = t.id;
+  const name = t.taskName || t.task_name;
+  const status = t.status || 'not_started';
+  const start = t.plannedStart || t.planned_start;
+  const finish = t.plannedFinish || t.planned_finish;
+  const contractor = t.assignedContractor || t.assigned_contractor || '';
+  const alert = t.alertLevel || t.alert_level || 'none';
+  const crit = t.isCritical;
+  const fl = t.float;
+  const checked = schBulkSelected.has(id);
+  const ws = t.workstream || 'both';
+  const wsTag = `<span class="tag ${ws==='interior'?'ok':ws==='exterior'?'neutral':'dark'}" style="font-size:8px">${ws.charAt(0).toUpperCase()+ws.slice(1)}</span>`;
+  const subName = t.subcontractorId && subsCache ? (subsCache.find(s=>s.id===t.subcontractorId)||{}).name||'—' : contractor || '—';
+  const dur = t.durationDays || t.duration_days || 1;
+  return `<tr>
+    <td style="width:30px;text-align:center"><input type="checkbox" class="sch-chk" ${checked?'checked':''} onchange="schToggleBulk('${id}')"></td>
+    <td class="sch-tbl-name" title="${name}" onclick="toggleTaskEdit('${id}','${projectId}')" style="cursor:pointer">${name}</td>
+    <td style="font-size:10px;color:var(--charcoal-4)">${t.phase||'—'}</td>
+    <td><select class="sch-tbl-status" onchange="schQuickStatus('${projectId}','${id}',this.value)">${statusOpts(status)}</select></td>
+    <td class="sch-tbl-date">${schFmtDate(start)}</td>
+    <td class="sch-tbl-date">${schFmtDate(finish)}</td>
+    <td style="font-size:11px;text-align:center">${dur}d</td>
+    <td style="font-size:11px;color:var(--charcoal-3)">${subName}</td>
+    <td>${wsTag}</td>
+    <td style="text-align:center">${alert==='red'?'<span class="tag danger" style="font-size:8px">RED</span>':alert==='yellow'?'<span class="tag warn" style="font-size:8px">YLW</span>':crit?'<span class="tag dark" style="font-size:8px">CRIT</span>':''}</td>
+    <td style="font-size:10px;color:var(--charcoal-4);text-align:right">${fl!=null?fl+'d':''}</td>
+  </tr>
+  <tr id="sch-edit-${id}" style="display:none"><td colspan="11" style="padding:0"></td></tr>`;
+}
+
+let schEditOpen = null;
+
+function toggleTaskEdit(taskId, projectId) {
+  const el = document.getElementById('sch-edit-' + taskId);
+  if (!el) return;
+  if (schEditOpen === taskId) { el.style.display = 'none'; schEditOpen = null; return; }
+  if (schEditOpen) { const prev = document.getElementById('sch-edit-' + schEditOpen); if (prev) prev.style.display = 'none'; }
+
+  const cache = scheduleCache[activeProject];
+  if (!cache) return;
+  const task = cache.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const deps = cache.dependencies || [];
+  const blockedBy = deps.filter(d => d.taskId === taskId).map(d => { const bt = cache.tasks.find(t => t.id === d.blockedByTaskId); return bt ? { id: d.blockedByTaskId, name: bt.taskName } : null; }).filter(Boolean);
+  const blocking = deps.filter(d => d.blockedByTaskId === taskId).map(d => { const bt = cache.tasks.find(t => t.id === d.taskId); return bt ? { id: d.taskId, name: bt.taskName } : null; }).filter(Boolean);
+
+  const statusOpts = Object.entries(STATUS_LABELS).map(([s,l]) => `<option value="${s}" ${s===task.status?'selected':''}>${l}</option>`).join('');
+  const phaseOpts = PHASE_ORDER.map(p => `<option value="${p}" ${p===task.phase?'selected':''}>${p}</option>`).join('');
+  const tradeOpts = TRADE_OPTIONS.map(t => `<option value="${t}" ${t===task.trade?'selected':''}>${t}</option>`).join('');
+  const wsOpts = ['interior','exterior','both'].map(w => `<option value="${w}" ${w===task.workstream?'selected':''}>${w.charAt(0).toUpperCase()+w.slice(1)}</option>`).join('');
+  const subOpts = `<option value="">— None —</option>` + (subsCache||[]).map(s => `<option value="${s.id}" ${s.id===task.subcontractorId?'selected':''}>${s.name}${s.trade?' ('+s.trade+')':''}</option>`).join('');
+  const rOpts = (val) => ['','excellent','good','fair','poor','na'].map(r => `<option value="${r}" ${r===(val||'')?'selected':''}>${r?r.charAt(0).toUpperCase()+r.slice(1):'—'}</option>`).join('');
+  const depSelectOpts = cache.tasks.filter(t => t.id !== taskId && !blockedBy.find(b => b.id === t.id)).map(t => `<option value="${t.id}">${t.taskName}</option>`).join('');
+
+  el.innerHTML = `<div class="sch-edit-panel">
+    <div class="sch-edit-hd">
+      <div>
+        <div class="sch-edit-meta">${schFmtDate(task.plannedStart)} → ${schFmtDate(task.plannedFinish)} · Float: ${task.float??'—'}d${task.isCritical?' · <strong>CRITICAL PATH</strong>':''}${task.selectionsGate?' · Gate: '+task.selectionsGate:''}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="tag ${task.status==='complete'?'ok':task.alertLevel==='red'?'danger':task.alertLevel==='yellow'?'warn':'neutral'}">${STATUS_LABELS[task.status]||task.status}</span>
+        <button class="adm-btn adm-btn-danger" style="padding:4px 8px;font-size:10px" onclick="schDeleteTask('${projectId}','${taskId}','${(task.taskName||'').replace(/'/g,"\\'")}')">Delete</button>
+      </div>
+    </div>
+
+    <div class="adm-grid2" style="margin-bottom:6px">
+      <div class="adm-field"><label>Task Name</label><input class="adm-inp" id="sch-e-name-${taskId}" value="${task.taskName||''}"></div>
+      <div class="adm-field"><label>Status</label><select class="adm-inp adm-sel" id="sch-e-status-${taskId}">${statusOpts}</select></div>
+      <div class="adm-field"><label>Phase</label><select class="adm-inp adm-sel" id="sch-e-phase-${taskId}">${phaseOpts}</select></div>
+      <div class="adm-field"><label>Trade</label><select class="adm-inp adm-sel" id="sch-e-trade-${taskId}">${tradeOpts}</select></div>
+      <div class="adm-field"><label>Workstream</label><select class="adm-inp adm-sel" id="sch-e-ws-${taskId}">${wsOpts}</select></div>
+      <div class="adm-field"><label>Duration (days)</label><input class="adm-inp" type="number" id="sch-e-dur-${taskId}" value="${task.durationDays}" min="1"></div>
+      <div class="adm-field"><label>Actual Start</label><input class="adm-inp" type="date" id="sch-e-astart-${taskId}" value="${task.actualStart||''}"></div>
+      <div class="adm-field"><label>Actual Finish</label><input class="adm-inp" type="date" id="sch-e-afin-${taskId}" value="${task.actualFinish||''}"></div>
+    </div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:10px 0 6px">Client-Facing</div>
+    <div class="adm-field"><label>Client Note (visible to client)</label><textarea class="adm-inp" id="sch-e-cnote-${taskId}" rows="2" style="background:var(--cream-pale)">${task.clientNote||''}</textarea></div>
+    <div class="adm-field"><label>Definition of Done (acceptance criteria)</label><textarea class="adm-inp" id="sch-e-dod-${taskId}" rows="2">${task.definitionOfDone||''}</textarea></div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:10px 0 6px">Internal</div>
+    <div class="adm-field"><label>Internal Note (admin only)</label><textarea class="adm-inp" id="sch-e-inote-${taskId}" rows="2" style="border-color:var(--green)">${task.internalNote||''}</textarea></div>
+
+    <div class="adm-grid2" style="margin-top:6px">
+      <div class="adm-field"><label>Subcontractor</label><select class="adm-inp adm-sel" id="sch-e-sub-${taskId}">${subOpts}</select></div>
+      <div class="adm-field" style="display:flex;align-items:center;gap:8px;padding-top:22px">
+        <input type="checkbox" id="sch-e-conf-${taskId}" ${task.contractorConfirmed?'checked':''}>
+        <label for="sch-e-conf-${taskId}" style="margin:0;text-transform:none;letter-spacing:0;font-size:12px">Contractor confirmed</label>
+      </div>
+    </div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:10px 0 6px">Dependencies</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--charcoal-3)">Blocked by:</span>
+      ${blockedBy.length ? blockedBy.map(b => `<span class="tag neutral" style="font-size:9px">${b.name} <span style="cursor:pointer;margin-left:2px" onclick="schRemoveDep('${projectId}','${taskId}','${b.id}')">&times;</span></span>`).join('') : '<span style="font-size:11px;color:var(--charcoal-4);font-style:italic">None</span>'}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--charcoal-3)">Blocking:</span>
+      ${blocking.length ? blocking.map(b => `<span class="tag neutral" style="font-size:9px">${b.name}</span>`).join('') : '<span style="font-size:11px;color:var(--charcoal-4);font-style:italic">None</span>'}
+    </div>
+    ${depSelectOpts ? `<div style="display:flex;gap:4px;align-items:center"><select class="adm-inp adm-sel" id="sch-dep-add-${taskId}" style="font-size:11px;max-width:250px"><option value="">Add predecessor…</option>${depSelectOpts}</select><button class="adm-btn adm-btn-ghost" style="padding:4px 8px;font-size:10px" onclick="const v=document.getElementById('sch-dep-add-${taskId}').value;if(v)schAddDep('${projectId}','${taskId}',v)">Add</button></div>` : ''}
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:12px 0 6px">Performance Ratings</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">
+      <div class="adm-field"><label>Schedule</label><select class="adm-inp adm-sel" id="sch-e-psch-${taskId}">${rOpts(task.perfSchedule)}</select></div>
+      <div class="adm-field"><label>Invoice</label><select class="adm-inp adm-sel" id="sch-e-pinv-${taskId}">${rOpts(task.perfInvoice)}</select></div>
+      <div class="adm-field"><label>Communication</label><select class="adm-inp adm-sel" id="sch-e-pcom-${taskId}">${rOpts(task.perfCommunication)}</select></div>
+      <div class="adm-field"><label>Scope</label><select class="adm-inp adm-sel" id="sch-e-psco-${taskId}">${rOpts(task.perfScope)}</select></div>
+      <div class="adm-field"><label>Cleanliness</label><select class="adm-inp adm-sel" id="sch-e-pcln-${taskId}">${rOpts(task.perfCleanliness)}</select></div>
+    </div>
+    <div class="adm-field" style="margin-top:4px"><label>Performance Notes</label><textarea class="adm-inp" id="sch-e-pnotes-${taskId}" rows="2">${task.perfNotes||''}</textarea></div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin:12px 0 6px">Task Notes & Instructions</div>
+    <div id="sch-notes-list-${taskId}" style="max-height:200px;overflow-y:auto"><div style="font-size:11px;color:var(--charcoal-4);font-style:italic;padding:8px 0">Loading notes…</div></div>
+    <div style="display:flex;gap:4px;margin-top:6px">
+      <select class="adm-inp adm-sel" id="sch-note-type-${taskId}" style="width:120px;font-size:11px">
+        <option value="general">General</option><option value="instruction">Instruction</option><option value="punchlist">Punchlist</option><option value="observation">Observation</option>
+      </select>
+      <input class="adm-inp" id="sch-note-body-${taskId}" placeholder="Add a note…" style="flex:1;font-size:11px">
+      <button class="adm-btn adm-btn-ghost" style="padding:4px 10px;font-size:10px" onclick="schAddNote('${projectId}','${taskId}')">Post</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:0.5px solid var(--border);flex-wrap:wrap">
+      <button class="adm-btn adm-btn-green" onclick="saveTaskUpdate('${projectId}','${taskId}')">Save & Recalculate</button>
+      <button class="adm-btn" style="background:#4a7fb5;color:white;transition:all .15s" onclick="draftContractorText('${projectId}','${taskId}',event)" title="Create a contractor confirmation draft in Today">📨 Draft contractor text</button>
+      <button class="adm-btn adm-btn-ghost" onclick="toggleTaskEdit('${taskId}','${projectId}')">Cancel</button>
+    </div>
+  </div>`;
+  el.style.display = 'block';
+  schEditOpen = taskId;
+  // Load notes async
+  schLoadNotes(projectId, taskId);
+}
+
+function renderGanttRow(task, tlStart, tlWidth) {
+  const barL = schBarLeft(task.plannedStart || task.planned_start, tlStart);
+  const barW = schBarWidth(task.durationDays || task.duration_days || 1);
+  const status = task.status || 'needs_scheduling';
+  const crit = task.isCritical ? 'critical' : '';
+  const alert = (task.alertLevel||task.alert_level)==='red' ? 'alert-red' : (task.alertLevel||task.alert_level)==='yellow' ? 'alert-yellow' : '';
+  const ws = (task.workstream||'both');
+  const wsClass = 'ws-'+ws;
+  const name = task.taskName || task.task_name;
+  const id = task.id;
+  const canDrag = status !== 'complete' && status !== 'skipped';
+  const dw = getSchDayWidth();
+  return `<div class="gantt-row" data-task-id="${id}">
+    <div class="gantt-row-label" title="${name}">${name}</div>
+    <div class="gantt-row-track" style="width:${tlWidth}px">
+      <div class="gantt-bar ${status} ${crit} ${alert} ${wsClass}" style="left:${barL}px;width:${barW}px"
+           ${canDrag ? `data-draggable="true" data-task-id="${id}" data-original-left="${barL}"` : ''}
+           onclick="if(!window._dragMoved)toggleTaskEdit('${id}','${activeProject}')"
+           title="${name} (${task.durationDays||task.duration_days}d) ${task.trade||''}&#10;${schFmtDate(task.plannedStart||task.planned_start)} → ${schFmtDate(task.plannedFinish||task.planned_finish)}">
+        ${barW > 70 ? name : ''}
+      </div>
+    </div>
+  </div>
+  <div id="sch-edit-${id}" style="display:none"></div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  CHARTS VIEW — visual dashboards
+// ══════════════════════════════════════════════════════
+function renderScheduleCharts(tasks, cache) {
+  if (!tasks || tasks.length === 0) return `<div class="card"><div style="padding:2rem;text-align:center;color:var(--charcoal-4)">No tasks to chart</div></div>`;
+
+  // Phase completion bars
+  const phaseStats = {};
+  PHASE_ORDER.forEach(p => phaseStats[p] = { total:0, complete:0, inProg:0, days:0 });
+  tasks.forEach(t => {
+    const p = t.phase || 'Other';
+    if (!phaseStats[p]) phaseStats[p] = { total:0, complete:0, inProg:0, days:0 };
+    phaseStats[p].total++;
+    phaseStats[p].days += (t.durationDays || 0);
+    if (t.status === 'complete') phaseStats[p].complete++;
+    if (t.status === 'in_progress') phaseStats[p].inProg++;
+  });
+
+  const phaseBars = Object.entries(phaseStats).filter(([,s])=>s.total>0).map(([name, s]) => {
+    const pct = s.total ? Math.round(s.complete/s.total*100) : 0;
+    const inProgPct = s.total ? Math.round(s.inProg/s.total*100) : 0;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
+        <span style="font-weight:600;color:var(--charcoal)">${name}</span>
+        <span style="color:var(--charcoal-4)">${s.complete}/${s.total} · ${s.days}d</span>
+      </div>
+      <div style="height:14px;background:var(--cream-2);border-radius:7px;overflow:hidden;display:flex">
+        <div style="width:${pct}%;background:var(--green);transition:width .3s"></div>
+        <div style="width:${inProgPct}%;background:#4a7fb5;transition:width .3s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Status donut (pseudo via horizontal bar)
+  const statusCounts = {};
+  tasks.forEach(t => { statusCounts[t.status] = (statusCounts[t.status]||0) + 1; });
+  const statusColors = { complete:'var(--green)', in_progress:'#4a7fb5', scheduled:'#6ba3c7', needs_scheduling:'#b0b0b0', waiting_on_client:'#c89200', on_hold:'#8b6bb5', not_ready:'#d4a574', skipped:'#ddd' };
+  const total = tasks.length;
+  const statusSegments = Object.entries(statusCounts).map(([s,c]) => ({
+    status: s, count: c, pct: Math.round(c/total*100), color: statusColors[s]||'#aaa'
+  })).sort((a,b) => b.count - a.count);
+
+  const statusStack = `<div style="display:flex;height:24px;border-radius:4px;overflow:hidden;margin-bottom:10px">
+    ${statusSegments.map(s => `<div style="width:${s.pct}%;background:${s.color};transition:width .3s" title="${STATUS_LABELS[s.status]||s.status}: ${s.count}"></div>`).join('')}
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11px">
+    ${statusSegments.map(s => `<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:${s.color}"></div>${STATUS_LABELS[s.status]||s.status} <strong>${s.count}</strong></div>`).join('')}
+  </div>`;
+
+  // Workstream split
+  const wsCounts = { interior:0, exterior:0, both:0 };
+  const wsDays = { interior:0, exterior:0, both:0 };
+  tasks.forEach(t => {
+    const w = t.workstream || 'both';
+    if (wsCounts[w] !== undefined) { wsCounts[w]++; wsDays[w] += (t.durationDays||0); }
+  });
+  const wsTotal = wsCounts.interior + wsCounts.exterior + wsCounts.both || 1;
+  const wsBars = `<div style="display:flex;gap:12px">
+    ${['interior','exterior','both'].map(w => {
+      const pct = Math.round(wsCounts[w]/wsTotal*100);
+      const color = w==='interior'?'var(--green)':w==='exterior'?'#6ba3c7':'var(--charcoal-3)';
+      return `<div style="flex:1;text-align:center">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--charcoal-4);font-weight:700;margin-bottom:4px">${w}</div>
+        <div style="font-size:24px;font-weight:700;color:${color}">${wsCounts[w]}</div>
+        <div style="font-size:10px;color:var(--charcoal-4)">${pct}% · ${wsDays[w]}d work</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  // Subcontractor workload
+  const subWorkload = {};
+  tasks.forEach(t => {
+    if (t.subcontractorId) {
+      const sub = (subsCache||[]).find(s => s.id === t.subcontractorId);
+      const name = sub ? sub.name : 'Unknown';
+      if (!subWorkload[name]) subWorkload[name] = { count:0, days:0, complete:0 };
+      subWorkload[name].count++;
+      subWorkload[name].days += (t.durationDays || 0);
+      if (t.status === 'complete') subWorkload[name].complete++;
+    }
+  });
+  const subList = Object.entries(subWorkload).sort((a,b) => b[1].days - a[1].days);
+  const maxDays = subList.length ? subList[0][1].days : 1;
+  const subBars = subList.length === 0
+    ? `<div style="font-size:12px;color:var(--charcoal-4);padding:1rem;text-align:center;font-style:italic">No subcontractors assigned yet</div>`
+    : subList.map(([name, s]) => `<div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+          <span style="font-weight:600">${name}</span>
+          <span style="color:var(--charcoal-4)">${s.count} tasks · ${s.days}d${s.complete?` · ${s.complete} done`:''}</span>
+        </div>
+        <div style="height:10px;background:var(--cream-2);border-radius:5px;overflow:hidden">
+          <div style="width:${Math.round(s.days/maxDays*100)}%;height:100%;background:var(--charcoal)"></div>
+        </div>
+      </div>`).join('');
+
+  // Critical path timeline
+  const critical = tasks.filter(t => t.isCritical);
+  const critHTML = critical.length === 0
+    ? `<div style="font-size:12px;color:var(--charcoal-4);font-style:italic">No critical path tasks</div>`
+    : critical.slice(0, 10).map(t => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px">
+        <span style="font-weight:600">${t.taskName}</span>
+        <span style="color:var(--charcoal-4)">${schFmtDate(t.plannedStart)} → ${schFmtDate(t.plannedFinish)}</span>
+      </div>`).join('');
+
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px">
+    <div class="card">
+      <div class="sh"><div class="sh-title">Phase Progress</div><span style="font-size:10px;color:var(--charcoal-4)">${tasks.length} tasks total</span></div>
+      ${phaseBars}
+    </div>
+    <div class="card">
+      <div class="sh"><div class="sh-title">Status Breakdown</div></div>
+      ${statusStack}
+    </div>
+    <div class="card">
+      <div class="sh"><div class="sh-title">Workstream Split</div></div>
+      ${wsBars}
+    </div>
+    <div class="card">
+      <div class="sh"><div class="sh-title">Subcontractor Workload</div><span style="font-size:10px;color:var(--charcoal-4)">${subList.length} active</span></div>
+      ${subBars}
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <div class="sh"><div class="sh-title">Critical Path Tasks</div><span class="tag ${critical.length?'danger':'ok'}" style="font-size:9px">${critical.length} zero-float</span></div>
+      ${critHTML}
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  TODAY VIEW — the PM's action queue
+// ══════════════════════════════════════════════════════
+
+let actionItemsCache = {}; // scopeKey ('all' | projectId) → array
+let todayScope = 'all';     // current filter scope
+
+const KIND_LABELS = {
+  approve_contractor_text: 'Approve contractor message',
+  review_qc_complete:      'Review QC',
+  approve_client_update:   'Approve client update',
+  confirm_selection_gate:  'Resolve selection gate',
+  reschedule_response:     'Contractor reschedule',
+  manual:                  'Manual',
+  // Lookahead-generated kinds
+  assign_sub:              'Assign subcontractor',
+  confirm_sub:             'Confirm subcontractor',
+  resolve_selection_gate:  'Resolve selection gate',
+  order_materials:         'Order materials',
+  predecessor_blocked:     'Predecessor not complete',
+  weekly_lookahead_review: 'Weekly lookahead review',
+};
+
+function projectNameById(id) {
+  const p = PROJECTS[id];
+  return p ? (p.clientName || p.projectName || id) : id;
+}
+
+function renderTodayView(p) {
+  const stored = sessionStorage.getItem('sa_today_scope');
+  if (stored) todayScope = stored;
+  const projectOpts = Object.values(PROJECTS).map(pr =>
+    `<option value="${pr.id}" ${pr.id===todayScope?'selected':''}>${pr.clientName}</option>`
+  ).join('');
+  return `
+    <div class="sch-hd" style="margin-bottom:12px">
+      <div>
+        <div class="sh-title" style="font-size:18px">Today</div>
+        <div style="font-size:11px;color:var(--charcoal-4)">Everything that needs your attention across every active project.</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select class="adm-inp adm-sel" style="font-size:12px;padding:5px 8px;width:auto" onchange="setTodayScope(this.value)" title="Filter by project">
+          <option value="all" ${todayScope==='all'?'selected':''}>All projects</option>
+          ${projectOpts}
+        </select>
+        <button class="adm-btn adm-btn-ghost" onclick="loadActionItems(todayScope)" title="Refresh">↻ Refresh</button>
+        <button class="adm-btn adm-btn-ghost" onclick="openManualItemForm(todayScope==='all' ? '${p.id}' : todayScope)">+ Add manual item</button>
+      </div>
+    </div>
+    <div id="manual-item-form" style="display:none;margin-bottom:12px"></div>
+    <div id="today-queue">
+      <div style="padding:2rem;text-align:center;color:var(--charcoal-4);font-size:12px">Loading action items…</div>
+    </div>
+  `;
+}
+
+function setTodayScope(scope) {
+  todayScope = scope;
+  sessionStorage.setItem('sa_today_scope', scope);
+  loadActionItems(scope);
+}
+
+async function loadActionItems(scope) {
+  const el = document.getElementById('today-queue');
+  if (!el) return;
+  scope = scope || todayScope || 'all';
+  try {
+    const res = await fetch(`/.netlify/functions/action-items?projectId=${encodeURIComponent(scope)}&status=open`, {
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load');
+    actionItemsCache[scope] = data.items || [];
+    renderTodayQueue(scope);
+  } catch (err) {
+    el.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--danger);font-size:12px">Error: ${err.message}</div>`;
+  }
+}
+
+function renderTodayQueue(scope) {
+  const el = document.getElementById('today-queue');
+  if (!el) return;
+  const items = actionItemsCache[scope] || [];
+  if (items.length === 0) {
+    const scopeLabel = scope === 'all' ? 'across all projects' : `for ${projectNameById(scope)}`;
+    el.innerHTML = `<div class="card" style="padding:2.5rem;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">✓</div>
+      <div style="font-size:14px;font-weight:600;color:var(--charcoal)">All clear</div>
+      <div style="font-size:11px;color:var(--charcoal-4);margin-top:4px">Nothing needs your attention ${scopeLabel}.</div>
+    </div>`;
+    return;
+  }
+  const byPri = { red:[], yellow:[], normal:[] };
+  items.forEach(it => (byPri[it.priority] || byPri.normal).push(it));
+  const order = [
+    ['red',    'Urgent',     'var(--danger)'],
+    ['yellow', 'This week',  '#c89200'],
+    ['normal', 'Normal',     'var(--charcoal-3)'],
+  ];
+  const showProjectLabel = scope === 'all';
+  el.innerHTML = order.map(([pri, label, color]) => {
+    if (!byPri[pri].length) return '';
+    return `<div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${color};margin-bottom:6px">${label} · ${byPri[pri].length}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${byPri[pri].map(it => renderActionCard(it, showProjectLabel)).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderActionCard(it, showProjectLabel) {
+  const kindLabel = KIND_LABELS[it.kind] || it.kind;
+  const borderColor = it.priority === 'red' ? 'var(--danger)' : it.priority === 'yellow' ? '#c89200' : 'var(--border-2)';
+  const age = timeAgo(it.created_at);
+  const projectLabel = showProjectLabel ? `<span style="display:inline-block;padding:1px 6px;margin-right:5px;background:var(--cream-2);color:var(--charcoal-3);border-radius:3px;font-size:10px;font-weight:600">${escapeHtml(projectNameById(it.project_id))}</span>` : '';
+
+  // Kind-specific primary action
+  let primaryBtn = `<button class="adm-btn adm-btn-green" style="padding:5px 10px;font-size:11px" onclick="completeActionItem('${it.id}')" title="Mark done">✓ Done</button>`;
+  if (it.kind === 'approve_contractor_text' && it.related_entity_id) {
+    primaryBtn = `<button class="adm-btn" style="padding:5px 10px;font-size:11px;background:#4a7fb5;color:white" onclick="openApproveTextModal('${it.related_entity_id}','${it.id}')" title="Preview and approve the draft">📨 Review & Send</button>`;
+  }
+
+  return `<div class="card" style="padding:12px;border-left:3px solid ${borderColor}">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--charcoal-4);font-weight:700;margin-bottom:3px">${projectLabel}${kindLabel}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--charcoal);margin-bottom:2px">${escapeHtml(it.title)}</div>
+        ${it.body ? `<div style="font-size:11px;color:var(--charcoal-3);margin-top:4px;line-height:1.4">${escapeHtml(it.body)}</div>` : ''}
+        <div style="font-size:10px;color:var(--charcoal-4);margin-top:6px">Created ${age}${it.due_at?` · Due ${new Date(it.due_at).toLocaleDateString()}`:''}</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+        ${primaryBtn}
+        <button class="adm-btn adm-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="snoozeActionItem('${it.id}')" title="Snooze 24h">⏱ Snooze</button>
+        <button class="adm-btn adm-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="dismissActionItem('${it.id}')" title="Dismiss">✕</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+
+async function patchActionItem(id, action, extra = '') {
+  const res = await fetch(`/.netlify/functions/action-items?id=${id}&action=${action}${extra}`, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+  });
+  if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || `HTTP ${res.status}`); }
+  // Optimistic: remove from whichever scope caches contain it, then re-render current
+  Object.keys(actionItemsCache).forEach(scope => {
+    actionItemsCache[scope] = (actionItemsCache[scope] || []).filter(it => it.id !== id);
+  });
+  renderTodayQueue(todayScope);
+}
+
+async function completeActionItem(id) {
+  try { await patchActionItem(id, 'complete'); schShowToast('Marked done','success'); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(todayScope); }
+}
+async function snoozeActionItem(id) {
+  try { await patchActionItem(id, 'snooze'); schShowToast('Snoozed 24h',''); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(todayScope); }
+}
+async function dismissActionItem(id) {
+  try { await patchActionItem(id, 'dismiss'); schShowToast('Dismissed',''); }
+  catch (e) { schShowToast(e.message,'error'); loadActionItems(todayScope); }
+}
+
+function openManualItemForm(projectId) {
+  const el = document.getElementById('manual-item-form');
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="card" style="padding:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--charcoal);margin-bottom:8px">Add manual action item</div>
+    <div style="display:grid;grid-template-columns:1fr 140px;gap:8px;margin-bottom:8px">
+      <input class="adm-inp" id="mi-title" placeholder="Title (what needs to be done)">
+      <select class="adm-inp adm-sel" id="mi-priority"><option value="normal">Normal</option><option value="yellow">This week</option><option value="red">Urgent</option></select>
+    </div>
+    <textarea class="adm-inp adm-textarea" id="mi-body" placeholder="Details (optional)" style="margin-bottom:8px"></textarea>
+    <div style="display:flex;gap:6px">
+      <button class="adm-btn adm-btn-green" onclick="submitManualItem('${projectId}')">Create</button>
+      <button class="adm-btn adm-btn-ghost" onclick="openManualItemForm('${projectId}')">Cancel</button>
+    </div>
+  </div>`;
+  setTimeout(() => document.getElementById('mi-title')?.focus(), 30);
+}
+
+// ── Contractor text drafting + approval modal ─────────────
+
+async function draftContractorText(projectId, taskId, evt) {
+  const btn = (evt && evt.currentTarget) || (window.event && window.event.currentTarget);
+  if (btn) {
+    if (btn.dataset.busy === '1') return; // prevent double-fire
+    btn.dataset.busy = '1';
+    btn.dataset.originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Drafting…';
+    btn.style.opacity = '.7';
+    btn.disabled = true;
+  }
+  schShowToast('Drafting…','');
+  try {
+    const res = await fetch(`/.netlify/functions/contractor-messages?action=draft`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ projectId, taskId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    schShowToast('✓ Draft created — see Today','success');
+    if (btn) {
+      btn.innerHTML = '✓ Drafted — see Today';
+      btn.style.background = 'var(--green)';
+      btn.style.opacity = '1';
+      setTimeout(() => {
+        if (!btn.isConnected) return;
+        btn.innerHTML = btn.dataset.originalText || '📨 Draft contractor text';
+        btn.style.background = '#4a7fb5';
+        btn.dataset.busy = '0';
+        btn.disabled = false;
+      }, 2000);
+    }
+  } catch (e) {
+    schShowToast(e.message,'error');
+    if (btn) {
+      btn.innerHTML = btn.dataset.originalText || '📨 Draft contractor text';
+      btn.style.opacity = '1';
+      btn.dataset.busy = '0';
+      btn.disabled = false;
+    }
+  }
+}
+
+function openApproveTextModal(messageId, actionItemId) {
+  // Fetch the message via admin list + find the one we want (simple for now)
+  const backdrop = document.createElement('div');
+  backdrop.id = 'approve-text-backdrop';
+  backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  backdrop.innerHTML = `<div style="background:white;border-radius:var(--r-md);max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:var(--sh-lg)">
+    <div style="padding:16px 18px;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:700;color:var(--charcoal)">Review contractor text</div>
+      <button class="adm-btn adm-btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeApproveTextModal()">✕</button>
+    </div>
+    <div id="approve-text-body" style="padding:18px">
+      <div style="text-align:center;color:var(--charcoal-4);font-size:12px;padding:2rem">Loading draft…</div>
+    </div>
+  </div>`;
+  document.body.appendChild(backdrop);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeApproveTextModal(); });
+  loadApproveTextBody(messageId, actionItemId);
+}
+
+function closeApproveTextModal() {
+  document.getElementById('approve-text-backdrop')?.remove();
+}
+
+async function loadApproveTextBody(messageId, actionItemId) {
+  const el = document.getElementById('approve-text-body');
+  if (!el) return;
+  // Find the item in our cache for context
+  let item = null;
+  Object.values(actionItemsCache).forEach(arr => {
+    const found = (arr || []).find(it => it.related_entity_id === messageId);
+    if (found) item = found;
+  });
+  if (!item) {
+    el.innerHTML = `<div style="color:var(--danger);font-size:12px">Could not find the action item. Refresh and try again.</div>`;
+    return;
+  }
+
+  // Pull the full message list for this project, pick ours
+  try {
+    const res = await fetch(`/.netlify/functions/contractor-messages?projectId=${encodeURIComponent(item.project_id)}`, {
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    const msg = (data.messages || []).find(m => m.id === messageId);
+    if (!msg) throw new Error('Message not found');
+
+    const confirmUrl = `${location.origin}/confirm.html?token=${msg.confirm_token}`;
+    el.innerHTML = `
+      <div style="font-size:11px;color:var(--charcoal-4);margin-bottom:6px">
+        To: <strong style="color:var(--charcoal)">${escapeHtml(msg.contact_name || 'Contractor')}</strong>
+        ${msg.contact_phone ? ` · ${escapeHtml(msg.contact_phone)}` : ''}
+        ${msg.contact_email ? ` · ${escapeHtml(msg.contact_email)}` : ''}
+      </div>
+      <div style="font-size:10px;color:var(--charcoal-4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Message</div>
+      <textarea id="approve-text-body-input" class="adm-inp adm-textarea" style="min-height:200px;font-family:'Work Sans',sans-serif;font-size:13px;line-height:1.5;white-space:pre-wrap">${escapeHtml(msg.body)}</textarea>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="adm-btn adm-btn-ghost" style="flex:0 0 auto" onclick="copyApproveText()">📋 Copy message</button>
+        <button class="adm-btn adm-btn-ghost" style="flex:0 0 auto" onclick="copyApproveUrl('${msg.confirm_token}')">🔗 Copy confirm link</button>
+        <div style="flex:1"></div>
+        <button class="adm-btn" style="background:#4a7fb5;color:white" onclick="approveTextAndClose('${msg.id}','${actionItemId}')">Mark as Sent</button>
+      </div>
+      <div style="font-size:10px;color:var(--charcoal-4);margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border);line-height:1.5">
+        <strong style="color:var(--charcoal-3)">How to use:</strong> Copy the message, paste into a text or email to the contractor. They tap the link, pick Confirm/Decline/Propose. When their response lands, Today updates automatically.
+        <br>Confirm URL: <span style="color:var(--charcoal-3);word-break:break-all">${escapeHtml(confirmUrl)}</span>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="color:var(--danger);font-size:12px">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function copyApproveText() {
+  const ta = document.getElementById('approve-text-body-input');
+  if (!ta) return;
+  navigator.clipboard.writeText(ta.value).then(
+    () => schShowToast('Message copied','success'),
+    () => schShowToast('Copy failed — select and copy manually','error')
+  );
+}
+
+function copyApproveUrl(token) {
+  const url = `${location.origin}/confirm.html?token=${token}`;
+  navigator.clipboard.writeText(url).then(
+    () => schShowToast('Link copied','success'),
+    () => schShowToast('Copy failed','error')
+  );
+}
+
+async function approveTextAndClose(messageId, actionItemId) {
+  const ta = document.getElementById('approve-text-body-input');
+  const editedBody = ta?.value || null;
+  try {
+    const res = await fetch(`/.netlify/functions/contractor-messages?id=${messageId}&action=approve`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' },
+      body: JSON.stringify(editedBody ? { body: editedBody } : {}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    schShowToast('Marked sent — waiting on contractor','success');
+    closeApproveTextModal();
+    // Optimistic: drop from cache
+    Object.keys(actionItemsCache).forEach(scope => {
+      actionItemsCache[scope] = (actionItemsCache[scope] || []).filter(it => it.id !== actionItemId);
+    });
+    renderTodayQueue(todayScope);
+  } catch (err) {
+    schShowToast(err.message, 'error');
+  }
+}
+
+async function submitManualItem(projectId) {
+  const title = document.getElementById('mi-title')?.value.trim();
+  const body  = document.getElementById('mi-body')?.value.trim() || null;
+  const priority = document.getElementById('mi-priority')?.value || 'normal';
+  if (!title) { schShowToast('Title required','error'); return; }
+  try {
+    const res = await fetch(`/.netlify/functions/action-items`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ projectId, kind: 'manual', title, body, priority }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    schShowToast('Item created','success');
+    openManualItemForm(projectId); // close form
+    loadActionItems(projectId);
+  } catch (e) { schShowToast(e.message, 'error'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  LOOKAHEAD VIEW — 8-week forward window, gap-driven
+// ══════════════════════════════════════════════════════
+
+let lookaheadCache = {};       // scope → payload
+let lookaheadScope = 'all';
+let lookaheadFilter = 'gaps';  // 'gaps' | 'all'
+let lookaheadGroup  = 'week';  // 'week' | 'project' | 'phase'
+
+function renderLookaheadView(p) {
+  const stored = sessionStorage.getItem('sa_lookahead_scope');
+  if (stored) lookaheadScope = stored;
+  const projectOpts = Object.values(PROJECTS).map(pr =>
+    `<option value="${pr.id}" ${pr.id===lookaheadScope?'selected':''}>${pr.clientName}</option>`
+  ).join('');
+  return `
+    <div class="sch-hd" style="margin-bottom:12px">
+      <div>
+        <div class="sh-title" style="font-size:18px">Lookahead — Next 8 weeks</div>
+        <div style="font-size:11px;color:var(--charcoal-4)">Every task starting in the next 56 days, with the gaps that need closing. Anything red means: it's coming up and isn't ready.</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select class="adm-inp adm-sel" style="font-size:12px;padding:5px 8px;width:auto" onchange="setLookaheadScope(this.value)">
+          <option value="all" ${lookaheadScope==='all'?'selected':''}>All projects</option>
+          ${projectOpts}
+        </select>
+        <select class="adm-inp adm-sel" style="font-size:12px;padding:5px 8px;width:auto" onchange="setLookaheadGroup(this.value)" title="Group by">
+          <option value="week"    ${lookaheadGroup==='week'?'selected':''}>By week</option>
+          <option value="project" ${lookaheadGroup==='project'?'selected':''}>By project</option>
+          <option value="phase"   ${lookaheadGroup==='phase'?'selected':''}>By phase</option>
+        </select>
+        <select class="adm-inp adm-sel" style="font-size:12px;padding:5px 8px;width:auto" onchange="setLookaheadFilter(this.value)" title="Show">
+          <option value="gaps" ${lookaheadFilter==='gaps'?'selected':''}>Gaps only</option>
+          <option value="all"  ${lookaheadFilter==='all'?'selected':''}>All tasks</option>
+        </select>
+        <button class="adm-btn adm-btn-ghost" onclick="loadLookahead(lookaheadScope)" title="Refresh">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="lookahead-summary" style="margin-bottom:10px"></div>
+    <div id="lookahead-body"><div style="padding:2rem;text-align:center;color:var(--charcoal-4);font-size:12px">Loading lookahead…</div></div>
+  `;
+}
+
+function setLookaheadScope(scope)  { lookaheadScope = scope; sessionStorage.setItem('sa_lookahead_scope', scope); loadLookahead(scope); }
+function setLookaheadGroup(g)      { lookaheadGroup = g; renderLookaheadBody(); }
+function setLookaheadFilter(f)     { lookaheadFilter = f; renderLookaheadBody(); }
+
+async function loadLookahead(scope) {
+  scope = scope || lookaheadScope || 'all';
+  const el = document.getElementById('lookahead-body');
+  if (!el) return;
+  try {
+    const res = await fetch(`/.netlify/functions/lookahead?projectId=${encodeURIComponent(scope)}`, {
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load');
+    lookaheadCache[scope] = data;
+    renderLookaheadBody();
+  } catch (err) {
+    el.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--danger);font-size:12px">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderLookaheadBody() {
+  const data = lookaheadCache[lookaheadScope];
+  const sumEl = document.getElementById('lookahead-summary');
+  const bodyEl = document.getElementById('lookahead-body');
+  if (!data || !bodyEl) return;
+
+  // Aggregate summary across visible projects
+  const totals = data.projects.reduce((acc, p) => {
+    acc.tasks += p.summary.tasks;
+    acc.with_gaps += p.summary.with_gaps;
+    acc.red += p.summary.red_gaps;
+    acc.yellow += p.summary.yellow_gaps;
+    return acc;
+  }, { tasks:0, with_gaps:0, red:0, yellow:0 });
+
+  if (sumEl) {
+    sumEl.innerHTML = `<div style="display:flex;gap:14px;padding:10px 14px;background:var(--cream-2);border-radius:var(--r-md);font-size:11px;color:var(--charcoal-3);align-items:center;flex-wrap:wrap">
+      <div><strong style="color:var(--charcoal);font-size:13px">${totals.tasks}</strong> tasks in window</div>
+      <div style="opacity:.5">·</div>
+      <div><strong style="color:var(--danger)">${totals.red}</strong> red</div>
+      <div><strong style="color:#c89200">${totals.yellow}</strong> yellow</div>
+      <div><strong style="color:var(--green)">${totals.tasks - totals.with_gaps}</strong> ready</div>
+      <div style="margin-left:auto;font-size:10px;color:var(--charcoal-4)">Generated ${timeAgo(data.generated_at)}</div>
+    </div>`;
+  }
+
+  // Flatten + filter
+  let rows = [];
+  for (const p of data.projects) {
+    for (const t of p.tasks) {
+      if (lookaheadFilter === 'gaps' && t.gap_count === 0) continue;
+      rows.push({ ...t, project_name: p.client_name });
+    }
+  }
+  if (rows.length === 0) {
+    bodyEl.innerHTML = `<div class="card" style="padding:2.5rem;text-align:center"><div style="font-size:32px;margin-bottom:8px">✓</div><div style="font-size:14px;font-weight:600;color:var(--charcoal)">No gaps in the next 8 weeks</div><div style="font-size:11px;color:var(--charcoal-4);margin-top:4px">Everything starting before ${new Date(Date.now()+56*86400000).toLocaleDateString()} is locked down.</div></div>`;
+    return;
+  }
+
+  // Group rows
+  const groups = new Map();
+  for (const r of rows) {
+    let key, label;
+    if (lookaheadGroup === 'project') {
+      key = r.project_id; label = r.project_name;
+    } else if (lookaheadGroup === 'phase') {
+      key = r.phase || 'Other'; label = r.phase || 'Other';
+    } else {
+      // by week — group by Monday-of-week
+      const d = new Date(r.planned_start + 'T00:00:00');
+      const dow = d.getDay();
+      const monday = new Date(d); monday.setDate(d.getDate() - ((dow + 6) % 7));
+      key = monday.toISOString().split('T')[0];
+      const wkEnd = new Date(monday); wkEnd.setDate(monday.getDate() + 6);
+      label = `Week of ${monday.toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${wkEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+    }
+    if (!groups.has(key)) groups.set(key, { label, items: [] });
+    groups.get(key).items.push(r);
+  }
+  // Sort groups
+  const groupOrder = [...groups.keys()].sort();
+
+  bodyEl.innerHTML = groupOrder.map(key => {
+    const grp = groups.get(key);
+    const groupRed = grp.items.filter(t => t.worst_severity === 'red').length;
+    const groupYellow = grp.items.filter(t => t.worst_severity === 'yellow').length;
+    return `<div style="margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--charcoal)">${escapeHtml(grp.label)}</div>
+        <div style="font-size:10px;color:var(--charcoal-4)">${grp.items.length} task${grp.items.length===1?'':'s'}${groupRed?` · <span style="color:var(--danger);font-weight:700">${groupRed} red</span>`:''}${groupYellow?` · <span style="color:#c89200;font-weight:700">${groupYellow} yellow</span>`:''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${grp.items.map(renderLookaheadRow).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderLookaheadRow(t) {
+  const sevColor = t.worst_severity === 'red' ? 'var(--danger)' : t.worst_severity === 'yellow' ? '#c89200' : 'var(--border-2)';
+  const startStr = t.planned_start ? new Date(t.planned_start + 'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '—';
+  const dayBadge = t.days_to_start <= 7 ? `<span style="display:inline-block;padding:1px 6px;background:var(--danger);color:white;border-radius:3px;font-size:9px;font-weight:700">${t.days_to_start}d</span>`
+                : t.days_to_start <= 21 ? `<span style="display:inline-block;padding:1px 6px;background:#c89200;color:white;border-radius:3px;font-size:9px;font-weight:700">${t.days_to_start}d</span>`
+                : `<span style="display:inline-block;padding:1px 6px;background:var(--cream-2);color:var(--charcoal-3);border-radius:3px;font-size:9px;font-weight:600">${t.days_to_start}d</span>`;
+  const sub = t.contact_name ? escapeHtml(t.contact_name) : '<span style="color:var(--danger);font-style:italic">no sub</span>';
+  const confirmed = t.contractor_confirmed ? '<span style="color:var(--green);font-weight:700" title="Confirmed">✓</span>' : (t.subcontractor_id || t.assigned_contractor) ? '<span style="color:#c89200" title="Not confirmed">○</span>' : '<span style="color:var(--charcoal-4)">—</span>';
+  const gateCell = !t.selections_gate ? '<span style="color:var(--charcoal-4);font-size:10px">—</span>'
+                : t.gate_resolved      ? '<span style="color:var(--green);font-weight:700" title="Resolved">✓</span>'
+                                       : `<span style="color:var(--danger);font-size:10px;font-weight:700" title="Unresolved gate">${escapeHtml(t.selections_gate)}</span>`;
+  const projBadge = lookaheadGroup !== 'project' ? `<span style="display:inline-block;padding:1px 6px;background:var(--cream-2);color:var(--charcoal-3);border-radius:3px;font-size:10px;font-weight:600;margin-right:5px">${escapeHtml(t.project_name)}</span>` : '';
+  const gapList = t.gaps.length > 0
+    ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${t.gaps.map(g => {
+        const c = g.severity === 'red' ? 'var(--danger)' : g.severity === 'yellow' ? '#c89200' : 'var(--charcoal-3)';
+        return `<span style="display:inline-block;padding:2px 7px;background:${c};color:white;border-radius:3px;font-size:10px;font-weight:600">${escapeHtml(g.label)}</span>`;
+      }).join('')}</div>`
+    : '';
+
+  return `<div class="card" style="padding:9px 12px;border-left:3px solid ${sevColor};display:flex;flex-direction:column;gap:0">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--charcoal);line-height:1.2">${projBadge}${escapeHtml(t.task_name)}</div>
+        <div style="font-size:10px;color:var(--charcoal-4);margin-top:2px">${escapeHtml(t.phase)}${t.trade?` · ${escapeHtml(t.trade)}`:''} · starts ${startStr}</div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;font-size:11px;color:var(--charcoal-3);flex-shrink:0">
+        ${dayBadge}
+        <div title="Sub assigned"><strong style="color:var(--charcoal)">Sub:</strong> ${sub}</div>
+        <div title="Confirmed?">${confirmed}</div>
+        <div title="Selection gate">${gateCell}</div>
+        <button class="adm-btn adm-btn-ghost" style="padding:3px 8px;font-size:10px" onclick="lookaheadDraftText('${t.project_id}','${t.id}')" title="Draft contractor text">📨</button>
+      </div>
+    </div>
+    ${gapList}
+  </div>`;
+}
+
+async function lookaheadDraftText(projectId, taskId) {
+  schShowToast('Drafting…','');
+  try {
+    const res = await fetch(`/.netlify/functions/contractor-messages?action=draft`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ projectId, taskId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    schShowToast('Draft created — see Today','success');
+  } catch (e) { schShowToast(e.message,'error'); }
+}
+
+function renderScheduleView(p) {
+  const cache = scheduleCache[p.id];
+
+  // No cache yet — loading state
+  if (!cache) {
+    return `<div class="card" style="text-align:center;padding:2rem">
+      <div id="sch-loading" style="font-size:13px;color:var(--charcoal-3)">Loading schedule…</div>
+    </div>`;
+  }
+
+  const tasks = cache.tasks || [];
+
+  // No schedule yet — offer to instantiate
+  if (tasks.length === 0) {
+    const hasBSD = p.buildStartDate || (cache.client && cache.client.build_start_date);
+    return `<div class="card" style="text-align:center;padding:2rem">
+      <div style="font-size:13px;color:var(--charcoal-3);margin-bottom:12px">
+        No build schedule exists for this project yet.
+      </div>
+      ${!hasBSD ? `<div style="font-size:12px;color:var(--danger);margin-bottom:12px">Set build_start_date on this client first (Project Info tab).</div>` : ''}
+      <button class="adm-btn adm-btn-green" onclick="instantiateSchedule('${p.id}')" ${!hasBSD?'disabled':''}>
+        Instantiate Schedule from Templates
+      </button>
+      <div id="sch-toast" class="sch-toast" style="margin-top:8px"></div>
+    </div>`;
+  }
+
+  // ── Compute stats ──
+  const total = tasks.length;
+  const complete = tasks.filter(t => (t.status) === 'complete').length;
+  const inProg = tasks.filter(t => (t.status) === 'in_progress').length;
+  const notStarted = tasks.filter(t => (t.status) === 'not_started').length;
+  const skipped = tasks.filter(t => (t.status) === 'skipped').length;
+  const pct = total ? Math.round(complete / total * 100) : 0;
+  const critCount = cache.criticalPathLength || (cache.criticalPath||[]).length;
+  const alerts = cache.alerts || { red:[], yellow:[] };
+  const gates = cache.gateStatus || {};
+  const buildStart = cache.buildStart || p.buildStartDate || '';
+  const targetEnd = cache.targetEnd || p.targetEndDate || '';
+  const computedEnd = cache.computedEnd || p.computedEndDate || '';
+
+  // ── A: KPI row (compact by default, expandable) ──
+  const alertBadges = `${alerts.red.length?`<span class="tag danger" style="font-size:9px">${alerts.red.length} Red</span>`:''}${alerts.yellow.length?`<span class="tag warn" style="font-size:9px;margin-left:4px">${alerts.yellow.length} Yellow</span>`:''}${!alerts.red.length&&!alerts.yellow.length?`<span class="tag ok" style="font-size:9px">Clear</span>`:''}`;
+  const kpiCompactHTML = `<div class="sch-kpi-compact">
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Progress</span><span class="sch-kpi-stat-val">${pct}%</span><div class="track" style="width:60px;margin:0"><div class="bar" style="width:${pct}%"></div></div></div>
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Tasks</span><span class="sch-kpi-stat-val">${complete}/${total}</span><span style="font-size:10px;color:var(--charcoal-4)">· ${inProg} active</span></div>
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Timeline</span><span class="sch-kpi-stat-val">${schFmtDate(buildStart)} → ${schFmtDate(computedEnd)}</span></div>
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Critical</span><span class="sch-kpi-stat-val">${critCount}</span></div>
+    <div class="sch-kpi-stat"><span class="sch-kpi-stat-lbl">Alerts</span>${alertBadges}</div>
+    <button class="sch-kpi-expand" onclick="schKpiExpanded=!schKpiExpanded;renderAdmin()">${schKpiExpanded?'Collapse ↑':'Expand ↓'}</button>
+  </div>`;
+
+  const kpiExpandedHTML = `<div class="sch-kpi-row">
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Tasks</div><div class="kpi-val">${total}</div><div class="kpi-sub">${complete} done · ${inProg} active · ${skipped} skipped</div></div></div>
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Complete</div><div class="kpi-val">${pct}%</div></div><div class="track" style="margin-top:6px"><div class="bar" style="width:${pct}%"></div></div></div>
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Timeline</div><div class="kpi-val" style="font-size:13px">${schFmtDate(buildStart)} → ${schFmtDate(computedEnd)}</div><div class="kpi-sub">Target: ${schFmtDateFull(targetEnd)}</div></div></div>
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Critical Path</div><div class="kpi-val">${critCount}</div><div class="kpi-sub">Zero-float tasks</div></div></div>
+    <div class="sch-kpi-card"><div class="kpi"><div class="kpi-lbl">Alerts</div><div style="display:flex;gap:6px;margin-top:4px">${alerts.red.length?`<span class="tag danger">${alerts.red.length} Red</span>`:''}<span class="tag ${alerts.yellow.length?'warn':'neutral'}">${alerts.yellow.length} Yellow</span></div></div></div>
+  </div>`;
+
+  const kpiHTML = schKpiExpanded ? kpiCompactHTML + kpiExpandedHTML : kpiCompactHTML;
+
+  // ── B: Action bar + controls ──
+  const actionHTML = `<div class="sch-action-bar">
+    <button class="adm-btn adm-btn-green" onclick="recalculateSchedule('${p.id}')">Recalculate CPM</button>
+    <button class="adm-btn adm-btn-ghost" onclick="validateSchedule('${p.id}')">Validate</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schShowAddTask=!schShowAddTask;renderAdmin()">+ Add Task</button>
+    <div id="sch-toast" class="sch-toast"></div>
+    <div class="sch-view-toggle">
+      <button class="sch-view-btn ${schViewMode==='gantt'?'active':''}" onclick="schSetView('gantt')">Gantt</button>
+      <button class="sch-view-btn ${schViewMode==='table'?'active':''}" onclick="schSetView('table')">Table</button>
+      <button class="sch-view-btn ${schViewMode==='charts'?'active':''}" onclick="schSetView('charts')">Charts</button>
+    </div>
+    ${schViewMode==='gantt' ? `
+    <div class="sch-view-toggle" style="margin-left:4px">
+      <button class="sch-view-btn ${schGroupBy==='phase'?'active':''}" onclick="schSetGroupBy('phase')">Phase</button>
+      <button class="sch-view-btn ${schGroupBy==='workstream'?'active':''}" onclick="schSetGroupBy('workstream')">Workstream</button>
+    </div>
+    <div class="sch-zoom-toggle">
+      <button class="sch-zoom-btn ${schZoom==='days'?'active':''}" onclick="schSetZoom('days')">Days</button>
+      <button class="sch-zoom-btn ${schZoom==='weeks'?'active':''}" onclick="schSetZoom('weeks')">Weeks</button>
+      <button class="sch-zoom-btn ${schZoom==='months'?'active':''}" onclick="schSetZoom('months')">Months</button>
+    </div>
+    <div class="sch-zoom-toggle" title="Ripple mode: when you drag a task, also recalculate downstream dates">
+      <button class="sch-zoom-btn ${schRippleMode?'active':''}" onclick="schRippleMode=true;renderAdmin()">Ripple</button>
+      <button class="sch-zoom-btn ${!schRippleMode?'active':''}" onclick="schRippleMode=false;renderAdmin()">Free</button>
+    </div>
+    <button class="adm-btn adm-btn-ghost" onclick="schFocusMode=!schFocusMode;renderAdmin()" title="Hide everything but the Gantt" style="margin-left:4px">${schFocusMode?'Exit Focus':'Focus'}</button>` : ''}
+  </div>
+
+  <div class="sch-queue-tabs">
+    ${[{key:'all',label:'All'},{key:'next_to_schedule',label:'Next to Schedule'},{key:'long_lead',label:'Long-Lead'},{key:'waiting_hold',label:'Waiting / Hold'}].map(t =>
+      `<button class="sch-queue-tab ${schSubView===t.key?'active':''}" onclick="schSetSubView('${t.key}')">${t.label}${t.key!=='all'?`<span class="sch-queue-count">${countQueue(tasks, t.key)}</span>`:''}</button>`
+    ).join('')}
+  </div>
+
+  ${schShowAddTask ? `<div class="sch-add-modal">
+    <div class="sh"><div class="sh-title">Add Custom Task</div></div>
+    <div class="adm-grid2">
+      <div class="adm-field"><label>Task Name *</label><input class="adm-inp" id="sch-add-name" placeholder="e.g. Install specialty beam"></div>
+      <div class="adm-field"><label>Phase</label><select class="adm-inp adm-sel" id="sch-add-phase">${PHASE_ORDER.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
+      <div class="adm-field"><label>Trade</label><select class="adm-inp adm-sel" id="sch-add-trade"><option value="">—</option>${TRADE_OPTIONS.map(t=>`<option value="${t}">${t}</option>`).join('')}</select></div>
+      <div class="adm-field"><label>Workstream</label><select class="adm-inp adm-sel" id="sch-add-ws"><option value="interior">Interior</option><option value="exterior">Exterior</option><option value="both" selected>Both</option></select></div>
+      <div class="adm-field"><label>Duration (days)</label><input class="adm-inp" type="number" id="sch-add-dur" value="1" min="1"></div>
+      <div class="adm-field"><label>Sequence #</label><input class="adm-inp" type="number" id="sch-add-seq" value="999" min="1"></div>
+    </div>
+    <div class="adm-field"><label>Definition of Done</label><input class="adm-inp" id="sch-add-dod" placeholder="What marks this task complete?"></div>
+    <div class="adm-field"><label>Client Note</label><input class="adm-inp" id="sch-add-cnote" placeholder="Visible to client"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="adm-btn adm-btn-green" onclick="schAddTask('${p.id}')">Add Task</button>
+      <button class="adm-btn adm-btn-ghost" onclick="schShowAddTask=false;renderAdmin()">Cancel</button>
+    </div>
+  </div>` : ''}
+
+  <div id="sch-bulk-bar" class="sch-bulk-bar" style="display:${schBulkSelected.size>0?'flex':'none'}">
+    <span id="sch-bulk-count">${schBulkSelected.size} selected</span>
+    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','scheduled')">Scheduled</button>
+    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','in_progress')">In Progress</button>
+    <button class="adm-btn adm-btn-green" onclick="schBulkSetStatus('${p.id}','complete')">Complete</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schBulkSetStatus('${p.id}','on_hold')">On Hold</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schBulkSetStatus('${p.id}','waiting_on_client')">Waiting</button>
+    <button class="adm-btn adm-btn-ghost" onclick="schSelectNone()" style="margin-left:auto">Clear</button>
+  </div>`;
+
+  // ── Filter by queue sub-view ──
+  const viewTasks = schSubView === 'all' ? tasks : filterQueue(tasks, schSubView);
+
+  // ── C: Gantt chart ──
+  const dw = getSchDayWidth();
+  const tlStart = viewTasks.reduce((m,t) => {
+    const s = t.plannedStart || t.planned_start;
+    return s && (!m || s < m) ? s : m;
+  }, null) || buildStart;
+  const tlEnd = viewTasks.reduce((m,t) => {
+    const f = t.plannedFinish || t.planned_finish;
+    return f && (!m || f > m) ? f : m;
+  }, null) || computedEnd;
+
+  const tlEndPad = new Date((tlEnd||buildStart) + 'T00:00:00');
+  tlEndPad.setUTCDate(tlEndPad.getUTCDate() + 14);
+  const tlEndStr = tlEndPad.toISOString().split('T')[0];
+
+  const tlWidth = schDaysBetween(tlStart, tlEndStr) * dw;
+  const timeMarkers = generateTimeMarkers(tlStart, tlEndStr);
+
+  const headerHTML = `<div class="gantt-header" style="width:${180 + tlWidth}px">
+    <div style="width:180px;flex-shrink:0;font-size:9px;font-weight:700;color:var(--charcoal-3);padding:0 8px">Task</div>
+    ${timeMarkers.map(w => `<div class="gantt-week-mark" style="width:${w.width}px">${w.label}</div>`).join('')}
+  </div>`;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayInRange = todayStr >= tlStart && todayStr <= tlEndStr;
+  const todayLeft = 180 + schBarLeft(todayStr, tlStart);
+  const todayHTML = todayInRange ? `<div class="gantt-today" style="left:${todayLeft}px"></div>` : '';
+
+  const groupMap = schGroupBy === 'workstream' ? groupTasksByWorkstream(viewTasks) : groupTasksByPhase(viewTasks);
+  let phaseHTML = '';
+  let pi = 0;
+  for (const [groupName, groupTasks] of groupMap) {
+    if (groupTasks.length === 0) { pi++; continue; }
+    const done = groupTasks.filter(t => t.status === 'complete').length;
+    const isCollapsed = schCollapsed[pi];
+    const wsAccent = schGroupBy === 'workstream' ? ` ws-${groupName.toLowerCase()}` : '';
+    phaseHTML += `<div class="gantt-phase ${isCollapsed?'collapsed':''}" id="sch-phase-${pi}">
+      <div class="gantt-phase-hd${wsAccent}" onclick="schTogglePhase(${pi})">
+        <svg viewBox="0 0 10 10"><path d="M3 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        ${groupName}
+        <span class="gantt-phase-count">${done}/${groupTasks.length} complete</span>
+      </div>
+      <div class="gantt-phase-body">
+        ${groupTasks.map(t => renderGanttRow(t, tlStart, tlWidth)).join('')}
+      </div>
+    </div>`;
+    pi++;
+  }
+
+  const ganttHTML = `<div class="gantt-wrap">
+    <div class="gantt-scroll">
+      <div style="min-width:${180+tlWidth}px;position:relative">
+        ${headerHTML}
+        ${todayHTML}
+        ${phaseHTML}
+      </div>
+    </div>
+  </div>`;
+
+  // ── D: Alerts & gates ──
+  let alertsHTML = '';
+  if (alerts.red.length || alerts.yellow.length || Object.keys(gates).length) {
+    alertsHTML = `<div class="card">
+      <div class="sh"><div class="sh-title">Alerts & Selection Gates</div></div>
+      ${alerts.red.length ? `<div style="font-size:10px;font-weight:700;color:var(--danger);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Red Alerts (${alerts.red.length})</div>
+        ${alerts.red.map(a => `<div class="sch-alert-row"><span class="tag danger" style="font-size:9px">RED</span><strong style="font-size:12px">${a.taskName}</strong><span style="color:var(--charcoal-4);font-size:11px">— ${a.reason}</span></div>`).join('')}` : ''}
+      ${alerts.yellow.length ? `<div style="font-size:10px;font-weight:700;color:var(--warning);margin:${alerts.red.length?'12px':'0'} 0 4px;text-transform:uppercase;letter-spacing:.05em">Yellow Alerts (${alerts.yellow.length})</div>
+        ${alerts.yellow.map(a => `<div class="sch-alert-row"><span class="tag warn" style="font-size:9px">YELLOW</span><strong style="font-size:12px">${a.taskName}</strong><span style="color:var(--charcoal-4);font-size:11px">— ${a.reason}</span></div>`).join('')}` : ''}
+      ${Object.keys(gates).length ? `<div style="font-size:10px;font-weight:700;color:var(--charcoal-4);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.05em">Selection Gates</div>
+        <div class="sch-gate-grid">
+          ${Object.entries(gates).map(([g,v]) => `<div class="sch-gate-item"><span style="text-transform:capitalize">${g.replace(/_/g,' ')}</span><span class="tag ${v?'ok':'danger'}" style="font-size:9px">${v?'Resolved':'Unresolved'}</span></div>`).join('')}
+        </div>` : ''}
+    </div>`;
+  }
+
+  // ── E: Table view ──
+  const tableHTML = renderScheduleTable(viewTasks, p.id);
+  // ── F: Charts view ──
+  const chartsHTML = renderScheduleCharts(viewTasks, cache);
+
+  // Choose view
+  const mainView = schViewMode === 'table' ? tableHTML : schViewMode === 'charts' ? chartsHTML : ganttHTML;
+
+  // Auto-scroll + drag init after render
+  if (schViewMode === 'gantt') {
+    setTimeout(() => { schAutoScrollToday(); initGanttDrag(); }, 150);
+  }
+
+  const wrapperOpen = schFocusMode ? '<div class="sch-focus-active">' : '<div>';
+  return wrapperOpen + kpiHTML + actionHTML + mainView + alertsHTML + '</div>';
 }
 
 // ════════════════════════════════════════════════════════
