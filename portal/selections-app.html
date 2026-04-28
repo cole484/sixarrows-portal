@@ -658,6 +658,11 @@ function validate(){
     if(!(ST.answers['ext_soffit_type']||'').trim())return{ok:false,msg:'Please select a soffit type.'};
     if(!(ST.answers['ext_soffit_vent']||'').trim())return{ok:false,msg:'Please select vented or non-vented soffit.'};
     if(!(ST.answers['ext_soffit_color']||'').trim())return{ok:false,msg:'Please enter a soffit color.'};
+    var wc=(ST.answers['ext_window_color']||'').trim();
+    if(!wc) return{ok:false,msg:'Please select a window color combo.'};
+    if(wc==='Other / custom (describe below)' && !(ST.answers['ext_window_color_other']||'').trim()){
+      return{ok:false,msg:'Please describe your custom window color combo.'};
+    }
     var pct=(ST.answers['ext_porch_ceil_type']||'').trim();
     if(!pct) return{ok:false,msg:'Please select a porch ceiling material (pick "None / no porch" if the home has no covered porch).'};
     if(pct!=='None / no porch' && pct!=='Undecided'){
@@ -1510,6 +1515,50 @@ function rfExteriorFinishes(){
     +textField('ext_soffit_color','Color','e.g. White, Almond, Clay, or custom match...', true)
     +'</div></div>';
 
+  // ── Windows ─────────────────────────────────────────────────────────────
+  var windowColor=ST.answers['ext_window_color']||'';
+  var winIsOther = windowColor==='Other / custom (describe below)';
+  var winUndecided = windowColor==='Undecided';
+  var WIN_OPTS=[
+    'White on white',
+    'Black on black',
+    'Black exterior / white interior',
+    'Bronze on bronze',
+    'Bronze exterior / white interior',
+    'Almond / tan on white',
+    'Two-tone — wood-clad interior',
+    'Other / custom (describe below)',
+    'Undecided',
+  ];
+  var winPills=WIN_OPTS.map(function(o){
+    var sel=windowColor===o;
+    var esc=o.replace(/'/g,"\\'");
+    return '<label class="ro'+(sel?' sel':'')+'" onclick="ST.answers[\'ext_window_color\']=\''+esc+'\';render()">'
+      +'<input type="radio" name="window_color" '+(sel?'checked':'')+'>'+o+'</label>';
+  }).join('');
+  var windowSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Windows</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Frame color affects exterior look and interior trim choices — locked early because of long lead times</div></div>'
+    +'<div class="rs-body">'
+    +'<div class="fg"><label>Window color combo <span class="req">*</span></label><div class="rg">'+winPills+'</div></div>'
+    +(winUndecided ? '' :
+      (winIsOther
+        ? textField('ext_window_color_other','Describe window color combo','e.g. Sage exterior / white interior, custom RAL color match...',true)
+        : '')
+      +textField('ext_window_brand','Brand / line (optional)','e.g. Andersen 400 Series, Pella Reserve, Marvin Essential, Provia Endure...',false)
+      +'<div class="fg"><label>Grille / grid pattern <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>'
+        +'<input type="text" value="'+(ST.answers['ext_window_grilles']||'').replace(/"/g,'&quot;')+'" '
+        +'placeholder="e.g. 6 over 6 (front only), no grilles, simulated divided lite, prairie pattern..." '
+        +'onchange="ST.answers[\'ext_window_grilles\']=this.value" onkeyup="ST.answers[\'ext_window_grilles\']=this.value">'
+      +'</div>'
+      +'<div class="fg"><label>Notes <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>'
+        +'<input type="text" value="'+(ST.answers['ext_window_notes']||'').replace(/"/g,'&quot;')+'" '
+        +'placeholder="Hardware finish, screen color, specialty shapes, basement window plan..." '
+        +'onchange="ST.answers[\'ext_window_notes\']=this.value" onkeyup="ST.answers[\'ext_window_notes\']=this.value">'
+      +'</div>'
+    )
+    +'</div></div>';
+
   // ── Porch Ceiling ───────────────────────────────────────────────────────
   var porchType=ST.answers['ext_porch_ceil_type']||'';
   var porchNoPorch = porchType==='None / no porch';
@@ -1575,7 +1624,7 @@ function rfExteriorFinishes(){
     +'onchange="ST.answers[\'ext_siding_notes\']=this.value" onkeyup="ST.answers[\'ext_siding_notes\']=this.value">'
     +'</div></div></div>';
 
-  return roofSection + sidingSection + soffitSection + porchCeilSection + gutterSection;
+  return roofSection + sidingSection + windowSection + soffitSection + porchCeilSection + gutterSection;
 }
 
 function rfPaint(){
