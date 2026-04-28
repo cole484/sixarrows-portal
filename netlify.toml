@@ -15,6 +15,14 @@
 [[scheduled_functions]]
   name = "generate-updates"
   cron = "0 18 * * 5"
+
+# ── Lookahead audit ───────────────────────────────────────────────────────────
+# Daily 8:00 AM CT (13:00 UTC) — audits 8-week window across all active
+# projects, creates/refreshes action items for gaps. On Fridays it also
+# creates the weekly "Friday lookahead review" item per project.
+[[scheduled_functions]]
+  name = "lookahead-cron"
+  cron = "0 13 * * *"
 # ─────────────────────────────────────────────────────────────────────────────
 
 [[headers]]

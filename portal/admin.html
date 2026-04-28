@@ -516,6 +516,7 @@ function renderAdmin() {
   const p   = PROJECTS[activeProject];
   const nav = [
     { key:'today',     icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="6"/><polyline points="7,3.5 7,7 9.5,8.5"/></svg>`, label:'Today'            },
+    { key:'lookahead', icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 2h12v10H1z"/><path d="M1 5h12"/><path d="M4 2v10"/><path d="M8 2v10"/><circle cx="11" cy="8.5" r="1.2" fill="currentColor" stroke="none"/></svg>`, label:'Lookahead (8w)' },
     { key:'tracker',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="3.5" x2="13" y2="3.5"/><line x1="1" y1="7" x2="9" y2="7"/><line x1="1" y1="10.5" x2="11" y2="10.5"/></svg>`, label:'SAB Tracker'     },
     { key:'updates',   icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 10V3a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H4L1 12V10z"/></svg>`, label:'Project Updates' },
     { key:'timeline',  icon:`<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="2.5" cy="3.5" r="1.5"/><line x1="5" y1="3.5" x2="13" y2="3.5"/><circle cx="2.5" cy="7" r="1.5"/><line x1="5" y1="7" x2="13" y2="7"/></svg>`, label:'Milestones'        },
@@ -551,6 +552,12 @@ function renderAdmin() {
     // active project on first render — fixes the "have to click refresh
     // to see All projects data" bug.
     setTimeout(() => loadActionItems(sessionStorage.getItem('sa_today_scope') || 'all'), 50);
+  }
+
+  // ── LOOKAHEAD VIEW ────────────────────────────────────
+  else if (activeView === 'lookahead') {
+    mainContent = renderLookaheadView(p);
+    setTimeout(() => loadLookahead(sessionStorage.getItem('sa_lookahead_scope') || 'all'), 50);
   }
 
   // ── TRACKER VIEW ──────────────────────────────────────
@@ -3419,6 +3426,13 @@ const KIND_LABELS = {
   confirm_selection_gate:  'Resolve selection gate',
   reschedule_response:     'Contractor reschedule',
   manual:                  'Manual',
+  // Lookahead-generated kinds
+  assign_sub:              'Assign subcontractor',
+  confirm_sub:             'Confirm subcontractor',
+  resolve_selection_gate:  'Resolve selection gate',
+  order_materials:         'Order materials',
+  predecessor_blocked:     'Predecessor not complete',
+  weekly_lookahead_review: 'Weekly lookahead review',
 };
 
 function projectNameById(id) {
@@ -3768,6 +3782,199 @@ async function submitManualItem(projectId) {
     openManualItemForm(projectId); // close form
     loadActionItems(projectId);
   } catch (e) { schShowToast(e.message, 'error'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  LOOKAHEAD VIEW — 8-week forward window, gap-driven
+// ══════════════════════════════════════════════════════
+
+let lookaheadCache = {};       // scope → payload
+let lookaheadScope = 'all';
+let lookaheadFilter = 'gaps';  // 'gaps' | 'all'
+let lookaheadGroup  = 'week';  // 'week' | 'project' | 'phase'
+
+function renderLookaheadView(p) {
+  const stored = sessionStorage.getItem('sa_lookahead_scope');
+  if (stored) lookaheadScope = stored;
+  const projectOpts = Object.values(PROJECTS).map(pr =>
+    `<option value="${pr.id}" ${pr.id===lookaheadScope?'selected':''}>${pr.clientName}</option>`
+  ).join('');
+  return `
+    <div class="sch-hd" style="margin-bottom:12px">
+      <div>
+        <div class="sh-title" style="font-size:18px">Lookahead — Next 8 weeks</div>
+        <div style="font-size:11px;color:var(--charcoal-4)">Every task starting in the next 56 days, with the gaps that need closing. Anything red means: it's coming up and isn't ready.</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select class="adm-inp adm-sel" style="font-size:12px;padding:5px 8px;width:auto" onchange="setLookaheadScope(this.value)">
+          <option value="all" ${lookaheadScope==='all'?'selected':''}>All projects</option>
+          ${projectOpts}
+        </select>
+        <select class="adm-inp adm-sel" style="font-size:12px;padding:5px 8px;width:auto" onchange="setLookaheadGroup(this.value)" title="Group by">
+          <option value="week"    ${lookaheadGroup==='week'?'selected':''}>By week</option>
+          <option value="project" ${lookaheadGroup==='project'?'selected':''}>By project</option>
+          <option value="phase"   ${lookaheadGroup==='phase'?'selected':''}>By phase</option>
+        </select>
+        <select class="adm-inp adm-sel" style="font-size:12px;padding:5px 8px;width:auto" onchange="setLookaheadFilter(this.value)" title="Show">
+          <option value="gaps" ${lookaheadFilter==='gaps'?'selected':''}>Gaps only</option>
+          <option value="all"  ${lookaheadFilter==='all'?'selected':''}>All tasks</option>
+        </select>
+        <button class="adm-btn adm-btn-ghost" onclick="loadLookahead(lookaheadScope)" title="Refresh">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="lookahead-summary" style="margin-bottom:10px"></div>
+    <div id="lookahead-body"><div style="padding:2rem;text-align:center;color:var(--charcoal-4);font-size:12px">Loading lookahead…</div></div>
+  `;
+}
+
+function setLookaheadScope(scope)  { lookaheadScope = scope; sessionStorage.setItem('sa_lookahead_scope', scope); loadLookahead(scope); }
+function setLookaheadGroup(g)      { lookaheadGroup = g; renderLookaheadBody(); }
+function setLookaheadFilter(f)     { lookaheadFilter = f; renderLookaheadBody(); }
+
+async function loadLookahead(scope) {
+  scope = scope || lookaheadScope || 'all';
+  const el = document.getElementById('lookahead-body');
+  if (!el) return;
+  try {
+    const res = await fetch(`/.netlify/functions/lookahead?projectId=${encodeURIComponent(scope)}`, {
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load');
+    lookaheadCache[scope] = data;
+    renderLookaheadBody();
+  } catch (err) {
+    el.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--danger);font-size:12px">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderLookaheadBody() {
+  const data = lookaheadCache[lookaheadScope];
+  const sumEl = document.getElementById('lookahead-summary');
+  const bodyEl = document.getElementById('lookahead-body');
+  if (!data || !bodyEl) return;
+
+  // Aggregate summary across visible projects
+  const totals = data.projects.reduce((acc, p) => {
+    acc.tasks += p.summary.tasks;
+    acc.with_gaps += p.summary.with_gaps;
+    acc.red += p.summary.red_gaps;
+    acc.yellow += p.summary.yellow_gaps;
+    return acc;
+  }, { tasks:0, with_gaps:0, red:0, yellow:0 });
+
+  if (sumEl) {
+    sumEl.innerHTML = `<div style="display:flex;gap:14px;padding:10px 14px;background:var(--cream-2);border-radius:var(--r-md);font-size:11px;color:var(--charcoal-3);align-items:center;flex-wrap:wrap">
+      <div><strong style="color:var(--charcoal);font-size:13px">${totals.tasks}</strong> tasks in window</div>
+      <div style="opacity:.5">·</div>
+      <div><strong style="color:var(--danger)">${totals.red}</strong> red</div>
+      <div><strong style="color:#c89200">${totals.yellow}</strong> yellow</div>
+      <div><strong style="color:var(--green)">${totals.tasks - totals.with_gaps}</strong> ready</div>
+      <div style="margin-left:auto;font-size:10px;color:var(--charcoal-4)">Generated ${timeAgo(data.generated_at)}</div>
+    </div>`;
+  }
+
+  // Flatten + filter
+  let rows = [];
+  for (const p of data.projects) {
+    for (const t of p.tasks) {
+      if (lookaheadFilter === 'gaps' && t.gap_count === 0) continue;
+      rows.push({ ...t, project_name: p.client_name });
+    }
+  }
+  if (rows.length === 0) {
+    bodyEl.innerHTML = `<div class="card" style="padding:2.5rem;text-align:center"><div style="font-size:32px;margin-bottom:8px">✓</div><div style="font-size:14px;font-weight:600;color:var(--charcoal)">No gaps in the next 8 weeks</div><div style="font-size:11px;color:var(--charcoal-4);margin-top:4px">Everything starting before ${new Date(Date.now()+56*86400000).toLocaleDateString()} is locked down.</div></div>`;
+    return;
+  }
+
+  // Group rows
+  const groups = new Map();
+  for (const r of rows) {
+    let key, label;
+    if (lookaheadGroup === 'project') {
+      key = r.project_id; label = r.project_name;
+    } else if (lookaheadGroup === 'phase') {
+      key = r.phase || 'Other'; label = r.phase || 'Other';
+    } else {
+      // by week — group by Monday-of-week
+      const d = new Date(r.planned_start + 'T00:00:00');
+      const dow = d.getDay();
+      const monday = new Date(d); monday.setDate(d.getDate() - ((dow + 6) % 7));
+      key = monday.toISOString().split('T')[0];
+      const wkEnd = new Date(monday); wkEnd.setDate(monday.getDate() + 6);
+      label = `Week of ${monday.toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${wkEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+    }
+    if (!groups.has(key)) groups.set(key, { label, items: [] });
+    groups.get(key).items.push(r);
+  }
+  // Sort groups
+  const groupOrder = [...groups.keys()].sort();
+
+  bodyEl.innerHTML = groupOrder.map(key => {
+    const grp = groups.get(key);
+    const groupRed = grp.items.filter(t => t.worst_severity === 'red').length;
+    const groupYellow = grp.items.filter(t => t.worst_severity === 'yellow').length;
+    return `<div style="margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--charcoal)">${escapeHtml(grp.label)}</div>
+        <div style="font-size:10px;color:var(--charcoal-4)">${grp.items.length} task${grp.items.length===1?'':'s'}${groupRed?` · <span style="color:var(--danger);font-weight:700">${groupRed} red</span>`:''}${groupYellow?` · <span style="color:#c89200;font-weight:700">${groupYellow} yellow</span>`:''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${grp.items.map(renderLookaheadRow).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderLookaheadRow(t) {
+  const sevColor = t.worst_severity === 'red' ? 'var(--danger)' : t.worst_severity === 'yellow' ? '#c89200' : 'var(--border-2)';
+  const startStr = t.planned_start ? new Date(t.planned_start + 'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '—';
+  const dayBadge = t.days_to_start <= 7 ? `<span style="display:inline-block;padding:1px 6px;background:var(--danger);color:white;border-radius:3px;font-size:9px;font-weight:700">${t.days_to_start}d</span>`
+                : t.days_to_start <= 21 ? `<span style="display:inline-block;padding:1px 6px;background:#c89200;color:white;border-radius:3px;font-size:9px;font-weight:700">${t.days_to_start}d</span>`
+                : `<span style="display:inline-block;padding:1px 6px;background:var(--cream-2);color:var(--charcoal-3);border-radius:3px;font-size:9px;font-weight:600">${t.days_to_start}d</span>`;
+  const sub = t.contact_name ? escapeHtml(t.contact_name) : '<span style="color:var(--danger);font-style:italic">no sub</span>';
+  const confirmed = t.contractor_confirmed ? '<span style="color:var(--green);font-weight:700" title="Confirmed">✓</span>' : (t.subcontractor_id || t.assigned_contractor) ? '<span style="color:#c89200" title="Not confirmed">○</span>' : '<span style="color:var(--charcoal-4)">—</span>';
+  const gateCell = !t.selections_gate ? '<span style="color:var(--charcoal-4);font-size:10px">—</span>'
+                : t.gate_resolved      ? '<span style="color:var(--green);font-weight:700" title="Resolved">✓</span>'
+                                       : `<span style="color:var(--danger);font-size:10px;font-weight:700" title="Unresolved gate">${escapeHtml(t.selections_gate)}</span>`;
+  const projBadge = lookaheadGroup !== 'project' ? `<span style="display:inline-block;padding:1px 6px;background:var(--cream-2);color:var(--charcoal-3);border-radius:3px;font-size:10px;font-weight:600;margin-right:5px">${escapeHtml(t.project_name)}</span>` : '';
+  const gapList = t.gaps.length > 0
+    ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${t.gaps.map(g => {
+        const c = g.severity === 'red' ? 'var(--danger)' : g.severity === 'yellow' ? '#c89200' : 'var(--charcoal-3)';
+        return `<span style="display:inline-block;padding:2px 7px;background:${c};color:white;border-radius:3px;font-size:10px;font-weight:600">${escapeHtml(g.label)}</span>`;
+      }).join('')}</div>`
+    : '';
+
+  return `<div class="card" style="padding:9px 12px;border-left:3px solid ${sevColor};display:flex;flex-direction:column;gap:0">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--charcoal);line-height:1.2">${projBadge}${escapeHtml(t.task_name)}</div>
+        <div style="font-size:10px;color:var(--charcoal-4);margin-top:2px">${escapeHtml(t.phase)}${t.trade?` · ${escapeHtml(t.trade)}`:''} · starts ${startStr}</div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;font-size:11px;color:var(--charcoal-3);flex-shrink:0">
+        ${dayBadge}
+        <div title="Sub assigned"><strong style="color:var(--charcoal)">Sub:</strong> ${sub}</div>
+        <div title="Confirmed?">${confirmed}</div>
+        <div title="Selection gate">${gateCell}</div>
+        <button class="adm-btn adm-btn-ghost" style="padding:3px 8px;font-size:10px" onclick="lookaheadDraftText('${t.project_id}','${t.id}')" title="Draft contractor text">📨</button>
+      </div>
+    </div>
+    ${gapList}
+  </div>`;
+}
+
+async function lookaheadDraftText(projectId, taskId) {
+  schShowToast('Drafting…','');
+  try {
+    const res = await fetch(`/.netlify/functions/contractor-messages?action=draft`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ADMIN_PASS}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ projectId, taskId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    schShowToast('Draft created — see Today','success');
+  } catch (e) { schShowToast(e.message,'error'); }
 }
 
 function renderScheduleView(p) {
