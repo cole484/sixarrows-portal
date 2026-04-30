@@ -333,11 +333,20 @@ function renderAdminLogin() {
   document.getElementById('admin-pw').addEventListener('keydown', e => { if(e.key==='Enter') attemptAdminLogin(); });
 }
 
-function attemptAdminLogin() {
+async function attemptAdminLogin() {
   const pw = document.getElementById('admin-pw').value;
   if (pw === ADMIN_PASS) {
     sessionStorage.setItem('sa_admin_auth', ADMIN_PASS);
-    adminAuthed = true; renderAdmin();
+    adminAuthed = true;
+    // Show a loading state immediately so the password screen doesn't
+    // appear stuck while Supabase loads (~300-800ms on a fresh session).
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui;color:#666;font-size:13px">Loading clients…</div>';
+    await loadAllClientsFromSupabase();
+    if (!PROJECTS[activeProject]) {
+      activeProject = Object.keys(PROJECTS)[0];
+      sessionStorage.setItem('sa_admin_project', activeProject);
+    }
+    renderAdmin();
   } else {
     const err = document.getElementById('admin-err');
     err.style.display = 'block'; err.textContent = 'Incorrect password.';
