@@ -1486,10 +1486,17 @@ function saveProjectInfo(projectId) {
   p.projectName     = document.getElementById('pi-projectName')?.value.trim() || p.projectName;
   p.location        = document.getElementById('pi-location')?.value.trim()    || p.location;
   p.statusType      = document.getElementById('pi-statusType')?.value         || p.statusType;
-  p.phaseLabel      = document.getElementById('pi-phaseLabel')?.value.trim()  || p.phaseLabel;
+  // Allow these fields to be cleared — read raw .value.trim() and only fall
+  // back to the prior value if the element doesn't exist. Using `||` here
+  // (the prior implementation) treated an empty string as "no change", so
+  // clearing the input and saving silently restored the old value.
+  const phaseEl    = document.getElementById('pi-phaseLabel');
+  if (phaseEl)    p.phaseLabel    = phaseEl.value.trim();
   p.constructionPct = parseInt(document.getElementById('pi-conPct')?.value)   || 0;
-  p.timelineStart      = document.getElementById('pi-tlStart')?.value.trim()  || p.timelineStart;
-  p.timelineTarget     = document.getElementById('pi-tlTarget')?.value.trim() || p.timelineTarget;
+  const tlStartEl  = document.getElementById('pi-tlStart');
+  if (tlStartEl)  p.timelineStart  = tlStartEl.value.trim();
+  const tlTargetEl = document.getElementById('pi-tlTarget');
+  if (tlTargetEl) p.timelineTarget = tlTargetEl.value.trim();
   p.groundbreakingDate = document.getElementById('pi-gbDate')?.value ?? p.groundbreakingDate ?? '';
   if (PROJECTS[projectId]) PROJECTS[projectId].groundbreakingDate = p.groundbreakingDate;
   const budgetLink = document.getElementById('pi-budgetLink')?.value.trim() || '';
