@@ -663,6 +663,22 @@ function validate(){
     if(wc==='Other / custom (describe below)' && !(ST.answers['ext_window_color_other']||'').trim()){
       return{ok:false,msg:'Please describe your custom window color combo.'};
     }
+    // Exterior doors — at least one required, every door needs label/RO/product/finish, color if Paint or Stain
+    var doors=[]; try { doors=JSON.parse(ST.answers['ext_doors']||'[]'); if(!Array.isArray(doors)) doors=[]; } catch(e){ doors=[]; }
+    if(!doors.length) return{ok:false,msg:'Please add at least one exterior door (front door, garage entry, etc.).'};
+    for(var di=0; di<doors.length; di++){
+      var d=doors[di]||{}; var pos='Door #'+(di+1);
+      if(!(d.label||'').trim())   return{ok:false,msg:'Pick a door type for '+pos+'.'};
+      if(d.label==='Other (specify below)' && !(d.customLabel||'').trim()){
+        return{ok:false,msg:'Enter a custom label for '+pos+'.'};
+      }
+      if(!(d.roSize||'').trim())  return{ok:false,msg:'Enter a rough opening size for '+pos+'.'};
+      if(!(d.product||'').trim()) return{ok:false,msg:'Enter the selected door / exact product for '+pos+'.'};
+      if(!(d.finish||'').trim())  return{ok:false,msg:'Pick a finish (paint / stain / pre-finished) for '+pos+'.'};
+      if((d.finish==='Paint' || d.finish==='Stain') && !(d.color||'').trim()){
+        return{ok:false,msg:'Enter the color / stain choice for '+pos+'.'};
+      }
+    }
     var pct=(ST.answers['ext_porch_ceil_type']||'').trim();
     if(!pct) return{ok:false,msg:'Please select a porch ceiling material (pick "None / no porch" if the home has no covered porch).'};
     if(pct!=='None / no porch' && pct!=='Undecided'){
@@ -1559,6 +1575,96 @@ function rfExteriorFinishes(){
     )
     +'</div></div>';
 
+  // ── Exterior Doors ──────────────────────────────────────────────────────
+  // Variable number of doors. Each door: label (preset or custom), rough
+  // opening size, selected door product, finish (paint/stain/pre-finished),
+  // color, notes. Stored as a JSON array under ST.answers['ext_doors'].
+  var doorList=[];
+  try { doorList=JSON.parse(ST.answers['ext_doors']||'[]'); if(!Array.isArray(doorList)) doorList=[]; } catch(e){ doorList=[]; }
+
+  var DOOR_LABEL_OPTS = [
+    'Front door',
+    'Back door / patio door',
+    'Garage entry (man door)',
+    'Garage overhead door',
+    'Side / mudroom door',
+    'Basement walkout',
+    'French doors (rear)',
+    'Sliding glass door',
+    'Storm door',
+    'Other (specify below)',
+  ];
+  var DOOR_FINISH_OPTS = ['Paint','Stain','Pre-finished / no field finish','Undecided'];
+
+  var doorRows = doorList.map(function(d, i){
+    d = d || {};
+    var labelPicker = '<select class="adm-inp adm-sel" '
+      +'onchange="extDoorField('+i+',\'label\',this.value)" '
+      +'style="font-size:13px;padding:8px 10px;width:100%;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-primary);font-family:inherit">'
+      +'<option value="">— Pick door type —</option>'
+      +DOOR_LABEL_OPTS.map(function(o){
+        return '<option value="'+o+'" '+(d.label===o?'selected':'')+'>'+o+'</option>';
+      }).join('')
+      +'</select>';
+
+    var customLabelField = (d.label==='Other (specify below)')
+      ? '<div class="fg" style="margin-top:8px"><label style="font-size:11px">Custom label</label>'
+        +'<input type="text" value="'+(d.customLabel||'').replace(/"/g,'&quot;')+'" '
+        +'placeholder="e.g. Wine cellar door, dog run door..." '
+        +'onchange="extDoorField('+i+',\'customLabel\',this.value)" onkeyup="extDoorField('+i+',\'customLabel\',this.value)"></div>'
+      : '';
+
+    var finishPills = DOOR_FINISH_OPTS.map(function(o){
+      var sel = d.finish === o;
+      var esc = o.replace(/'/g,"\\'");
+      return '<label class="ro'+(sel?' sel':'')+'" '
+        +'onclick="extDoorField('+i+',\'finish\',\''+esc+'\');render()">'
+        +'<input type="radio" name="ext_door_finish_'+i+'" '+(sel?'checked':'')+'>'+o+'</label>';
+    }).join('');
+
+    var hideColor = d.finish === 'Undecided';
+
+    return '<div style="padding:14px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">'
+        +'<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sage)">Door #'+(i+1)+'</div>'
+        +'<button onclick="extDoorRemove('+i+')" '
+        +'style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--text-danger);font-size:12px;font-weight:600">Remove</button>'
+      +'</div>'
+      +'<div class="fg"><label>Door type / location <span class="req">*</span></label>'+labelPicker+'</div>'
+      +customLabelField
+      +'<div class="fg"><label>Rough opening size <span class="req">*</span></label>'
+        +'<input type="text" value="'+(d.roSize||'').replace(/"/g,'&quot;')+'" '
+        +'placeholder="e.g. 3&#39;-0&quot; x 6&#39;-8&quot;,  6&#39;0&quot; x 6&#39;8&quot; double, 16&#39;0&quot; x 8&#39;0&quot; (overhead)..." '
+        +'onchange="extDoorField('+i+',\'roSize\',this.value)" onkeyup="extDoorField('+i+',\'roSize\',this.value)"></div>'
+      +'<div class="fg"><label>Selected door / exact product <span class="req">*</span></label>'
+        +'<input type="text" value="'+(d.product||'').replace(/"/g,'&quot;')+'" '
+        +'placeholder="e.g. Therma-Tru Smooth-Star S210, ProVia Signet 2-panel craftsman, Clopay Gallery Collection..." '
+        +'onchange="extDoorField('+i+',\'product\',this.value)" onkeyup="extDoorField('+i+',\'product\',this.value)"></div>'
+      +'<div class="fg"><label>Finish <span class="req">*</span></label><div class="rg">'+finishPills+'</div></div>'
+      +(hideColor?'':
+        '<div class="fg"><label>Color / stain choice <span class="req">*</span></label>'
+          +'<input type="text" value="'+(d.color||'').replace(/"/g,'&quot;')+'" '
+          +'placeholder="e.g. SW Tricorn Black, Minwax Special Walnut, Sapele wood-grain factory finish..." '
+          +'onchange="extDoorField('+i+',\'color\',this.value)" onkeyup="extDoorField('+i+',\'color\',this.value)"></div>'
+      )
+      +'<div class="fg"><label>Notes <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>'
+        +'<input type="text" value="'+(d.notes||'').replace(/"/g,'&quot;')+'" '
+        +'placeholder="Glass type, hardware finish, swing direction, sidelights/transom..." '
+        +'onchange="extDoorField('+i+',\'notes\',this.value)" onkeyup="extDoorField('+i+',\'notes\',this.value)"></div>'
+    +'</div>';
+  }).join('');
+
+  var doorsSection = '<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Exterior Doors</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Add an entry for every exterior door — front, back, garage entry, basement walkout, sliders, etc. Affects framing rough openings and finish lead times.</div></div>'
+    +'<div class="rs-body">'
+    +(doorList.length
+      ? doorRows
+      : '<div style="padding:14px;text-align:center;border:1px dashed var(--border);border-radius:var(--radius);color:var(--text-secondary);font-size:13px;margin-bottom:10px">No exterior doors added yet. Click below to add the first.</div>')
+    +'<button onclick="extDoorAdd()" '
+    +'style="padding:10px 16px;background:var(--sage);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;width:100%">+ Add Exterior Door</button>'
+    +'</div></div>';
+
   // ── Porch Ceiling ───────────────────────────────────────────────────────
   var porchType=ST.answers['ext_porch_ceil_type']||'';
   var porchNoPorch = porchType==='None / no porch';
@@ -1624,7 +1730,31 @@ function rfExteriorFinishes(){
     +'onchange="ST.answers[\'ext_siding_notes\']=this.value" onkeyup="ST.answers[\'ext_siding_notes\']=this.value">'
     +'</div></div></div>';
 
-  return roofSection + sidingSection + windowSection + soffitSection + porchCeilSection + gutterSection;
+  return roofSection + sidingSection + windowSection + doorsSection + soffitSection + porchCeilSection + gutterSection;
+}
+
+// ── Exterior Doors helpers (variable-length list) ─────────────────────────
+function extDoorList(){
+  try { var a=JSON.parse(ST.answers['ext_doors']||'[]'); return Array.isArray(a)?a:[]; } catch(e){ return []; }
+}
+function extDoorSave(arr){ ST.answers['ext_doors']=JSON.stringify(arr); }
+function extDoorAdd(){
+  var arr=extDoorList();
+  arr.push({ label:'', customLabel:'', roSize:'', product:'', finish:'', color:'', notes:'' });
+  extDoorSave(arr);
+  render();
+}
+function extDoorRemove(i){
+  var arr=extDoorList();
+  arr.splice(i,1);
+  extDoorSave(arr);
+  render();
+}
+function extDoorField(i, field, val){
+  var arr=extDoorList();
+  if (!arr[i]) return;
+  arr[i][field]=val;
+  extDoorSave(arr);
 }
 
 function rfPaint(){
