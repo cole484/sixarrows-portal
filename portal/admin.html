@@ -1543,6 +1543,7 @@ function saveProjectInfo(projectId) {
     email: p.email || '',
     password: p.password || '',
   };
+  showMsg('pi-msg','neutral','Saving…');
   fetch(`${SUPABASE_DIRECT_URL}/rest/v1/clients`, {
     method: 'POST',
     headers: sbH,
@@ -1551,13 +1552,18 @@ function saveProjectInfo(projectId) {
     if (!res.ok) {
       const err = await res.text();
       console.error('saveProjectInfo upsert failed:', res.status, err);
-      showMsg('pi-msg', 'error', `Save failed (${res.status}) — check console`);
+      // Surface the Supabase error inline so missing-column / RLS issues are
+      // immediately visible instead of being masked by a stale "Saved ✓".
+      let detail = err;
+      try { const j = JSON.parse(err); detail = j.message || j.hint || err; } catch(e) {}
+      showMsg('pi-msg', 'error', `Save failed (${res.status}): ${detail.slice(0, 180)} — see console`);
+      return;
     }
+    showMsg('pi-msg','success','Saved to cloud ✓');
   }).catch(err => {
     console.error('saveProjectInfo network error:', err);
     showMsg('pi-msg', 'error', 'Network error — could not reach Supabase');
   });
-  showMsg('pi-msg','success','Saved ✓');
 }
 
 function saveCredentials(projectId) {
