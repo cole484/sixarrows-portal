@@ -255,7 +255,7 @@ const DEFAULT_ROOMS=[
 
 const FLOOR_OPTS=["Hardwood","Engineered Hardwood","LVP / LVT","Carpet","Tile","Concrete","Epoxy (garage)","Undecided"];
 const WAVES=[
-  {label:"Wave 1",name:"Structure",cats:["fireplace","appliances","exterior_finishes"]},
+  {label:"Wave 1",name:"Structure",cats:["fireplace","appliances","exterior_finishes","hvac"]},
   {label:"Wave 2",name:"The Shell",cats:["specialty_trim","flooring","tile"]},
   {label:"Wave 3",name:"The Jewelry",cats:["plumbing","lighting","countertops","hardware","paint","doors"]}
 ];
@@ -313,6 +313,8 @@ const CATS={
     guidance:"Select all appliances going into your home. Standard appliances are listed first — all are required. Then add any additional appliances from the list below."},
   exterior_finishes:{name:"Exterior Finishes",wave:0,type:"exterior_finishes",
     guidance:"Roof, soffit, and gutter selections need to be finalized before exterior framing closes. Roof type affects structural load and ventilation planning. All three need exact product selections before contractor bids are sent."},
+  hvac:{name:"HVAC",wave:0,type:"hvac",
+    guidance:"Heating and cooling equipment drives mechanical room sizing, chase routing, vent terminations, and outdoor pad placement. Specialty equipment (geothermal, premium ERVs) has long lead times — confirming early prevents framing conflicts and schedule slips."},
   specialty_trim:{name:"Specialty Trim & Built-Ins",wave:1,type:"specialty",guidance:"Select all specialty trim items you want. Complete all required fields for each selection. Cabinets are handled separately with your cabinet maker."},
   flooring:{name:"Flooring",wave:1,type:"flooring",guidance:"Select flooring for each room. All fields are required before this section can be marked complete."},
   tile:{name:"Tile Selections",wave:1,type:"tile",guidance:"Each bathroom gets its own tile selections. All required fields must be completed before advancing."},
@@ -351,7 +353,7 @@ const CATS={
     {id:"tr_notes",label:"Notes",type:"textarea",ph:"Wainscoting, board & batten, picture rail..."}
   ]}
 };
-const ALL_IDS=["fireplace","appliances","exterior_finishes","specialty_trim","flooring","tile","plumbing","lighting","countertops","hardware","paint","doors"];
+const ALL_IDS=["fireplace","appliances","exterior_finishes","hvac","specialty_trim","flooring","tile","plumbing","lighting","countertops","hardware","paint","doors"];
 
 // ── State ─────────────────────────────────────────────────
 let ST={
@@ -691,6 +693,26 @@ function validate(){
     if(!(ST.answers['ext_gutter_type']||'').trim())return{ok:false,msg:'Please select a gutter style.'};
     if(!(ST.answers['ext_gutter_material']||'').trim())return{ok:false,msg:'Please select a gutter material.'};
     if(!(ST.answers['ext_gutter_color']||'').trim())return{ok:false,msg:'Please enter a gutter color.'};
+    return{ok:true};
+  }
+  // ── HVAC ───────────────────────────────────────────────────────────────────
+  if(ST.catId==="hvac"){
+    var ht=(ST.answers['hvac_heat_type']||'').trim();
+    if(!ht) return{ok:false,msg:'Please select a heating system type.'};
+    if(ht!=='Undecided'){
+      if(!(ST.answers['hvac_heat_make_model']||'').trim()) return{ok:false,msg:'Please enter the heating equipment make / model.'};
+      if(!(ST.answers['hvac_heat_size']||'').trim())       return{ok:false,msg:'Please enter the heating equipment size (tonnage / BTU).'};
+    }
+    var ct=(ST.answers['hvac_cool_type']||'').trim();
+    if(!ct) return{ok:false,msg:'Please select a cooling system type.'};
+    if(ct!=='Undecided' && ct!=='None / heating only'){
+      if(!(ST.answers['hvac_cool_make_model']||'').trim()) return{ok:false,msg:'Please enter the cooling equipment make / model.'};
+      if(!(ST.answers['hvac_cool_size']||'').trim())       return{ok:false,msg:'Please enter the cooling equipment tonnage.'};
+    }
+    if(!(ST.answers['hvac_zones']||'').trim())       return{ok:false,msg:'Please select the number of zones.'};
+    if(!(ST.answers['hvac_thermostat']||'').trim())  return{ok:false,msg:'Please select a thermostat preference.'};
+    if(!(ST.answers['hvac_equip_loc']||'').trim())   return{ok:false,msg:'Please select the primary indoor equipment location.'};
+    if(!(ST.answers['hvac_manualj']||'').trim())     return{ok:false,msg:'Please confirm Manual J load calculation status.'};
     return{ok:true};
   }
   // ── SPECIALTY TRIM ─────────────────────────────────────────────────────────
@@ -1757,6 +1779,164 @@ function extDoorField(i, field, val){
   extDoorSave(arr);
 }
 
+// ── HVAC (Wave 1) ───────────────────────────────────────────────────────
+function rfHvac(){
+  // Reusable inline radio-pill helper (re-renders so dependent fields can show/hide)
+  function radioPills(key, opts, name){
+    var val=ST.answers[key]||'';
+    return opts.map(function(o){
+      var sel=val===o;
+      var esc=o.replace(/'/g,"\\'");
+      return '<label class="ro'+(sel?' sel':'')+'" '
+        +'onclick="ST.answers[\''+key+'\']=\''+esc+'\';render()">'
+        +'<input type="radio" name="'+name+'" '+(sel?'checked':'')+'>'+o+'</label>';
+    }).join('');
+  }
+  function pillBlock(key, opts, label, req, name){
+    return '<div class="fg"><label>'+label+(req?' <span class="req">*</span>':'')+'</label>'
+      +'<div class="rg">'+radioPills(key, opts, name||key)+'</div></div>';
+  }
+  function txtField(key, label, ph, req){
+    var val=(ST.answers[key]||'').replace(/"/g,'&quot;');
+    return '<div class="fg"><label>'+label+(req?' <span class="req">*</span>':' <span style="font-weight:400;color:var(--text-secondary)">(optional)</span>')+'</label>'
+      +'<input type="text" value="'+val+'" placeholder="'+ph+'" '
+      +'onchange="ST.answers[\''+key+'\']=this.value" onkeyup="ST.answers[\''+key+'\']=this.value"></div>';
+  }
+  function checkBlock(key, opts, label){
+    var raw=ST.answers[key]||'[]';
+    var sel=[]; try { var p=JSON.parse(raw); if(Array.isArray(p)) sel=p; } catch(e){}
+    var rows=opts.map(function(o, i){
+      var checked=sel.indexOf(o)>=0;
+      var esc=o.replace(/"/g,'&quot;');
+      return '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-primary);cursor:pointer;margin-bottom:6px;font-size:13px"'
+        +(checked?' style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--sage);background:rgba(117,127,105,.06);border-radius:var(--radius);cursor:pointer;margin-bottom:6px;font-size:13px"':'')
+        +'>'
+        +'<input type="checkbox" '+(checked?'checked':'')+' '
+        +'onchange="hvacToggleMulti(\''+key+'\',\''+esc.replace(/'/g,"\\'")+'\',this.checked)" '
+        +'style="margin:0;accent-color:var(--sage);width:16px;height:16px;flex-shrink:0">'
+        +'<span>'+o+'</span></label>';
+    }).join('');
+    return '<div class="fg"><label>'+label+'</label>'+rows+'</div>';
+  }
+
+  // ── Heating ─────────────────────────────────────────────────────────────
+  var heatType=ST.answers['hvac_heat_type']||'';
+  var heatSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Heating System</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Drives equipment lead times and mechanical room sizing</div></div>'
+    +'<div class="rs-body">'
+    +pillBlock('hvac_heat_type',
+      ['Gas furnace','Heat pump','Dual fuel (heat pump + gas backup)','Geothermal','Boiler / hydronic','Mini-split only','Other','Undecided'],
+      'Heating type', true, 'heat_type')
+    +(heatType && heatType !== 'Undecided' ? (
+      txtField('hvac_heat_make_model','Make / model','e.g. Carrier Infinity 98 59MN7A, Trane XV80, Bosch IDS 2.0...', true)
+      +'<div class="adm-grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        +txtField('hvac_heat_size','Tonnage / BTU','e.g. 80,000 BTU, 4 ton...', true)
+        +txtField('hvac_heat_eff','Efficiency rating','e.g. 96 AFUE, 9.5 HSPF, 4.5 COP...', false)
+      +'</div>'
+    ):'')
+    +'</div></div>';
+
+  // ── Cooling ─────────────────────────────────────────────────────────────
+  var coolType=ST.answers['hvac_cool_type']||'';
+  var coolSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Cooling System</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Tied to heating equipment when using a matched system or heat pump</div></div>'
+    +'<div class="rs-body">'
+    +pillBlock('hvac_cool_type',
+      ['Central AC','Heat pump (same unit as heating)','Mini-split','None / heating only','Undecided'],
+      'Cooling type', true, 'cool_type')
+    +(coolType && coolType !== 'None / heating only' && coolType !== 'Undecided' ? (
+      txtField('hvac_cool_make_model','Make / model','e.g. Carrier 24VNA6, Trane XV20i, Mitsubishi MUZ-FH...', true)
+      +'<div class="adm-grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        +txtField('hvac_cool_size','Tonnage','e.g. 4 ton, 36,000 BTU...', true)
+        +txtField('hvac_cool_seer','SEER rating','e.g. 18 SEER, 22 SEER2...', false)
+      +'</div>'
+    ):'')
+    +'</div></div>';
+
+  // ── Zones & thermostats ─────────────────────────────────────────────────
+  var zoneSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Zones &amp; Thermostats</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Multi-zone systems need ductwork planned during framing</div></div>'
+    +'<div class="rs-body">'
+    +pillBlock('hvac_zones', ['1','2','3','4+','Undecided'], 'Number of zones', true, 'zones')
+    +pillBlock('hvac_thermostat',
+      ['Standard programmable','Smart — Ecobee','Smart — Nest','Smart — Honeywell T-series','Other smart','Builder choice'],
+      'Thermostat preference', true, 'thermostat')
+    +'</div></div>';
+
+  // ── Indoor air quality (multi-select) ───────────────────────────────────
+  var IAQ_OPTS=[
+    'Whole-home humidifier (Aprilaire / GeneralAire)',
+    'ERV or HRV (energy / heat recovery ventilator)',
+    'Whole-home dehumidifier',
+    'UV light / air purifier (Reme Halo, iWave, etc.)',
+    '4–5″ media filter cabinet (MERV 13–16)',
+    'None — standard 1″ filter only',
+  ];
+  var iaqSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Indoor Air Quality</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Tight modern homes need active air management — easier to spec now than retrofit later</div></div>'
+    +'<div class="rs-body">'
+    +checkBlock('hvac_iaq', IAQ_OPTS, 'Air quality additions (check all that apply)')
+    +'</div></div>';
+
+  // ── Specialty comfort additions ─────────────────────────────────────────
+  var HEATED_FLOOR_OPTS=[
+    'None','Primary bath','Other bathroom(s)','Mudroom / entry','Kitchen','Basement','Whole home',
+  ];
+  var comfortSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Specialty Comfort</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Optional add-ons that drive electrical / plumbing rough-in changes</div></div>'
+    +'<div class="rs-body">'
+    +checkBlock('hvac_heated_floors', HEATED_FLOOR_OPTS, 'Heated floors — pick all locations that apply')
+    +txtField('hvac_minisplit_addons','Mini-splits for specific spaces','e.g. Detached garage, sunroom, ADU, primary suite — note location and tonnage if known...', false)
+    +'</div></div>';
+
+  // ── Equipment location ──────────────────────────────────────────────────
+  var locSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Equipment Location</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Affects mechanical room sizing, framing chases, and condenser pad pour</div></div>'
+    +'<div class="rs-body">'
+    +pillBlock('hvac_equip_loc',
+      ['Basement','Attic','Mechanical closet (conditioned)','Garage','Mixed / multi-location','Undecided'],
+      'Primary indoor equipment location', true, 'equip_loc')
+    +txtField('hvac_condenser_loc','Outdoor condenser pad location(s)','e.g. North side under deck, side yard between AC and gas meter, screened pad behind garage...', false)
+    +'</div></div>';
+
+  // ── Engineering ─────────────────────────────────────────────────────────
+  var engSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Engineering Basis</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Performance design avoids over- or under-sizing</div></div>'
+    +'<div class="rs-body">'
+    +pillBlock('hvac_manualj', ['Done','Pending','Not required'], 'Manual J load calculation', true, 'manualj')
+    +'</div></div>';
+
+  // ── Notes ───────────────────────────────────────────────────────────────
+  var notesSection='<div class="room-section" style="margin-bottom:12px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Notes</div></div>'
+    +'<div class="rs-body">'
+    +'<div class="fg"><label>Anything else to flag</label>'
+      +'<textarea style="width:100%;min-height:80px;padding:9px 11px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-primary);resize:vertical;line-height:1.5" '
+      +'placeholder="Refrigerant line routing concerns, supply register style preferences, return-air strategy, snow melt, whole-house fan, any specialty equipment lead times..." '
+      +'onchange="ST.answers[\'hvac_notes\']=this.value" onkeyup="ST.answers[\'hvac_notes\']=this.value">'+(ST.answers['hvac_notes']||'').replace(/</g,'&lt;')+'</textarea>'
+    +'</div>'
+    +'</div></div>';
+
+  return heatSection + coolSection + zoneSection + iaqSection + comfortSection + locSection + engSection + notesSection;
+}
+
+// Toggle a value in/out of an HVAC multi-select stored as JSON-encoded array
+function hvacToggleMulti(key, value, checked){
+  var arr=[]; try { var p=JSON.parse(ST.answers[key]||'[]'); if(Array.isArray(p)) arr=p; } catch(e){}
+  var idx=arr.indexOf(value);
+  if (checked && idx<0) arr.push(value);
+  if (!checked && idx>=0) arr.splice(idx,1);
+  ST.answers[key]=JSON.stringify(arr);
+  render();
+}
+
 function rfPaint(){
   if(!ST.rooms.length)return '<div style="padding:1rem;background:var(--bg-secondary);border-radius:var(--radius);font-size:14px;color:var(--text-secondary)">No rooms set up. Go back to Project Setup first.</div>';
 
@@ -1952,6 +2132,7 @@ function renderForm(){
   else if(cat.type==="lighting")body=rfLighting();
   else if(cat.type==="appliances")body=rfAppliances();
   else if(cat.type==="exterior_finishes")body=rfExteriorFinishes();
+  else if(cat.type==="hvac")body=rfHvac();
   else if(cat.type==="countertops")body=rfCountertops();
   else if(cat.type==="paint")body=rfPaint();
   else body=rfStandard();

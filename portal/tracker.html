@@ -813,7 +813,7 @@ function renderStepCard(pi, si, step, phaseComplete) {
 
     // ── Wave selection launch card (Steps 5, 6, 7 in Phase 2) ──
     const waveConfig = {
-      5: { wave:0, label:'Wave 1', name:'Structure',   cats:['Fireplace','Appliances','Exterior Finishes'] },
+      5: { wave:0, label:'Wave 1', name:'Structure',   cats:['Fireplace','Appliances','Exterior Finishes','HVAC'] },
       6: { wave:1, label:'Wave 2', name:'The Shell',    cats:['Specialty Trim','Flooring','Tile'] },
       7: { wave:2, label:'Wave 3', name:'The Jewelry',  cats:['Plumbing','Lighting','Countertops','Hardware','Paint & Stain','Doors'] },
     };
@@ -838,7 +838,7 @@ function renderStepCard(pi, si, step, phaseComplete) {
       let answersData = {};
       try { answersData = JSON.parse(localStorage.getItem(`sab8_${ck}_ans`) || '{}'); } catch(e) {}
       const catMap = {
-        5: ['fireplace','appliances','exterior_finishes'],
+        5: ['fireplace','appliances','exterior_finishes','hvac'],
         6: ['specialty_trim','flooring','tile'],
         7: ['plumbing','lighting','countertops','hardware','paint','doors'],
       };
