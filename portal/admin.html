@@ -204,6 +204,20 @@ async function loadAllClientsFromSupabase() {
     const docsRes = await fetch(`${SUPABASE_DIRECT_URL}/rest/v1/documents?select=*&order=created_at.asc`, { headers: sbHeaders });
     const allDocs = docsRes.ok ? await docsRes.json() : [];
 
+    // ── Prune local PROJECTS to match Supabase canonical list ───────────────
+    // data.js hardcodes a default set of clients which seed PROJECTS at page
+    // load. Without this prune, any client deleted from Supabase would
+    // immediately reappear from the data.js seed on the next admin reload —
+    // making admin client deletions look broken. Supabase is the source of
+    // truth in admin, so any in-memory client without a matching Supabase
+    // row gets dropped here. (We only prune on a SUCCESSFUL Supabase fetch
+    // — the early `return` above protects against accidental wipe-outs when
+    // Supabase is briefly unreachable.)
+    const validIds = new Set(clients.map(c => c.id));
+    for (const id of Object.keys(PROJECTS)) {
+      if (!validIds.has(id)) delete PROJECTS[id];
+    }
+
     // Merge into PROJECTS
     for (const client of clients) {
       const id = client.id;
