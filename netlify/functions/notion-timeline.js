@@ -146,17 +146,57 @@ export const handler = async (event) => {
   if (!dbId) return { statusCode: 400, headers: corsH, body: JSON.stringify({ error: 'dbId required' }) };
 
   try {
-    // Query all pages — sort by Sequence # first, fallback to Start Date
+    // Query all pages — sort by Sequence # first, fallback to Start Date,
+    // then fall back to a no-sort query so we can distinguish "DB has rows
+    // but neither sort column exists" from "DB is genuinely empty" from
+    // "DB isn't shared with this Notion integration."
+    //
+    // Capture the first real error so we can surface it if every attempt
+    // returns no rows. Notion responds the same way (empty list) whether
+    // the database is actually empty or a sort property is missing, so the
+    // recoverable errors below are the only signal we have for diagnostics.
+    let lastErr = null;
+    const trySort = async (sorts) => {
+      try { return await queryDatabase(dbId, token, sorts); }
+      catch (e) { if (!lastErr) lastErr = e; return []; }
+    };
+
     const [bySequence, byDate] = await Promise.all([
-      queryDatabase(dbId, token, [{ property: 'Sequence #', direction: 'ascending' }]).catch(() => []),
-      queryDatabase(dbId, token, [{ property: 'Start Date', direction: 'ascending' }]).catch(() => []),
+      trySort([{ property: 'Sequence #', direction: 'ascending' }]),
+      trySort([{ property: 'Start Date', direction: 'ascending' }]),
     ]);
 
-    // Use whichever returned results
-    const rawPages = bySequence.length ? bySequence : byDate;
+    // If both sorted queries returned nothing, try unsorted — that
+    // succeeds even when the sort columns are missing or named differently.
+    let rawPages = bySequence.length ? bySequence : byDate;
+    if (!rawPages.length) rawPages = await trySort([]);
+
     if (!rawPages.length) {
+      // Genuinely no rows OR Notion API rejected every query — surface the
+      // first concrete error from Notion so misconfiguration is visible.
+      const errMsg = (lastErr && lastErr.message) || '';
+      let userMsg = 'No tasks found in database';
+      let hint    = null;
+
+      if (/object_not_found|Could not find database|integration/i.test(errMsg)) {
+        userMsg = 'Notion database not accessible';
+        hint    = 'Open the database in Notion → ··· menu → Connections → add the Six Arrows portal integration. The integration must be explicitly shared with each database.';
+      } else if (/unauthorized|Invalid token|API token/i.test(errMsg)) {
+        userMsg = 'Notion authentication failed';
+        hint    = 'Check that NOTION_TOKEN is set correctly in Netlify environment variables.';
+      } else if (/validation|Could not find sort property/i.test(errMsg)) {
+        userMsg = 'Notion database schema mismatch';
+        hint    = 'Verify column names match the expected schema (Task, Status, Start, Sequence #, etc.).';
+      } else if (errMsg) {
+        userMsg = 'Notion query failed';
+        hint    = errMsg.slice(0, 240);
+      }
+
       return { statusCode: 200, headers: corsH, body: JSON.stringify({
-        schema: 'unknown', tasks: [], milestones: [], message: 'No tasks found in database'
+        schema: 'unknown', tasks: [], milestones: [],
+        message: userMsg,
+        ...(hint ? { hint } : {}),
+        ...(errMsg ? { notionError: errMsg.slice(0, 500) } : {}),
       })};
     }
 
