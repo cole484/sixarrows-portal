@@ -915,17 +915,36 @@ function renderRoomSpread(group, items) {
 // the returned image/title back in. Plain-text products are left
 // untouched and fall back to the placeholder card.
 async function enrichItemsWithMeta(items) {
-  // Find candidate URLs across the common fields where clients paste links
+  // Find candidate URLs across the common fields where clients paste links.
+  // Precedence rules:
+  //   1. If item.image already looks like an actual image URL (ends in
+  //      a common image extension), it's a manual paste and wins — skip
+  //      the metadata fetch for this item.
+  //   2. Otherwise we look for a product URL to fetch metadata for.
+  //   3. Treat URLs in the image field (sometimes pasted there as a
+  //      shortcut) as fallback source URLs — if the metadata fetch
+  //      gives us a real image, use it; if it doesn't, keep the user's
+  //      pasted URL as the image source so the <img> tag still tries.
+  const isImageUrl = u => /\.(jpe?g|png|webp|gif|avif|svg)(\?|#|$)/i.test(u);
   const urlsToFetch = new Set();
+
   items.forEach(it => {
-    // Product field is the most common place a URL ends up
-    const productUrl  = extractUrl(it.product);
-    const imageUrl    = extractUrl(it.image);   // some clients paste URLs in the photo field too
+    const productUrl = extractUrl(it.product);
+    const imageUrl   = extractUrl(it.image);
+
+    // Manual photo paste (image URL ending in a real image extension) wins
+    if (imageUrl && isImageUrl(imageUrl)) {
+      it._manualImage = true;
+      // Still expose a source URL so the "View product" link works when
+      // the client pasted the product URL in the product field too
+      if (productUrl) it._sourceUrl = productUrl;
+      return;
+    }
+
     const u = productUrl || imageUrl || '';
     if (u) {
       it._sourceUrl = u;
-      // Only refetch if we don't already have an image we trust
-      if (!it.image || isUrlString(it.image)) urlsToFetch.add(u);
+      urlsToFetch.add(u);
     }
   });
 
@@ -962,8 +981,9 @@ async function enrichItemsWithMeta(items) {
     } catch (e) { console.error('product-meta batch failed:', e); }
   }
 
-  // Merge back into items
+  // Merge back into items — manual photo URLs (set above) are preserved.
   items.forEach(it => {
+    if (it._manualImage) return;       // manual paste wins, leave alone
     const u = it._sourceUrl;
     if (!u) return;
     const meta = metaByUrl.get(u);

@@ -18,6 +18,7 @@ import { createHash } from 'node:crypto';
 
 const SB_URL = () => process.env.SUPABASE_URL;
 const SB_KEY = () => process.env.SUPABASE_ANON_KEY;
+const ML_KEY = () => process.env.MICROLINK_API_KEY || '';   // optional — works unauthenticated too
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function sbHeaders() {
@@ -234,6 +235,55 @@ async function fetchMetadata(canonicalUrl) {
   return { title, image, price, priceCurrency, retailer };
 }
 
+// ── Microlink fallback ──────────────────────────────────────────────────
+// Used when the direct fetch is blocked (Lowe's, Home Depot, etc. return
+// 403) or when the page doesn't expose OG/JSON-LD in the form we expect
+// (Menards, Ferguson). Microlink runs a real headless browser server-side
+// and is whitelisted by every big-box retailer for link-preview use.
+//
+// Works unauthenticated (~50/day shared rate limit) or with an API key
+// (50/day per key on free, 1k/day on paid). The function uses the key
+// when MICROLINK_API_KEY env var is set, otherwise falls back to anon.
+async function microlinkFetch(targetUrl) {
+  const params = new URLSearchParams({ url: targetUrl, audio: 'false', video: 'false' });
+  const headers = { 'Accept': 'application/json' };
+  const apiKey = ML_KEY();
+  if (apiKey) headers['x-api-key'] = apiKey;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 14000);
+  let res;
+  try {
+    res = await fetch(`https://api.microlink.io/?${params.toString()}`, { headers, signal: controller.signal });
+  } finally { clearTimeout(timer); }
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Microlink ${res.status}: ${t.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  if (j.status !== 'success' || !j.data) {
+    throw new Error('Microlink ' + (j.status || 'no data'));
+  }
+  const d = j.data;
+  // Microlink can return image as a string or an object with .url
+  const imgRaw = d.image;
+  const image = typeof imgRaw === 'string' ? imgRaw : (imgRaw && imgRaw.url) || '';
+  const title = d.title || '';
+  // Microlink's price extraction is best-effort
+  const priceRaw = d.price;
+  const price = typeof priceRaw === 'number' ? priceRaw
+              : typeof priceRaw === 'string' ? parseFloat(priceRaw.replace(/[^0-9.]/g, '')) || null
+              : null;
+  return {
+    title,
+    image,
+    price,
+    priceCurrency: d.currency || (price ? 'USD' : ''),
+    retailer:      d.publisher || inferRetailer(targetUrl) || '',
+  };
+}
+
 // ── Cache I/O ───────────────────────────────────────────────────────────
 async function getCached(urlHash) {
   const url = `${SB_URL()}/rest/v1/product_meta?url_hash=eq.${urlHash}&select=*`;
@@ -289,34 +339,58 @@ async function getOrFetch(rawUrl, forceFresh) {
     }
   }
 
-  // Fetch fresh, store, return
-  let result;
+  // Fetch fresh: try direct first, then fall back to Microlink for big-box
+  // retailers that block server fetches or JS-render their metadata.
+  let meta = null;
+  let directErr = '';
   try {
-    const meta = await fetchMetadata(url);
-    result = {
-      url_hash:       urlHash,
-      url,
-      retailer:       meta.retailer || retailer,
-      title:          meta.title    || '',
-      image:          meta.image    || '',
-      price:          meta.price ?? null,
-      price_currency: meta.priceCurrency || '',
-      error:          '',
-      fetched_at:     new Date().toISOString(),
-    };
+    meta = await fetchMetadata(url);
   } catch (e) {
-    result = {
-      url_hash:       urlHash,
-      url,
-      retailer,
-      title:          '',
-      image:          '',
-      price:          null,
-      price_currency: '',
-      error:          (e && e.message) ? e.message.slice(0, 240) : 'fetch failed',
-      fetched_at:     new Date().toISOString(),
-    };
+    directErr = (e && e.message) ? e.message : 'direct fetch failed';
   }
+
+  // Retry via Microlink when direct failed OR returned no usable image
+  if (!meta || !meta.image) {
+    try {
+      const ml = await microlinkFetch(url);
+      // Prefer Microlink result only if it actually got something useful
+      if (ml.image || ml.title) {
+        meta = {
+          title:         ml.title         || (meta && meta.title)         || '',
+          image:         ml.image         || (meta && meta.image)         || '',
+          price:         (ml.price ?? null) ?? (meta && meta.price ?? null),
+          priceCurrency: ml.priceCurrency || (meta && meta.priceCurrency) || '',
+          retailer:      ml.retailer      || (meta && meta.retailer)      || retailer,
+        };
+      }
+    } catch (e) {
+      // If both paths failed, surface the more informative error
+      if (!meta) directErr = `${directErr || 'no direct metadata'}; microlink: ${e.message || 'failed'}`;
+    }
+  }
+
+  const result = meta ? {
+    url_hash:       urlHash,
+    url,
+    retailer:       meta.retailer || retailer,
+    title:          meta.title    || '',
+    image:          meta.image    || '',
+    price:          meta.price ?? null,
+    price_currency: meta.priceCurrency || '',
+    error:          (!meta.image && !meta.title) ? (directErr || 'no metadata') : '',
+    fetched_at:     new Date().toISOString(),
+  } : {
+    url_hash:       urlHash,
+    url,
+    retailer,
+    title:          '',
+    image:          '',
+    price:          null,
+    price_currency: '',
+    error:          directErr.slice(0, 240) || 'fetch failed',
+    fetched_at:     new Date().toISOString(),
+  };
+
   await upsertCache(result);
   return shapeResponse(result, false);
 }
