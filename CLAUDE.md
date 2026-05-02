@@ -114,6 +114,26 @@ git push origin main
 curl 'https://YOUR_DOMAIN/.netlify/functions/<fn>?<args>'
 ```
 
+## Environment variables (Netlify)
+
+Required for core function:
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY` — every function uses these
+- `GOOGLE_API_KEY` — sheet-budget-sync, sheet-billing-sync, sheet-sab-budget-sync
+- `NOTION_TOKEN` — notion-tracker, notion-timeline, notion-clients,
+  notion-updates, generate-updates
+- `ANTHROPIC_API_KEY` — generate-updates (and product-meta query polish,
+  optional)
+
+Optional, for product-meta image fetching cascade:
+- `MICROLINK_API_KEY` — Microlink Pro for antibot retailer bypass.
+  Without it, Microlink uses ~50/day shared anonymous tier, which doesn't
+  bypass antibot (so Lowe's, Home Depot etc. still fail). Free tier signup
+  works for friendly sites.
+- `BRAVE_SEARCH_API_KEY` — required to enable image-search fallback for
+  plain-text products with no URL. Free tier: 2000 queries/month. Sign
+  up at brave.com/search/api. Without this set, plain-text products
+  always render as placeholders (no fallback).
+
 ## Recent / in-flight work (May 2026)
 
 - **Design Book image auto-fetch** — `product-meta.js` reads OG/JSON-LD,

@@ -2,24 +2,35 @@
 // Fetches Open Graph + JSON-LD metadata for a product URL pasted into
 // the selections app, used by the Design Book to render images.
 //
-// GET    /?url=ENCODED_URL                  → cached (or fresh) metadata
-// POST   /?refresh=1   body { urls: [...] } → bulk fetch fresh, ignore cache
-// DELETE /?clientUrls=1 body { urls: [...] }→ invalidate cache for these URLs
+// URL-based:
+//   GET    /?url=ENCODED_URL                       → cached or fresh metadata
+//   POST   /?refresh=1     body { urls:[...] }    → bulk fetch fresh
+//   POST   /?invalidate=1  body { urls:[...] }    → wipe cache for those URLs
+//   DELETE                  body { urls:[...] }    → same as invalidate
 //
-// Response shape:
-//   { url, urlHash, retailer, title, image, price, priceCurrency, error,
-//     fetchedAt, cached }
+// Text-based (for plain-text products with no URL):
+//   GET   /?text=PRODUCT_DESCRIPTION&hint=cat     → image search via Brave
+//   POST  body { texts:[{ key, text, hint }] }    → bulk text search
 //
-// Cache TTL: 7 days (rows older than that get re-fetched on read).
-// Schema: see supabase/add-product-meta.sql.
+// Resolution cascade for URLs (each step's result is cached):
+//   1. Direct fetch (Open Graph + JSON-LD)
+//   2. Microlink fallback (handles antibot — needs PRO for Lowe's etc.)
+//   3. Wayback Machine (Internet Archive snapshot if URL is dead/blocked)
+//
+// Resolution for text:
+//   Brave Image Search API → first result thumbnail
+//
+// Cache TTL: 7 days. Schema: see supabase/add-product-meta.sql.
 
 import { respond, corsHeaders } from './lib/supabase-client.js';
 import { createHash } from 'node:crypto';
 
-const SB_URL = () => process.env.SUPABASE_URL;
-const SB_KEY = () => process.env.SUPABASE_ANON_KEY;
-const ML_KEY = () => process.env.MICROLINK_API_KEY || '';   // optional — works unauthenticated too
-const TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SB_URL  = () => process.env.SUPABASE_URL;
+const SB_KEY  = () => process.env.SUPABASE_ANON_KEY;
+const ML_KEY  = () => process.env.MICROLINK_API_KEY    || '';
+const BR_KEY  = () => process.env.BRAVE_SEARCH_API_KEY || '';
+const AI_KEY  = () => process.env.ANTHROPIC_API_KEY    || '';
+const TTL_MS  = 7 * 24 * 60 * 60 * 1000;
 
 function sbHeaders() {
   return {
@@ -235,6 +246,116 @@ async function fetchMetadata(canonicalUrl) {
   return { title, image, price, priceCurrency, retailer };
 }
 
+// ── Wayback Machine fallback ────────────────────────────────────────────
+// Internet Archive saves snapshots of nearly every product page from
+// every major retailer. When the live page returns 4xx or no metadata,
+// we ask Wayback for the closest snapshot URL, then run our standard
+// scraper against the archived HTML. Free, no API key, no antibot
+// because the archive is just static HTML.
+async function waybackFetch(targetUrl) {
+  // Step 1: ask Wayback if it has a snapshot
+  const lookupUrl = `https://archive.org/wayback/available?url=${encodeURIComponent(targetUrl)}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let snapshotUrl = '';
+  try {
+    const res = await fetch(lookupUrl, { signal: controller.signal });
+    if (!res.ok) throw new Error(`Wayback lookup ${res.status}`);
+    const j = await res.json();
+    snapshotUrl = j?.archived_snapshots?.closest?.url || '';
+  } finally { clearTimeout(timer); }
+  if (!snapshotUrl) throw new Error('No Wayback snapshot available');
+
+  // Step 2: scrape the archived page same way we'd scrape a live one.
+  // Wayback rewrites internal links so OG tags point at archived URLs;
+  // that's fine — they still resolve to images via the Wayback CDN.
+  const archived = await fetchMetadata(snapshotUrl);
+  // Annotate retailer so admins can see this came from Wayback
+  return { ...archived, retailer: (archived.retailer || inferRetailer(targetUrl)) + ' (archived)' };
+}
+
+// ── Brave Image Search ──────────────────────────────────────────────────
+// Used as the primary path for plain-text products (no URL pasted) and
+// as a last resort when both direct + Microlink + Wayback fail. Free
+// tier of Brave Search API: 2000 queries/month with API key.
+async function braveImageSearch(query) {
+  const key = BR_KEY();
+  if (!key) throw new Error('BRAVE_SEARCH_API_KEY not set');
+  const params = new URLSearchParams({ q: query, count: '5', safesearch: 'strict' });
+  const url = `https://api.search.brave.com/res/v1/images/search?${params.toString()}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: {
+        'Accept':              'application/json',
+        'Accept-Encoding':     'gzip',
+        'X-Subscription-Token': key,
+      },
+      signal: controller.signal,
+    });
+  } finally { clearTimeout(timer); }
+  if (!res.ok) throw new Error(`Brave ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  const j = await res.json();
+  const first = (j.results || [])[0];
+  if (!first) throw new Error('Brave returned no results');
+  // Brave's response has thumbnail and properties.url for the original
+  const image    = first.properties?.url || first.thumbnail?.src || '';
+  const title    = first.title    || query;
+  const retailer = first.source   || (first.url ? new URL(first.url).hostname.replace(/^www\./,'') : 'Brave search');
+  if (!image) throw new Error('Brave result had no image URL');
+  return {
+    title,
+    image,
+    price: null,
+    priceCurrency: '',
+    retailer,
+    sourceUrl: first.url || '',
+  };
+}
+
+// ── Claude query polish ─────────────────────────────────────────────────
+// Optional preprocessing for image search queries. Takes raw selection
+// text like "GE Standard Depth 24.8 cu ft 3 door 33\" wide Model GNE25JYKFS"
+// and returns "GE GNE25JYKFS refrigerator" — short, search-engine-friendly.
+// Uses Haiku because it's fast and cheap (~$0.001 per call). Caller can
+// skip this if ANTHROPIC_API_KEY isn't set.
+async function polishQueryWithClaude(rawText, hint) {
+  const key = AI_KEY();
+  if (!key) return rawText;
+  const ctx = hint ? ` (category: ${hint})` : '';
+  const prompt = `Convert this construction product description into a short image-search query that will return a clean product photo. Output ONLY the query string, nothing else. Keep brand and model number when present. 6 words max.
+
+Description${ctx}: ${rawText}
+
+Query:`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:  'POST',
+      headers: {
+        'Content-Type':       'application/json',
+        'x-api-key':          key,
+        'anthropic-version':  '2023-06-01',
+      },
+      body: JSON.stringify({
+        model:      'claude-haiku-4-5',
+        max_tokens: 60,
+        messages:   [{ role: 'user', content: prompt }],
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return rawText;
+    const j = await res.json();
+    const out = (j.content?.[0]?.text || '').trim().replace(/^["']|["']$/g, '');
+    return out || rawText;
+  } catch (e) {
+    return rawText;   // fail open, just use the raw text
+  } finally { clearTimeout(timer); }
+}
+
 // ── Microlink fallback ──────────────────────────────────────────────────
 // Used when the direct fetch is blocked (Lowe's, Home Depot, etc. return
 // 403) or when the page doesn't expose OG/JSON-LD in the form we expect
@@ -353,13 +474,7 @@ async function getOrFetch(rawUrl, forceFresh) {
   if (!meta || !meta.image) {
     try {
       const ml = await microlinkFetch(url);
-      // Prefer Microlink result only if it actually got something useful
       if (ml.image || ml.title) {
-        // Pre-compute the direct-fetch price fallback. Avoid mixing && with
-        // ?? in the same expression — JavaScript throws a SyntaxError at
-        // parse time when those operators are combined without separate
-        // explicit parens around each grouping, which breaks the entire
-        // function module load (returns 502 on every call).
         const directPrice = (meta && meta.price !== undefined) ? meta.price : null;
         meta = {
           title:         ml.title         || (meta && meta.title)         || '',
@@ -370,8 +485,28 @@ async function getOrFetch(rawUrl, forceFresh) {
         };
       }
     } catch (e) {
-      // If both paths failed, surface the more informative error
       if (!meta) directErr = `${directErr || 'no direct metadata'}; microlink: ${e.message || 'failed'}`;
+    }
+  }
+
+  // Wayback fallback — for blocked/dead retailer URLs (Lowe's antibot,
+  // pages that 404'd, etc.). Always free, no API key, often has cached
+  // snapshots from when the link still worked.
+  if (!meta || !meta.image) {
+    try {
+      const wb = await waybackFetch(url);
+      if (wb.image || wb.title) {
+        const directPrice = (meta && meta.price !== undefined) ? meta.price : null;
+        meta = {
+          title:         wb.title         || (meta && meta.title)         || '',
+          image:         wb.image         || (meta && meta.image)         || '',
+          price:         wb.price ?? directPrice,
+          priceCurrency: wb.priceCurrency || (meta && meta.priceCurrency) || '',
+          retailer:      wb.retailer      || (meta && meta.retailer)      || retailer,
+        };
+      }
+    } catch (e) {
+      if (!meta) directErr = `${directErr || 'no direct metadata'}; wayback: ${e.message || 'failed'}`;
     }
   }
 
@@ -401,6 +536,83 @@ async function getOrFetch(rawUrl, forceFresh) {
   return shapeResponse(result, false);
 }
 
+// ── Text-based resolution (no URL) ──────────────────────────────────────
+// Build a stable cache key per text+hint combination so the same query
+// hits cache the second time. Stored alongside URL rows in product_meta
+// table, distinguished by url field starting with "text:".
+function textCacheUrl(query) {
+  return 'text:' + query.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+async function getOrFetchText(rawText, hint, forceFresh) {
+  const trimmed = String(rawText || '').trim();
+  if (!trimmed) return shapeResponse({
+    url_hash: hashUrl(textCacheUrl('empty')),
+    url:      'text:empty',
+    retailer: '',
+    title:    '',
+    image:    '',
+    price:    null,
+    price_currency: '',
+    error:    'No product text provided',
+    fetched_at: new Date().toISOString(),
+  }, false);
+
+  // Cache lookup uses the RAW text key — same description always maps to
+  // the same row regardless of whether Claude polish is enabled.
+  const cacheKey = textCacheUrl(trimmed + (hint ? ` | ${hint}` : ''));
+  const urlHash  = hashUrl(cacheKey);
+
+  if (!forceFresh) {
+    const existing = await getCached(urlHash);
+    if (existing) {
+      const fresh = existing.fetched_at && (Date.now() - new Date(existing.fetched_at).getTime() < TTL_MS);
+      if (fresh) return shapeResponse(existing, true);
+    }
+  }
+
+  // Polish the query with Claude (cheap, fail-open) then send to Brave
+  let polished = trimmed;
+  try { polished = await polishQueryWithClaude(trimmed, hint); } catch {}
+
+  let meta = null;
+  let err  = '';
+  try {
+    meta = await braveImageSearch(polished);
+  } catch (e) {
+    err = e.message || 'Brave image search failed';
+    // One retry with the un-polished query in case Claude made it worse
+    if (polished !== trimmed) {
+      try { meta = await braveImageSearch(trimmed); err = ''; }
+      catch (e2) { err = `${err}; raw retry: ${e2.message || 'failed'}`; }
+    }
+  }
+
+  const result = meta ? {
+    url_hash:       urlHash,
+    url:            cacheKey,
+    retailer:       meta.retailer || '',
+    title:          meta.title    || polished,
+    image:          meta.image    || '',
+    price:          null,
+    price_currency: '',
+    error:          '',
+    fetched_at:     new Date().toISOString(),
+  } : {
+    url_hash:       urlHash,
+    url:            cacheKey,
+    retailer:       '',
+    title:          '',
+    image:          '',
+    price:          null,
+    price_currency: '',
+    error:          err.slice(0, 240) || 'no image found',
+    fetched_at:     new Date().toISOString(),
+  };
+
+  await upsertCache(result);
+  return shapeResponse(result, false);
+}
+
 // ── Handler ─────────────────────────────────────────────────────────────
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -422,22 +634,39 @@ export const handler = async (event) => {
       return respond(200, { invalidated: hashes.length });
     }
 
-    // ── POST: bulk fetch (admin "refresh now") ───────────────────────────
+    // ── POST: bulk URL fetch OR bulk text search ─────────────────────────
     if (event.httpMethod === 'POST') {
       const body  = JSON.parse(event.body || '{}');
-      const urls  = Array.isArray(body.urls) ? body.urls : [];
       const force = qs.refresh === '1' || body.refresh === true;
-      // Cap at 50 per request to stay under Netlify's 10s function timeout
+
+      // Text-based bulk search (for plain-text products with no URL)
+      if (Array.isArray(body.texts) && body.texts.length) {
+        const slice = body.texts.slice(0, 50);
+        const results = await Promise.all(slice.map(item =>
+          getOrFetchText(item.text, item.hint, force)
+            .then(r => ({ ...r, key: item.key }))
+            .catch(err => ({ key: item.key, text: item.text, error: err.message || 'text search failed' }))
+        ));
+        return respond(200, { count: results.length, results });
+      }
+
+      // URL-based bulk fetch (existing path)
+      const urls  = Array.isArray(body.urls) ? body.urls : [];
       const slice = urls.slice(0, 50);
       const results = await Promise.all(slice.map(u => getOrFetch(u, force)
         .catch(err => ({ url: u, error: err.message || 'fetch failed' }))));
       return respond(200, { count: results.length, results });
     }
 
-    // ── GET: single URL ──────────────────────────────────────────────────
-    const url = qs.url;
-    if (!url) return respond(400, { error: 'url required' });
+    // ── GET: single URL or single text query ─────────────────────────────
+    const url  = qs.url;
+    const text = qs.text;
     const force = qs.refresh === '1';
+    if (text) {
+      const result = await getOrFetchText(text, qs.hint || '', force);
+      return respond(200, result);
+    }
+    if (!url) return respond(400, { error: 'url or text required' });
     const result = await getOrFetch(url, force);
     return respond(200, result);
   } catch (e) {

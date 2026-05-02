@@ -1057,28 +1057,26 @@ function renderRoomSpread(group, items) {
 // the returned image/title back in. Plain-text products are left
 // untouched and fall back to the placeholder card.
 async function enrichItemsWithMeta(items) {
-  // Find candidate URLs across the common fields where clients paste links.
-  // Precedence rules:
-  //   1. If item.image already looks like an actual image URL (ends in
-  //      a common image extension), it's a manual paste and wins — skip
-  //      the metadata fetch for this item.
-  //   2. Otherwise we look for a product URL to fetch metadata for.
-  //   3. Treat URLs in the image field (sometimes pasted there as a
-  //      shortcut) as fallback source URLs — if the metadata fetch
-  //      gives us a real image, use it; if it doesn't, keep the user's
-  //      pasted URL as the image source so the <img> tag still tries.
+  // Items split into three groups:
+  //   - manual paste (image URL ending in jpg/png/etc.) → leave alone
+  //   - has a URL in product/image field → URL fetch path
+  //   - plain text only (no URL anywhere) → image-search path
+  //
+  // The third group is the new piece — products like "Calacatta Elisio"
+  // or "GE Standard Depth Model GNE25JYKFS" with no URL go through Brave
+  // Image Search (server side) so they get an image automatically.
   const isImageUrl = u => /\.(jpe?g|png|webp|gif|avif|svg)(\?|#|$)/i.test(u);
-  const urlsToFetch = new Set();
+  const urlsToFetch  = new Set();
+  const textsToFetch = [];   // [{ key, text, hint }]
 
   items.forEach(it => {
+    if (it._manualImage) return;          // override already applied — skip both paths
     const productUrl = extractUrl(it.product);
     const imageUrl   = extractUrl(it.image);
 
     // Manual photo paste (image URL ending in a real image extension) wins
     if (imageUrl && isImageUrl(imageUrl)) {
       it._manualImage = true;
-      // Still expose a source URL so the "View product" link works when
-      // the client pasted the product URL in the product field too
       if (productUrl) it._sourceUrl = productUrl;
       return;
     }
@@ -1087,18 +1085,29 @@ async function enrichItemsWithMeta(items) {
     if (u) {
       it._sourceUrl = u;
       urlsToFetch.add(u);
+      return;
+    }
+
+    // Plain-text product — build a search query from the most descriptive
+    // field available. Strip URLs (defensive) and combine with the cat
+    // name as a hint so Brave knows we want a product image.
+    const txt = stripUrl(it.product) || it.material || it.style || it.label || '';
+    if (txt && txt.trim().length > 2) {
+      textsToFetch.push({ key: it.itemKey, text: txt.trim(), hint: it.cat });
     }
   });
 
-  if (!urlsToFetch.size) return items;
+  if (!urlsToFetch.size && !textsToFetch.length) return items;
 
-  // Batch fetch (function caps at 50 per call; chunk if more)
+  // ── URL batch fetch ──────────────────────────────────────────────────
   const all = Array.from(urlsToFetch);
-  const chunks = [];
-  for (let i = 0; i < all.length; i += 40) chunks.push(all.slice(i, i + 40));
+  const urlChunks = [];
+  for (let i = 0; i < all.length; i += 40) urlChunks.push(all.slice(i, i + 40));
 
-  const metaByUrl = new Map();
-  for (const chunk of chunks) {
+  const metaByUrl     = new Map();
+  const metaByItemKey = new Map();   // for text-search results
+
+  for (const chunk of urlChunks) {
     try {
       const res = await fetch(`/.netlify/functions/product-meta`, {
         method:  'POST',
@@ -1108,10 +1117,8 @@ async function enrichItemsWithMeta(items) {
       if (!res.ok) continue;
       const j = await res.json();
       (j.results || []).forEach(r => { if (r && r.url) metaByUrl.set(r.url, r); });
-      // The function canonicalizes URLs; key the map by the original chunk URL too
       chunk.forEach(orig => {
         if (!metaByUrl.has(orig)) {
-          // Loose match by hostname + path
           for (const [k, v] of metaByUrl.entries()) {
             try {
               const a = new URL(orig), b = new URL(k);
@@ -1120,27 +1127,51 @@ async function enrichItemsWithMeta(items) {
           }
         }
       });
-    } catch (e) { console.error('product-meta batch failed:', e); }
+    } catch (e) { console.error('product-meta URL batch failed:', e); }
+  }
+
+  // ── Text batch fetch (for plain-text products with no URL) ──────────
+  const textChunks = [];
+  for (let i = 0; i < textsToFetch.length; i += 40) textChunks.push(textsToFetch.slice(i, i + 40));
+
+  for (const chunk of textChunks) {
+    try {
+      const res = await fetch(`/.netlify/functions/product-meta`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ texts: chunk }),
+      });
+      if (!res.ok) continue;
+      const j = await res.json();
+      (j.results || []).forEach(r => { if (r && r.key) metaByItemKey.set(r.key, r); });
+    } catch (e) { console.error('product-meta text batch failed:', e); }
   }
 
   // Merge back into items — manual photo URLs (set above) are preserved.
   items.forEach(it => {
     if (it._manualImage) return;       // manual paste wins, leave alone
+
+    // URL path
     const u = it._sourceUrl;
-    if (!u) return;
-    const meta = metaByUrl.get(u);
-    if (!meta) return;
-    if (meta.image && !meta.error) {
-      it.image = meta.image;
+    if (u) {
+      const meta = metaByUrl.get(u);
+      if (meta) {
+        if (meta.image && !meta.error) it.image = meta.image;
+        if (meta.title)     it._fetchedTitle = meta.title;
+        if (meta.retailer)  it._retailer     = meta.retailer;
+        if (meta.error)     it._fetchError   = meta.error;
+      }
+      return;
     }
-    if (meta.title) {
-      it._fetchedTitle = meta.title;
-    }
-    if (meta.retailer) {
-      it._retailer = meta.retailer;
-    }
-    if (meta.error) {
-      it._fetchError = meta.error;
+
+    // Text-search path (plain-text products without a URL)
+    const tmeta = metaByItemKey.get(it.itemKey);
+    if (tmeta) {
+      if (tmeta.image && !tmeta.error) it.image = tmeta.image;
+      if (tmeta.retailer) it._retailer   = tmeta.retailer;
+      if (tmeta.error)    it._fetchError = tmeta.error;
+      // Mark this image as text-search-derived so admin can spot wrong picks
+      if (tmeta.image)    it._textSearchImage = true;
     }
   });
 
