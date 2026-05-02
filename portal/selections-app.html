@@ -766,10 +766,27 @@ function validate(){
   if(ST.catId==="tile"){
     const baths=ST.rooms.filter(r=>r.plumbing==="bath");
     for(const b of baths){
-      if(!(ST.answers[`tile_floor_${b.id}`]||"").trim())return{ok:false,msg:`Please enter floor tile for ${b.name}.`};
-      if(!(ST.answers[`tile_floor_product_${b.id}`]||"").trim())return{ok:false,msg:`Please enter floor tile product for ${b.name}.`};
-      if(!(ST.answers[`tile_shower_${b.id}`]||"").trim())return{ok:false,msg:`Please enter shower wall tile for ${b.name}.`};
-      if(!(ST.answers[`tile_shower_product_${b.id}`]||"").trim())return{ok:false,msg:`Please enter shower wall tile product for ${b.name}.`};
+      const sfType=ST.answers[`tile_shower_floor_type_${b.id}`]||"";
+      const swType=ST.answers[`tile_shower_wall_type_${b.id}`]||"";
+      // Shower floor: only require tile fields when the client picked Tile
+      if(sfType==="Tile"){
+        if(!(ST.answers[`tile_floor_${b.id}`]||"").trim())         return{ok:false,msg:`Please enter shower floor tile for ${b.name}.`};
+        if(!(ST.answers[`tile_floor_product_${b.id}`]||"").trim()) return{ok:false,msg:`Please enter shower floor tile product for ${b.name}.`};
+        if(!(ST.answers[`tile_floor_grout_${b.id}`]||"").trim())   return{ok:false,msg:`Please enter shower floor grout color for ${b.name}.`};
+      }
+      // Shower wall: only require tile fields when the client picked Tile
+      if(swType==="Tile"){
+        if(!(ST.answers[`tile_shower_${b.id}`]||"").trim())         return{ok:false,msg:`Please enter shower wall tile for ${b.name}.`};
+        if(!(ST.answers[`tile_shower_product_${b.id}`]||"").trim()) return{ok:false,msg:`Please enter shower wall tile product for ${b.name}.`};
+        if(!(ST.answers[`tile_shower_grout_${b.id}`]||"").trim())   return{ok:false,msg:`Please enter shower wall grout color for ${b.name}.`};
+      }
+    }
+    // Kitchen backsplash: every kitchen needs tile + product + grout color
+    const kitchens=ST.rooms.filter(r=>r.plumbing==="kitchen");
+    for(const k of kitchens){
+      if(!(ST.answers[`tile_backsplash_${k.id}`]||"").trim())         return{ok:false,msg:`Please enter backsplash tile for ${k.name}.`};
+      if(!(ST.answers[`tile_backsplash_product_${k.id}`]||"").trim()) return{ok:false,msg:`Please enter backsplash tile product for ${k.name}.`};
+      if(!(ST.answers[`tile_backsplash_grout_${k.id}`]||"").trim())   return{ok:false,msg:`Please enter backsplash grout color for ${k.name}.`};
     }
     return{ok:true};
   }
@@ -1190,6 +1207,7 @@ function rfTile(){
         ${sfType==="Tile"?`
         <div class="fg"><label>Shower floor tile <span class="req">*</span></label><input type="text" value="${fv("floor")}" placeholder="Style, size, color direction..." onchange="ST.answers['tile_floor_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_${b.id}']=this.value"></div>
         <div class="fg"><label>Shower floor tile exact product <span class="req">*</span></label><input type="text" value="${fv("floor_product")}" placeholder="e.g. Daltile Santorini White 12x24" onchange="ST.answers['tile_floor_product_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_product_${b.id}']=this.value"></div>
+        <div class="fg"><label>Shower floor grout color <span class="req">*</span></label><input type="text" value="${fv("floor_grout")}" placeholder="e.g. Mapei Avalanche, Custom Pewter, match tile, charcoal..." onchange="ST.answers['tile_floor_grout_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_grout_${b.id}']=this.value"></div>
         `:""}
         ${sfType==="Prefab insert / pan"?`
         <div class="fg"><label>Insert / pan product <span class="req">*</span></label><input type="text" value="${fv("floor_insert")}" placeholder="e.g. Schluter Kerdi 48x48 shower tray, Swanstone SF03636..." onchange="ST.answers['tile_floor_insert_${b.id}']=this.value" onkeyup="ST.answers['tile_floor_insert_${b.id}']=this.value"></div>
@@ -1198,11 +1216,15 @@ function rfTile(){
         ${swType==="Tile"?`
         <div class="fg"><label>Shower wall tile <span class="req">*</span></label><input type="text" value="${fv("shower")}" placeholder="Large format marble look, 4x16 subway, mosaic..." onchange="ST.answers['tile_shower_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_${b.id}']=this.value"></div>
         <div class="fg"><label>Shower wall exact product <span class="req">*</span></label><input type="text" value="${fv("shower_product")}" placeholder="e.g. Anatolia Vintage Chic 4x12 Subway" onchange="ST.answers['tile_shower_product_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_product_${b.id}']=this.value"></div>
+        <div class="fg"><label>Shower wall grout color <span class="req">*</span></label><input type="text" value="${fv("shower_grout")}" placeholder="e.g. Mapei Frost, TEC Snow White, match tile, contrasting black..." onchange="ST.answers['tile_shower_grout_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_grout_${b.id}']=this.value"></div>
         `:""}
         ${swType==="Prefab insert / surround"?`
         <div class="fg"><label>Surround / insert product <span class="req">*</span></label><input type="text" value="${fv("shower_insert")}" placeholder="e.g. Sterling Ensemble 60x32 wall set, Swanstone STMK96..." onchange="ST.answers['tile_shower_insert_${b.id}']=this.value" onkeyup="ST.answers['tile_shower_insert_${b.id}']=this.value"></div>
         `:""}
         <div class="fg"><label>Shower accent / niche tile</label><input type="text" value="${fv("accent")}" placeholder="Contrasting tile, mosaic strip..." onchange="ST.answers['tile_accent_${b.id}']=this.value" onkeyup="ST.answers['tile_accent_${b.id}']=this.value"></div>
+        ${(ST.answers[`tile_accent_${b.id}`]||"").trim()?`
+        <div class="fg"><label>Accent / niche grout color <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label><input type="text" value="${fv("accent_grout")}" placeholder="e.g. Match shower wall grout, contrasting accent..." onchange="ST.answers['tile_accent_grout_${b.id}']=this.value" onkeyup="ST.answers['tile_accent_grout_${b.id}']=this.value"></div>
+        `:""}
         <div class="fg"><label>Heated floor?</label><div class="rg">${["Yes","No","Undecided"].map(o=>`<label class="ro${(ST.answers[`tile_heat_${b.id}`]||"")===o?" sel":""}" onclick="ST.answers['tile_heat_${b.id}']='${o}';this.closest('.rg').querySelectorAll('.ro').forEach(x=>x.classList.remove('sel'));this.classList.add('sel')"><input type="radio" name="th_${b.id}" ${(ST.answers[`tile_heat_${b.id}`]||"")===o?"checked":""}>${o}</label>`).join("")}</div></div>
       </div></div>`;}).join("");
   }
@@ -1212,10 +1234,12 @@ function rfTile(){
     html+=kitchens.map(k=>{
       const bsVal=(ST.answers[`tile_backsplash_${k.id}`]||"").replace(/"/g,'&quot;');
       const bsProd=(ST.answers[`tile_backsplash_product_${k.id}`]||"").replace(/"/g,'&quot;');
+      const bsGrout=(ST.answers[`tile_backsplash_grout_${k.id}`]||"").replace(/"/g,'&quot;');
       return`<div class="room-section"><div class="rs-hd" style="cursor:default"><div class="rs-nm">${k.name} — Backsplash</div></div>
       <div class="rs-body">
         <div class="fg"><label>Backsplash tile <span class="req">*</span></label><input type="text" value="${bsVal}" placeholder="Subway, mosaic, large format slab..." onchange="ST.answers['tile_backsplash_${k.id}']=this.value" onkeyup="ST.answers['tile_backsplash_${k.id}']=this.value"></div>
         <div class="fg"><label>Exact product selected <span class="req">*</span></label><input type="text" value="${bsProd}" placeholder="e.g. Clé Tile Zellige 2x6 Weathered White" onchange="ST.answers['tile_backsplash_product_${k.id}']=this.value" onkeyup="ST.answers['tile_backsplash_product_${k.id}']=this.value"></div>
+        <div class="fg"><label>Backsplash grout color <span class="req">*</span></label><input type="text" value="${bsGrout}" placeholder="e.g. Mapei Avalanche, Custom Linen, match tile, charcoal..." onchange="ST.answers['tile_backsplash_grout_${k.id}']=this.value" onkeyup="ST.answers['tile_backsplash_grout_${k.id}']=this.value"></div>
       </div></div>`;
     }).join("")+`</div>`;
   }
@@ -2282,10 +2306,20 @@ function renderSummary(){
           preview+=shead(b.name);
           preview+=srow_req('Floor tile', ST.answers['tile_floor_'+b.id]||'');
           preview+=srow_req('Floor product', ST.answers['tile_floor_product_'+b.id]||'');
+          preview+=srow('Floor grout', ST.answers['tile_floor_grout_'+b.id]||'');
           preview+=srow_req('Shower wall tile', ST.answers['tile_shower_'+b.id]||'');
           preview+=srow_req('Shower product', ST.answers['tile_shower_product_'+b.id]||'');
+          preview+=srow('Shower grout', ST.answers['tile_shower_grout_'+b.id]||'');
           preview+=srow('Accent tile', ST.answers['tile_accent_'+b.id]||'');
+          preview+=srow('Accent grout', ST.answers['tile_accent_grout_'+b.id]||'');
           preview+=srow('Heated floor', ST.answers['tile_heat_'+b.id]||'');
+        });
+        ST.rooms.filter(function(r){return r.plumbing==='kitchen';}).forEach(function(k){
+          if(!(ST.answers['tile_backsplash_'+k.id]||'').trim()) return;
+          preview+=shead(k.name+' — Backsplash');
+          preview+=srow_req('Backsplash tile', ST.answers['tile_backsplash_'+k.id]||'');
+          preview+=srow_req('Backsplash product', ST.answers['tile_backsplash_product_'+k.id]||'');
+          preview+=srow('Backsplash grout', ST.answers['tile_backsplash_grout_'+k.id]||'');
         });
       }
 
