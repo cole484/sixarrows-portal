@@ -1730,6 +1730,14 @@ function renderSelectionsView(p) {
       });
   }, 0);
 
+  // Design book opens in admin-preview mode via URL params so we don't
+  // need to be logged in as the client. design-book.html builds a stub
+  // session from these params and fetches the client's selections directly.
+  const dbUrl = `design-book.html?clientKey=${encodeURIComponent(ck)}`
+              + `&clientName=${encodeURIComponent(p.clientName || '')}`
+              + `&projectName=${encodeURIComponent(p.projectName || '')}`
+              + `&location=${encodeURIComponent(p.location || '')}`;
+
   return `
     <!-- Launch button at top for quick access -->
     <div class="card dark" style="margin-bottom:1rem">
@@ -1750,6 +1758,26 @@ function renderSelectionsView(p) {
           return `<a href="${wUrl}" target="_blank" style="font-size:11px;color:var(--green);text-decoration:none;padding:5px 10px;border:0.5px solid rgba(117,127,105,.4);border-radius:6px;background:rgba(117,127,105,.1)">Jump to ${wLabel.split('—')[0].trim()} →</a>`;
         }).join('')}
       </div>
+    </div>
+
+    <!-- Design Book launcher + image refresh -->
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--charcoal-4);margin-bottom:3px">Design Book</div>
+          <div style="font-size:14px;font-weight:600;color:var(--charcoal)">Auto-generated from ${p.clientName}'s selections</div>
+          <div style="font-size:11px;color:var(--charcoal-4);margin-top:3px;line-height:1.5;max-width:540px">Pulls product images directly from any URL the client (or you) pasted into a product field — Lowe's, Home Depot, Menards, Ferguson, Moen, Amazon, etc. Plain-text products show as placeholders.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">
+          <a href="${dbUrl}" target="_blank" class="adm-btn" style="display:inline-flex;text-decoration:none;font-size:12px;padding:8px 14px">
+            Open Design Book →
+          </a>
+          <button class="adm-btn" style="font-size:12px;padding:8px 14px" onclick="refreshDesignBookImages('${ck}', this)">
+            Refresh product images
+          </button>
+        </div>
+      </div>
+      <div id="dbi-msg" class="adm-msg success" style="margin:8px 0 0;display:none"></div>
     </div>
 
     <!-- Live status from Supabase -->
@@ -1850,6 +1878,66 @@ function buildSelectionsContent(ck, p, saved, answers) {
           </div>`;
         }).join('')}`).join('')}
     </div>`;
+}
+
+// Walk the client's selection answers, pull every URL out of *_product
+// fields (and the JSON-encoded ext_doors blob), then ask product-meta
+// to invalidate its cache for those URLs. The next design-book load
+// re-fetches fresh images.
+async function refreshDesignBookImages(ck, btnEl) {
+  const msgEl = document.getElementById('dbi-msg');
+  const setMsg = (txt, kind) => {
+    if (!msgEl) return;
+    msgEl.style.display = '';
+    msgEl.className = 'adm-msg ' + (kind || 'success');
+    msgEl.textContent = txt;
+  };
+  if (btnEl) btnEl.disabled = true;
+  try {
+    setMsg('Loading selections…', 'success');
+    const ansRes = await fetch(`/.netlify/functions/selections-storage?clientKey=${ck}&suffix=ans`);
+    if (!ansRes.ok) throw new Error('Could not read selections (' + ansRes.status + ')');
+    const ans = (await ansRes.json())?.data || {};
+
+    const urlSet = new Set();
+    const urlRe  = /https?:\/\/[^\s)\]<>"']+/gi;
+
+    Object.keys(ans).forEach(k => {
+      const v = ans[k];
+      if (!v) return;
+      if (typeof v === 'string') {
+        const matches = v.match(urlRe);
+        if (matches) matches.forEach(u => urlSet.add(u));
+      } else if (Array.isArray(v) && k === 'ext_doors') {
+        v.forEach(d => {
+          ['product','color','notes'].forEach(f => {
+            if (d && typeof d[f] === 'string') {
+              const m = d[f].match(urlRe);
+              if (m) m.forEach(u => urlSet.add(u));
+            }
+          });
+        });
+      }
+    });
+
+    const urls = Array.from(urlSet);
+    if (!urls.length) { setMsg('No product URLs found in this client\'s selections.', 'success'); return; }
+
+    setMsg('Invalidating ' + urls.length + ' cached image' + (urls.length === 1 ? '' : 's') + '…', 'success');
+    const delRes = await fetch(`/.netlify/functions/product-meta?invalidate=1`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ urls }),
+    });
+    if (!delRes.ok) throw new Error('Cache invalidation failed (' + delRes.status + ')');
+
+    setMsg('Done. ' + urls.length + ' product link' + (urls.length === 1 ? '' : 's') + ' will re-fetch on the next Design Book load.', 'success');
+  } catch (e) {
+    console.error('refreshDesignBookImages failed:', e);
+    setMsg('Refresh failed: ' + (e.message || 'unknown error'), 'error');
+  } finally {
+    if (btnEl) btnEl.disabled = false;
+  }
 }
 
 async function answerSelQuestion(ck, catId){

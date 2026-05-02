@@ -320,8 +320,27 @@ body { min-height: 100vh; }
 <script src="app.js"></script>
 <script>
 // ── Auth & Session ────────────────────────────────────
-let p = AUTH.requireAuth();
-if (!p) throw new Error('Not authed');
+// Two ways to land here:
+//   1) Client logged in normally — AUTH.requireAuth() returns their session
+//   2) Admin previewing — URL has ?clientKey=... (set by admin Selections
+//      view's "Open Design Book" button). We build a stub p from the URL
+//      params so we can fetch selections and render without a client login.
+const _params = new URLSearchParams(window.location.search);
+const _adminClientKey = _params.get('clientKey');
+let p;
+if (_adminClientKey) {
+  p = {
+    id:                  _adminClientKey,
+    selectionsClientKey: _adminClientKey,
+    clientName:          _params.get('clientName')  || _adminClientKey,
+    projectName:         _params.get('projectName') || 'Custom Home',
+    location:            _params.get('location')    || '',
+    _adminPreview:       true,
+  };
+} else {
+  p = AUTH.requireAuth();
+  if (!p) throw new Error('Not authed');
+}
 
 // ── Helpers ──────────────────────────────────────────
 function esc(str) {
@@ -333,6 +352,23 @@ function esc(str) {
 function currency(n) {
   if (!n || isNaN(n)) return '';
   return '$' + Number(n).toLocaleString();
+}
+
+// Detects http(s):// URLs anywhere in a string. Returns the first match
+// or empty string. Used to find product links pasted into the
+// "exact product" / "_product" fields by the client.
+function extractUrl(s) {
+  if (!s) return '';
+  const m = String(s).match(/https?:\/\/[^\s)\]<>"']+/i);
+  return m ? m[0] : '';
+}
+function isUrlString(s) { return !!extractUrl(s); }
+
+// Strip the URL out of a label so the displayed product text doesn't
+// include the raw link (the link goes in the "View product →" anchor).
+function stripUrl(s) {
+  if (!s) return '';
+  return String(s).replace(/https?:\/\/[^\s)\]<>"']+/gi, '').trim();
 }
 
 // ── Category definitions (mirrors selections-app.html) ──
@@ -363,14 +399,15 @@ const ROOM_GROUPS = [
     name: 'Interior',
     subtitle: 'Flooring, Doors, Hardware & Trim',
     cats: ['flooring','doors','hardware','specialty_trim','lighting','fireplace','paint'],
-    roomFilter: null,
+    // Exclude exterior-room items so exterior doors don't double up here
+    roomFilter: r => !/exterior/i.test(r),
   },
   {
     id: 'exterior',
     name: 'Exterior',
-    subtitle: 'Finishes, Roofing & Lighting',
-    cats: ['exterior_finishes'],
-    roomFilter: null,
+    subtitle: 'Finishes, Doors, Roofing & Windows',
+    cats: ['exterior_finishes','doors'],
+    roomFilter: r => /exterior/i.test(r),
   },
 ];
 
@@ -386,7 +423,8 @@ const CAT_LABELS = {
   countertops:       'Countertops',
   hardware:          'Hardware',
   paint:             'Paint & Stain Colors',
-  doors:             'Interior Doors & Trim',
+  doors:             'Doors & Trim',
+  hvac:              'HVAC',
 };
 
 // ── Load selections from Supabase ─────────────────────
@@ -540,8 +578,8 @@ function parseSelections(answers, saved, rooms) {
     });
   }
 
-  // ── Exterior Finishes ──
-  ['roof','soffit','gutter'].forEach(part => {
+  // ── Exterior Finishes — roof / soffit / gutter / siding ──
+  ['roof','soffit','gutter','siding'].forEach(part => {
     const mat = a(answers, `ext_${part}_type`, `ext_${part}_mat`, `ext_${part}`);
     if (mat) {
       items.push({
@@ -550,10 +588,86 @@ function parseSelections(answers, saved, rooms) {
         material: mat,
         color: answers[`ext_${part}_color`] || '',
         product: answers[`ext_${part}_product`] || mat,
-        image: answers[`ext_${part}_photo`] || '',
+        notes:  answers[`ext_${part}_notes`]   || '',
+        image:  answers[`ext_${part}_photo`]   || '',
       });
     }
   });
+
+  // ── Exterior Finishes — windows ──
+  if (answers.ext_window_color) {
+    items.push({
+      cat: 'exterior_finishes', room: 'Exterior',
+      label: 'Windows',
+      material: answers.ext_window_color,
+      product: answers.ext_window_brand || answers.ext_window_color,
+      style:   answers.ext_window_grilles || '',
+      notes:   answers.ext_window_notes   || '',
+      image:   answers.ext_window_photo   || '',
+    });
+  }
+
+  // ── Exterior Finishes — porch ceiling ──
+  if (answers.ext_porch_ceil_type && answers.ext_porch_ceil_type !== 'None / no porch') {
+    items.push({
+      cat: 'exterior_finishes', room: 'Exterior',
+      label: 'Porch Ceiling',
+      material: answers.ext_porch_ceil_type,
+      color:   answers.ext_porch_ceil_color || '',
+      product: answers.ext_porch_ceil_product || answers.ext_porch_ceil_other || answers.ext_porch_ceil_type,
+      notes:   answers.ext_porch_ceil_notes  || '',
+      image:   answers.ext_porch_ceil_photo  || '',
+    });
+  }
+
+  // ── Exterior Doors (variable-length JSON array) ──
+  try {
+    const rawDoors = answers.ext_doors;
+    const doors = Array.isArray(rawDoors)
+      ? rawDoors
+      : (typeof rawDoors === 'string' && rawDoors.trim() ? JSON.parse(rawDoors) : []);
+    if (Array.isArray(doors)) {
+      doors.forEach((d, i) => {
+        if (!d || (!d.label && !d.product)) return;
+        const lbl = d.label === 'Other (specify below)' ? (d.customLabel || `Door ${i+1}`) : (d.label || `Door ${i+1}`);
+        items.push({
+          cat: 'doors', room: 'Exterior',
+          label: lbl,
+          material: d.roSize || '',
+          product: d.product || lbl,
+          color:   d.color   || '',
+          finish:  d.finish  || '',
+          notes:   d.notes   || '',
+          image:   '',
+        });
+      });
+    }
+  } catch (e) { /* malformed door list — ignore */ }
+
+  // ── HVAC ──
+  if (answers.hvac_heat_type && answers.hvac_heat_type !== 'Undecided') {
+    items.push({
+      cat: 'hvac', room: 'Whole Home',
+      label: 'Heating',
+      material: answers.hvac_heat_type,
+      product: answers.hvac_heat_make_model || answers.hvac_heat_type,
+      style:   answers.hvac_heat_size  || '',
+      finish:  answers.hvac_heat_eff   || '',
+      notes:   answers.hvac_notes      || '',
+      image:   '',
+    });
+  }
+  if (answers.hvac_cool_type && answers.hvac_cool_type !== 'Undecided' && answers.hvac_cool_type !== 'None / heating only') {
+    items.push({
+      cat: 'hvac', room: 'Whole Home',
+      label: 'Cooling',
+      material: answers.hvac_cool_type,
+      product: answers.hvac_cool_make_model || answers.hvac_cool_type,
+      style:   answers.hvac_cool_size  || '',
+      finish:  answers.hvac_cool_seer  || '',
+      image:   '',
+    });
+  }
 
   // ── Tile (per bathroom) ──
   if (Array.isArray(rooms)) {
@@ -686,8 +800,13 @@ function parseSelections(answers, saved, rooms) {
 
 // ── Render a single collage cell ─────────────────────
 function renderCollageCell(item, tall = false) {
-  const hasImg = !!item.image;
-  const primaryVal = item.product || item.material || item.style || item.finish || '';
+  // Resolve image source (already enriched via product-meta when available)
+  const imgSrc = (item.image && !isUrlString(item.image)) ? item.image
+              : (item.image && isUrlString(item.image) ? '' : item.image);
+  const hasImg = !!imgSrc;
+  // Prefer the fetched product title over the raw URL string in product field
+  const cleanedProduct = stripUrl(item.product) || item._fetchedTitle || item.product || '';
+  const primaryVal = cleanedProduct || item.material || item.style || item.finish || '';
   const label = esc(item.label);
   const val   = esc(primaryVal);
 
@@ -695,7 +814,7 @@ function renderCollageCell(item, tall = false) {
   <div class="collage-cell${tall?' tall':''}">
     <div class="collage-img-wrap">
       ${hasImg
-        ? `<img src="${esc(item.image)}" alt="${label}" loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'img-placeholder\\'><div class=\\'img-placeholder-icon\\'>🖼️</div><div class=\\'img-placeholder-label\\'>${label}</div></div>'">`
+        ? `<img src="${esc(imgSrc)}" alt="${label}" loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'img-placeholder\\'><div class=\\'img-placeholder-icon\\'>🖼️</div><div class=\\'img-placeholder-label\\'>${label}</div></div>'">`
         : `<div class="img-placeholder">
             <div class="img-placeholder-icon">🖼️</div>
             <div class="img-placeholder-label">${label}</div>
@@ -712,7 +831,12 @@ function renderCollageCell(item, tall = false) {
 
 // ── Render a catalog card ─────────────────────────────
 function renderCatalogCard(item, num) {
-  const primaryVal = item.product || item.material || item.style || item.finish || '';
+  // Use the clean (URL-stripped) product text, or the auto-fetched title
+  const cleanedProduct = stripUrl(item.product) || item._fetchedTitle || item.product || '';
+  const primaryVal = cleanedProduct || item.material || item.style || item.finish || '';
+  const sourceUrl  = item._sourceUrl || extractUrl(item.product);
+  const imgSrc     = (item.image && !isUrlString(item.image)) ? item.image : '';
+
   const details = [];
   if (item.material && item.material !== primaryVal) details.push(['Material', item.material]);
   if (item.color)   details.push(['Color', item.color]);
@@ -723,12 +847,13 @@ function renderCatalogCard(item, num) {
   if (item.height)  details.push(['Height', item.height]);
   if (item.crown)   details.push(['Crown', item.crown]);
   if (item.fuel)    details.push(['Fuel Type', item.fuel]);
+  if (item._retailer) details.push(['Source', item._retailer]);
 
   return `
   <div class="catalog-card">
     <div class="catalog-card-img">
-      ${item.image
-        ? `<img src="${esc(item.image)}" alt="${esc(item.label)}" loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'img-placeholder\\' style=\\'height:100%\\'><div class=\\'img-placeholder-icon\\'>🖼️</div><div class=\\'img-placeholder-label\\'>${esc(item.label)}</div></div>'">`
+      ${imgSrc
+        ? `<img src="${esc(imgSrc)}" alt="${esc(item.label)}" loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'img-placeholder\\' style=\\'height:100%\\'><div class=\\'img-placeholder-icon\\'>🖼️</div><div class=\\'img-placeholder-label\\'>${esc(item.label)}</div></div>'">`
         : `<div class="img-placeholder" style="height:100%">
             <div class="img-placeholder-icon">🖼️</div>
             <div class="img-placeholder-label">${esc(item.label)}</div>
@@ -748,6 +873,7 @@ function renderCatalogCard(item, num) {
         </div>`).join('')}
       </div>` : ''}
       ${item.notes ? `<div style="margin-top:10px;font-size:11px;color:var(--stone);font-style:italic;line-height:1.5">${esc(item.notes)}</div>` : ''}
+      ${sourceUrl ? `<a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--sage);text-decoration:none;border-bottom:1px solid var(--sage);padding-bottom:1px">View product →</a>` : ''}
     </div>
   </div>`;
 }
@@ -782,17 +908,100 @@ function renderRoomSpread(group, items) {
   </div>`;
 }
 
+// ── Enrich items with auto-fetched product metadata ─────
+// For every item whose product field (or image field) is a URL we
+// don't already have an image for, batch-call product-meta and merge
+// the returned image/title back in. Plain-text products are left
+// untouched and fall back to the placeholder card.
+async function enrichItemsWithMeta(items) {
+  // Find candidate URLs across the common fields where clients paste links
+  const urlsToFetch = new Set();
+  items.forEach(it => {
+    // Product field is the most common place a URL ends up
+    const productUrl  = extractUrl(it.product);
+    const imageUrl    = extractUrl(it.image);   // some clients paste URLs in the photo field too
+    const u = productUrl || imageUrl || '';
+    if (u) {
+      it._sourceUrl = u;
+      // Only refetch if we don't already have an image we trust
+      if (!it.image || isUrlString(it.image)) urlsToFetch.add(u);
+    }
+  });
+
+  if (!urlsToFetch.size) return items;
+
+  // Batch fetch (function caps at 50 per call; chunk if more)
+  const all = Array.from(urlsToFetch);
+  const chunks = [];
+  for (let i = 0; i < all.length; i += 40) chunks.push(all.slice(i, i + 40));
+
+  const metaByUrl = new Map();
+  for (const chunk of chunks) {
+    try {
+      const res = await fetch(`/.netlify/functions/product-meta`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ urls: chunk }),
+      });
+      if (!res.ok) continue;
+      const j = await res.json();
+      (j.results || []).forEach(r => { if (r && r.url) metaByUrl.set(r.url, r); });
+      // The function canonicalizes URLs; key the map by the original chunk URL too
+      chunk.forEach(orig => {
+        if (!metaByUrl.has(orig)) {
+          // Loose match by hostname + path
+          for (const [k, v] of metaByUrl.entries()) {
+            try {
+              const a = new URL(orig), b = new URL(k);
+              if (a.hostname === b.hostname && a.pathname === b.pathname) { metaByUrl.set(orig, v); break; }
+            } catch {}
+          }
+        }
+      });
+    } catch (e) { console.error('product-meta batch failed:', e); }
+  }
+
+  // Merge back into items
+  items.forEach(it => {
+    const u = it._sourceUrl;
+    if (!u) return;
+    const meta = metaByUrl.get(u);
+    if (!meta) return;
+    if (meta.image && !meta.error) {
+      it.image = meta.image;
+    }
+    if (meta.title) {
+      it._fetchedTitle = meta.title;
+    }
+    if (meta.retailer) {
+      it._retailer = meta.retailer;
+    }
+    if (meta.error) {
+      it._fetchError = meta.error;
+    }
+  });
+
+  return items;
+}
+
 // ── Main render ───────────────────────────────────────
 async function renderBook() {
-  // Refresh session for latest data
-  try {
-    const fresh = await AUTH.refreshSession(p.id);
-    if (fresh) p = fresh;
-  } catch(e) {}
+  // Refresh session for latest data (skip for admin preview — no session)
+  if (!p._adminPreview) {
+    try {
+      const fresh = await AUTH.refreshSession(p.id);
+      if (fresh) p = fresh;
+    } catch(e) {}
+  }
 
   const clientKey = p.selectionsClientKey || p.id;
   const { answers, saved, rooms } = await loadSelections(clientKey);
-  const items = parseSelections(answers, saved, rooms);
+  let items = parseSelections(answers, saved, rooms);
+
+  // Pull product images/titles for any items whose product field is a URL
+  try {
+    items = await enrichItemsWithMeta(items);
+  } catch (e) { console.error('enrichItemsWithMeta failed:', e); }
 
   const el = document.getElementById('book-content');
 
@@ -845,7 +1054,7 @@ async function renderBook() {
   </div>`;
 
   // Group by category for the catalog
-  const ALL_CATS = ['countertops','flooring','appliances','plumbing','tile','lighting','hardware','doors','specialty_trim','exterior_finishes','fireplace','paint'];
+  const ALL_CATS = ['countertops','flooring','appliances','plumbing','tile','lighting','hardware','doors','specialty_trim','exterior_finishes','hvac','fireplace','paint'];
   let catNum = 0;
   ALL_CATS.forEach(catId => {
     const catItems = items.filter(i => i.cat === catId);
