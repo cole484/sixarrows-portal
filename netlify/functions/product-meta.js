@@ -355,10 +355,16 @@ async function getOrFetch(rawUrl, forceFresh) {
       const ml = await microlinkFetch(url);
       // Prefer Microlink result only if it actually got something useful
       if (ml.image || ml.title) {
+        // Pre-compute the direct-fetch price fallback. Avoid mixing && with
+        // ?? in the same expression — JavaScript throws a SyntaxError at
+        // parse time when those operators are combined without separate
+        // explicit parens around each grouping, which breaks the entire
+        // function module load (returns 502 on every call).
+        const directPrice = (meta && meta.price !== undefined) ? meta.price : null;
         meta = {
           title:         ml.title         || (meta && meta.title)         || '',
           image:         ml.image         || (meta && meta.image)         || '',
-          price:         (ml.price ?? null) ?? (meta && meta.price ?? null),
+          price:         ml.price ?? directPrice,
           priceCurrency: ml.priceCurrency || (meta && meta.priceCurrency) || '',
           retailer:      ml.retailer      || (meta && meta.retailer)      || retailer,
         };
