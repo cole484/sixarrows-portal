@@ -89,21 +89,109 @@ function normalizeTask(page, schema) {
       phase:            prop(page, 'Phase')                || null,
       trade:            prop(page, 'Trade')                || null,
       isMilestone:      prop(page, 'Milestones')           || false,
+      longLead:         prop(page, 'Long lead')            || false,
+      leadTime:         prop(page, 'Lead time (days)')     || null,
       clientNote:       prop(page, 'Client-facing note')   || null,
       definitionOfDone: prop(page, 'Definition of done')   || null,
+      internalNote:     prop(page, 'Internal note')        || null,
     };
   }
   return {
-    name:             prop(page, 'Task Description') || 'Untitled',
+    name:             prop(page, 'Task Description') || prop(page, 'Task') || 'Untitled',
     status:           prop(page, 'Status')           || 'Needs Scheduling',
-    startDate:        prop(page, 'Start Date')       || null,
+    startDate:        prop(page, 'Start Date')       || prop(page, 'Start') || null,
     sequence:         9999,
     phase:            null,
     trade:            prop(page, 'Trade')            || null,
     isMilestone:      false,
-    clientNote:       prop(page, 'Notes')            || null,
-    definitionOfDone: null,
+    longLead:         prop(page, 'Long lead')        || false,
+    leadTime:         prop(page, 'Lead time (days)') || null,
+    clientNote:       prop(page, 'Notes')            || prop(page, 'Client-facing note') || null,
+    definitionOfDone: prop(page, 'Definition of done') || null,
+    internalNote:     prop(page, 'Internal note')    || null,
   };
+}
+
+// ── Categorization helpers ────────────────────────────────────────────────
+
+// Trades whose work is meaningfully delayed by rain. Keep this list
+// conservative — false positives clutter the weather-warning section
+// and erode client trust in the report.
+const WEATHER_SENSITIVE_TRADES = new Set([
+  'Concrete', 'Excavation & Footings', 'Masonry', 'Roofing', 'Painting',
+]);
+
+// Task names that suggest weather sensitivity even when the Trade isn't
+// flagged (e.g. material deliveries, exterior installs).
+const WEATHER_NAME_PATTERNS = [
+  /\bpour(ing|ed)?\b/i,
+  /\bconcrete\b/i,
+  /\bdeliver(y|ed|ies)?\b.*(rock|stone|concrete|brick|exterior|porch|chimney|roofing|gutter)/i,
+  /\b(stone|rock|brick)\b.*\bdeliver/i,
+  /\bsiding\s+install/i,
+  /\bchimney\s+install/i,
+  /\bexterior\s+(paint|stain|finish|trim)/i,
+];
+
+// Patterns suggesting the task represents a client decision / selection.
+// Used as a fallback when the client's Notion DB doesn't have a
+// "Waiting on Client" status (e.g. Hoops's old schema).
+const DECISION_NAME_PATTERNS = [
+  /\bselect(ed|ion|ions)?\b/i,
+  /\border(ed|ing)?\b/i,
+  /\bapprov(e|ed|al)\b/i,
+  /\bdecision\b/i,
+  /\bchoose\b/i,
+  /\bclient\s+(decide|approval|sign[\s-]?off)/i,
+];
+
+// Statuses considered "in this week's plan" — combines genuinely scheduled
+// items with old-schema "Estimated Time Frame" (which was being ignored).
+const SCHEDULED_STATUSES = new Set(['Scheduled', 'Estimated Time Frame']);
+
+// Statuses representing open client decisions, regardless of name pattern.
+const DECISION_STATUSES = new Set(['Waiting on Client', 'Needs Scheduling']);
+
+function looksWeatherSensitive(task) {
+  if (WEATHER_SENSITIVE_TRADES.has(task.trade)) return true;
+  return WEATHER_NAME_PATTERNS.some(p => p.test(task.name || ''));
+}
+
+function looksLikeDecision(task) {
+  // Already done — not a decision
+  if (task.status === 'Completed') return false;
+  // Active work — not a decision (someone is doing it)
+  if (task.status === 'In Progress') return false;
+  // Explicit status flag (new-schema only) — definite decision
+  if (task.status === 'Waiting on Client') return true;
+  // Heuristic — name suggests selection/approval AND task is not already in motion
+  if (DECISION_NAME_PATTERNS.some(p => p.test(task.name || ''))) return true;
+  return false;
+}
+
+// "Could impede progress" = the decision is upstream of work happening
+// soon. Without traversing the Blocking relation we use proxies:
+//   - Long lead = true (long order time means selecting late delays the build)
+//   - Start date is within 21 days
+function decisionImpedesProgress(task) {
+  if (task.longLead) return true;
+  if (!task.startDate) return false;
+  const start = new Date(task.startDate + 'T00:00:00');
+  const days  = (start - Date.now()) / 86400000;
+  return days >= 0 && days <= 21;
+}
+
+function isThisWeek(dateStr) {
+  if (!dateStr) return false;
+  const date = new Date(dateStr + 'T00:00:00');
+  const now  = new Date();
+  // Monday-anchored week (handles Sunday correctly)
+  const day  = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now.getFullYear(), now.getMonth(), diff);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 7);
+  return date >= monday && date < sunday;
 }
 
 function isRecentlyCompleted(task) {
@@ -122,25 +210,49 @@ function fmtDate(d) {
 function buildContext(client, tasks, schema, type) {
   const completed     = tasks.filter(t => t.status === 'Completed');
   const active        = tasks.filter(t => t.status === 'In Progress');
-  const scheduled     = tasks.filter(t => t.status === 'Scheduled');
-  const waitingClient = tasks.filter(t => t.status === 'Waiting on Client');
+  const scheduledRaw  = tasks.filter(t => SCHEDULED_STATUSES.has(t.status));
   const recent        = completed.filter(t => isRecentlyCompleted(t));
-  const upcoming      = [...active, ...scheduled].slice(0, 5);
   const milestones    = tasks.filter(t => t.isMilestone);
   const nextMilestone = milestones.find(m => m.status !== 'Completed');
   const totalTasks    = tasks.length;
   const donePct       = totalTasks > 0 ? Math.round(completed.length / totalTasks * 100) : 0;
 
-  const taskLine = t => {
+  // Tasks happening THIS week = active + scheduled with a Start date inside
+  // the current week. Scheduled-without-date items go to "next up" instead.
+  const activeOrThisWeek = [
+    ...active,
+    ...scheduledRaw.filter(t => isThisWeek(t.startDate)),
+  ];
+  const upcoming = scheduledRaw
+    .filter(t => !isThisWeek(t.startDate))
+    .sort((a, b) => {
+      const da = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+      const db = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+      return da - db;
+    });
+
+  // Decisions: explicit Waiting-on-Client status OR name heuristic, minus
+  // anything already In Progress / Completed.
+  const decisions = tasks.filter(looksLikeDecision);
+  const decisionsImpeding = decisions.filter(decisionImpedesProgress);
+
+  // Weather-sensitive tasks scheduled or in progress this week
+  const weatherTasks = activeOrThisWeek.filter(looksWeatherSensitive);
+
+  const taskLine = (t, extraTags = []) => {
     const date = t.startDate ? ` (${fmtDate(t.startDate)})` : '';
-    const dod  = t.definitionOfDone ? `\n     Done when: ${t.definitionOfDone}` : '';
-    const note = t.clientNote ? `\n     Note: ${t.clientNote}` : '';
-    return `  - ${t.name}${date}${dod}${note}`;
+    const tags = [...extraTags];
+    if (t.longLead)  tags.push('LONG LEAD');
+    if (t.leadTime)  tags.push(`Lead: ${t.leadTime}d`);
+    if (t.trade)     tags.push(`Trade: ${t.trade}`);
+    const tagStr = tags.length ? ` [${tags.join(', ')}]` : '';
+    const dod    = t.definitionOfDone ? `\n     Done when: ${t.definitionOfDone}` : '';
+    const note   = t.clientNote ? `\n     Note: ${t.clientNote}` : '';
+    return `  - ${t.name}${date}${tagStr}${dod}${note}`;
   };
 
-  const decisionsSection = waitingClient.length > 0
-    ? `\nDECISIONS NEEDED FROM CLIENT:\n${waitingClient.map(taskLine).join('\n')}`
-    : '\nDECISIONS NEEDED FROM CLIENT:\n  - None at this time';
+  const fmtList = (arr, taggers = () => []) =>
+    arr.length > 0 ? arr.map(t => taskLine(t, taggers(t))).join('\n') : '  - (none)';
 
   return `
 CLIENT: ${client.client_name}
@@ -150,17 +262,22 @@ UPDATE TYPE: ${type === 'monday' ? 'Monday Week Preview' : type === 'friday' ? '
 OVERALL PROGRESS: ${completed.length} of ${totalTasks} tasks complete (${donePct}%)
 
 RECENTLY COMPLETED (last 7 days):
-${recent.length > 0 ? recent.map(taskLine).join('\n') : '  - No tasks completed in last 7 days'}
+${fmtList(recent)}
 
-CURRENTLY IN PROGRESS:
-${active.length > 0 ? active.map(taskLine).join('\n') : '  - No tasks currently in progress'}
+ACTIVE OR SCHEDULED THIS WEEK:
+${fmtList(activeOrThisWeek, t => looksWeatherSensitive(t) ? ['WEATHER-SENSITIVE'] : [])}
 
-SCHEDULED NEXT:
-${scheduled.slice(0,4).map(taskLine).join('\n') || '  - No tasks scheduled yet'}
+UPCOMING (scheduled, beyond this week):
+${fmtList(upcoming.slice(0, 6))}
 
 NEXT MILESTONE:
 ${nextMilestone ? `  - ${nextMilestone.name}${nextMilestone.startDate ? ' (' + fmtDate(nextMilestone.startDate) + ')' : ''}` : '  - No upcoming milestones set'}
-${decisionsSection}
+
+OPEN CLIENT DECISIONS (selections, approvals, ordering):
+${fmtList(decisions, t => decisionImpedesProgress(t) ? ['IMPEDES PROGRESS'] : [])}
+
+WEATHER-SENSITIVE WORK SCHEDULED THIS WEEK:
+${weatherTasks.length > 0 ? weatherTasks.map(t => `  - ${t.name}${t.trade ? ' [' + t.trade + ']' : ''}`).join('\n') : '  - (none)'}
 `.trim();
 }
 
@@ -168,56 +285,96 @@ async function generateWithClaude(context, type, clientName, pmName) {
   const pm = pmName || 'Cole';
 
   const typeInstructions = {
-    monday: `This is a MONDAY MORNING update — it sets the week's expectations.
-Structure the update with these exact sections in this order:
-1. A short 1-2 sentence opening that sets the tone for the week ahead. Be specific about what is happening this week.
-2. "Completed last week:" followed by bullet points of what was finished (omit this section if nothing was completed).
-3. "This week:" followed by bullet points of what is actively happening or starting this week.
-4. "Coming up next:" followed by bullet points of the next 2-3 tasks on the schedule with estimated dates where available.
-5. "Your input needed:" section ONLY if there are decisions needed from the client — list each one as a bullet. If no decisions needed, omit this section entirely.
-6. Sign off.`,
+    monday: `This is a MONDAY project update — it sets the week's expectations.
 
-    friday: `This is a FRIDAY AFTERNOON recap — it celebrates what was accomplished this week.
-Structure the update with these exact sections in this order:
-1. A short 1-2 sentence opening that acknowledges the week's work with energy and confidence.
-2. "Completed this week:" followed by bullet points of everything finished this week. Be specific.
-3. "Currently in progress:" followed by bullet points of active work that will carry into next week.
-4. "On deck for next week:" followed by bullet points of the next 2-3 items coming up.
-5. "Your input needed:" section ONLY if there are decisions needed from the client. Omit if none.
-6. Sign off.`,
+OUTPUT EXACTLY this structure, in this order. Skip the entire heading + bullets for any section that has zero items. Do not fabricate items.
 
-    midweek: `This is a MIDWEEK touchpoint — brief and focused on what is happening right now.
-Structure the update with these exact sections in this order:
-1. A short 1-2 sentence opener about what is actively happening on site today.
-2. "In progress now:" followed by 1-2 bullet points of active work.
-3. "Finishing up this week:" followed by bullet points of what will be completed before Friday.
-4. "Your input needed:" section ONLY if there are decisions needed. Omit if none.
-5. Sign off.`,
+Monday project update:
+
+Scheduled for this week:
+- One bullet per task in ACTIVE OR SCHEDULED THIS WEEK. Name the task plainly. If a task is starting before another task completes (e.g. siding before concrete porches), say so briefly.
+
+Decisions needed:
+- One bullet per item in OPEN CLIENT DECISIONS. Be specific about WHAT decision the client owns (selection, vendor pick, equipment choice, approval).
+
+Decisions that could impede progress at current stage:
+- Subset of the above marked [IMPEDES PROGRESS]. Use the same language as the broader Decisions section but only the urgent ones. Omit this heading if none are flagged.
+
+Tasks susceptible to weather (rain) delays this week:
+- One bullet per item in WEATHER-SENSITIVE WORK SCHEDULED THIS WEEK. Omit this heading entirely if none.`,
+
+    friday: `This is a FRIDAY project update — a recap of the week with a brief look ahead.
+
+OUTPUT EXACTLY this structure, in this order. Skip any section with zero items.
+
+Friday project update:
+
+Completed this week:
+- One bullet per item in RECENTLY COMPLETED.
+
+Currently in progress:
+- One bullet per active task that will carry into next week.
+
+On deck for next week:
+- One bullet per upcoming item, top 3-5 by start date.
+
+Decisions needed:
+- One bullet per open client decision.
+
+Decisions that could impede progress:
+- Subset flagged [IMPEDES PROGRESS]. Omit if none.`,
+
+    midweek: `This is a MIDWEEK project update — short, focused on what is happening right now.
+
+OUTPUT EXACTLY this structure, in this order. Skip any section with zero items.
+
+Midweek project update:
+
+In progress now:
+- One bullet per active task today.
+
+Finishing up this week:
+- Tasks scheduled to wrap before Friday.
+
+Decisions needed:
+- One bullet per open client decision.
+
+Decisions that could impede progress at current stage:
+- Subset flagged [IMPEDES PROGRESS]. Omit if none.
+
+Tasks susceptible to weather (rain) delays this week:
+- Weather-sensitive items remaining this week. Omit if none.`,
   };
 
-  const systemPrompt = `You are ${pm}, the project manager at Six Arrows Construction, writing a client-facing project update for the ${clientName} custom home build.
+  const systemPrompt = `You are ${pm}, the project manager at Six Arrows Construction, writing the weekly project status update for the ${clientName} build. This is an operational status report sent to the client, not a friendly note.
 
-VOICE AND TONE:
-- Write as ${pm} personally, not as "your Six Arrows team"
-- Warm, confident, and direct. You are in complete control of the project
-- Write like a real person texting a valued client, not a corporate template
-- Every sentence must be specific and grounded in the actual project data provided
-- Never use vague filler like "work is progressing nicely" or "things are moving along"
-- Always reference specific task names from the data provided
+VOICE:
+- Direct, matter-of-fact, operational. The reader is the client, who wants to know what is happening and what they need to do.
+- No prose openers. No "Happy Monday." No "Hope you're doing well."
+- No sign-off. The admin will add personal touches when reviewing.
+- Reference tasks by their actual names from the data provided. Do not invent tasks.
+- Be specific. Avoid vague phrases like "work is progressing", "things are on track", "moving along nicely."
 
-FORMATTING RULES (strictly follow these):
-- Use the section headers and bullet points exactly as instructed
-- Bullet points use a hyphen and space: "- Item"
-- Keep each bullet point to one clear sentence
-- No em dashes anywhere. Use commas, colons, or periods instead
-- No corporate jargon: no "leverage", "synergy", "utilize", "touch base"
-- No filler openers like "I hope this finds you well" or "Happy Friday"
-- Keep the total update to 150-220 words
-- Sign off with exactly: "- ${pm}, Six Arrows"
+FORMATTING:
+- Begin with the exact heading "Monday project update:" / "Friday project update:" / "Midweek project update:" — chosen by the type instructions below.
+- Bullet points use a hyphen and a space: "- Item"
+- One bullet = one clear sentence (or sentence fragment).
+- No em dashes — use commas, colons, periods, or parentheses instead.
+- No corporate jargon ("leverage", "synergy", "touch base", "circle back").
+- Use the EXACT section headers shown in the type instructions, including the colon and capitalization.
+- Skip any section heading entirely if it has zero items. Do not write "None" or leave an empty bullet.
+
+DATA TAGS:
+The data block uses bracket tags to flag attributes. Use these to choose what to surface:
+- [WEATHER-SENSITIVE] → include in the weather section if the type instructions has one.
+- [IMPEDES PROGRESS] → include in the "Decisions that could impede progress" section.
+- [LONG LEAD] → consider this as urgent for the impedes-progress section, even if no other flag is set.
+- [Trade: X] → use only when relevant for context; do not list trades just to fill space.
+- "Done when:" / "Note:" lines under a task are PM context — useful for understanding the task but do NOT quote them verbatim.
 
 ${typeInstructions[type] || typeInstructions.monday}`;
 
-  const userPrompt = `Here is the current project data:\n\n${context}\n\nWrite the update now following the format instructions exactly. Start directly with the opening sentence.`;
+  const userPrompt = `Here is the current project data:\n\n${context}\n\nWrite the update now. Begin directly with the heading line — no preamble.`;
 
   const res = await fetch(ANTHROPIC_API, {
     method: 'POST',
