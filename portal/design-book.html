@@ -327,6 +327,7 @@ body { min-height: 100vh; }
 //      params so we can fetch selections and render without a client login.
 const _params = new URLSearchParams(window.location.search);
 const _adminClientKey = _params.get('clientKey');
+const _editMode = _params.get('editMode') === '1';
 let p;
 if (_adminClientKey) {
   p = {
@@ -336,11 +337,15 @@ if (_adminClientKey) {
     projectName:         _params.get('projectName') || 'Custom Home',
     location:            _params.get('location')    || '',
     _adminPreview:       true,
+    _editMode:           _editMode,
   };
 } else {
   p = AUTH.requireAuth();
   if (!p) throw new Error('Not authed');
 }
+
+// Edit-mode-only state — never set in client-facing mode
+let DBI_OVERRIDES = {};   // current override map, mutated by edit-mode UI
 
 // ── Helpers ──────────────────────────────────────────
 function esc(str) {
@@ -369,6 +374,30 @@ function isUrlString(s) { return !!extractUrl(s); }
 function stripUrl(s) {
   if (!s) return '';
   return String(s).replace(/https?:\/\/[^\s)\]<>"']+/gi, '').trim();
+}
+
+// Slug helper for synthesizing stable identifiers from human-readable
+// cat / room / label strings. Keeps lowercase a-z, 0-9, replaces
+// everything else with underscores, and collapses repeats. Matches what
+// most of the selections-app room IDs already look like.
+function slug(s) {
+  return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'x';
+}
+
+// Build a stable per-item key. Same cat/room/label always returns the
+// same key; the de-dupe layer below handles rare label collisions
+// (e.g. two ext_doors labeled "Front door" → front_door, front_door_2).
+function tagItemsWithKeys(items) {
+  const seen = Object.create(null);
+  items.forEach(it => {
+    let base = `${slug(it.cat)}:${slug(it.room)}:${slug(it.label)}`;
+    let key = base;
+    let n = 2;
+    while (seen[key]) key = `${base}_${n++}`;
+    seen[key] = true;
+    it.itemKey = key;
+  });
+  return items;
 }
 
 // ── Category definitions (mirrors selections-app.html) ──
@@ -795,7 +824,23 @@ function parseSelections(answers, saved, rooms) {
     });
   }
 
-  return items;
+  return tagItemsWithKeys(items);
+}
+
+// ── Per-client image overrides (selections suffix='dbi') ──
+// Stored as a flat map: { itemKey: imageUrl }. Saved by admin via the
+// Design Book editor in admin.html. Always wins over auto-fetched
+// metadata when present.
+async function loadImageOverrides(clientKey) {
+  try {
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${clientKey}&suffix=dbi`);
+    if (!res.ok) return {};
+    const j = await res.json();
+    return (j && j.data && typeof j.data === 'object') ? j.data : {};
+  } catch (e) {
+    console.error('loadImageOverrides failed:', e);
+    return {};
+  }
 }
 
 // ── Render a single collage cell ─────────────────────
@@ -875,9 +920,106 @@ function renderCatalogCard(item, num) {
       </div>` : ''}
       ${item.notes ? `<div style="margin-top:10px;font-size:11px;color:var(--stone);font-style:italic;line-height:1.5">${esc(item.notes)}</div>` : ''}
       ${sourceUrl ? `<a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--sage);text-decoration:none;border-bottom:1px solid var(--sage);padding-bottom:1px">View product →</a>` : ''}
+      ${p._editMode ? renderEditOverlay(item) : ''}
     </div>
   </div>`;
 }
+
+// ── Edit-mode UI (admin only, visible when ?editMode=1) ──
+function renderEditOverlay(item) {
+  const current = DBI_OVERRIDES[item.itemKey] || '';
+  return `
+  <div class="dbi-edit" data-key="${esc(item.itemKey)}" style="margin-top:14px;padding:10px;background:rgba(184,151,62,0.06);border:1px dashed rgba(184,151,62,0.5);border-radius:4px">
+    <div style="font-size:9px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#b8973e;margin-bottom:6px">Manual Image Override</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <input type="url" placeholder="Paste an image URL (https://...) " value="${esc(current).replace(/"/g,'&quot;')}"
+        style="flex:1;min-width:160px;padding:6px 9px;font-size:11px;font-family:inherit;border:1px solid var(--border);border-radius:3px;background:#fff;color:var(--charcoal)"
+        oninput="dbiPreviewLocal(this)">
+      <button onclick="dbiSaveCard(this)"
+        style="padding:6px 11px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:none;background:var(--sage);color:#fff;border-radius:3px;cursor:pointer">Save</button>
+      ${current ? `<button onclick="dbiClearCard(this)" style="padding:6px 11px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--stone);background:transparent;color:var(--stone);border-radius:3px;cursor:pointer">Clear</button>` : ''}
+    </div>
+    <div class="dbi-status" style="font-size:10px;color:var(--stone);margin-top:5px;min-height:13px"></div>
+  </div>`;
+}
+
+// Find the catalog card containing a given button, return its key + input
+function dbiCardCtx(btn) {
+  const wrap = btn.closest('.dbi-edit');
+  return {
+    wrap,
+    key:    wrap?.dataset.key,
+    input:  wrap?.querySelector('input[type=url]'),
+    status: wrap?.querySelector('.dbi-status'),
+    card:   btn.closest('.catalog-card'),
+  };
+}
+
+function dbiSetStatus(ctx, msg, kind) {
+  if (!ctx.status) return;
+  ctx.status.textContent = msg || '';
+  ctx.status.style.color = kind === 'err' ? '#c33' : kind === 'ok' ? 'var(--sage)' : 'var(--stone)';
+}
+
+// Live preview (no save) — replace the card's image preview as user types
+function dbiPreviewLocal(inputEl) {
+  const ctx = dbiCardCtx(inputEl);
+  const url = (inputEl.value || '').trim();
+  const imgWrap = ctx.card?.querySelector('.catalog-card-img');
+  if (!imgWrap) return;
+  if (url && /^https?:\/\//.test(url)) {
+    imgWrap.innerHTML = `<img src="${esc(url)}" alt="preview" loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'img-placeholder\\' style=\\'height:100%\\'><div class=\\'img-placeholder-icon\\'>🖼️</div><div class=\\'img-placeholder-label\\'>Bad URL or blocked image</div></div>'">`;
+  }
+}
+
+// Save: write the full DBI map back to selections-storage suffix='dbi'
+async function dbiPersist() {
+  const ck = p.selectionsClientKey || p.id;
+  const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${ck}`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ suffix: 'dbi', data: DBI_OVERRIDES }),
+  });
+  if (!res.ok) throw new Error('Save failed: ' + res.status);
+}
+
+window.dbiSaveCard = async function(btn) {
+  const ctx = dbiCardCtx(btn);
+  const url = (ctx.input.value || '').trim();
+  if (!ctx.key) return;
+  if (url && !/^https?:\/\//.test(url)) {
+    dbiSetStatus(ctx, 'URL must start with http:// or https://', 'err');
+    return;
+  }
+  dbiSetStatus(ctx, 'Saving…');
+  try {
+    if (url) DBI_OVERRIDES[ctx.key] = url;
+    else delete DBI_OVERRIDES[ctx.key];
+    await dbiPersist();
+    dbiSetStatus(ctx, url ? 'Saved.' : 'Cleared.', 'ok');
+    // Hide status after a moment
+    setTimeout(() => dbiSetStatus(ctx, ''), 2200);
+  } catch (e) {
+    console.error('dbiSaveCard:', e);
+    dbiSetStatus(ctx, 'Save failed — try again.', 'err');
+  }
+};
+
+window.dbiClearCard = async function(btn) {
+  const ctx = dbiCardCtx(btn);
+  if (!ctx.key) return;
+  ctx.input.value = '';
+  delete DBI_OVERRIDES[ctx.key];
+  dbiSetStatus(ctx, 'Saving…');
+  try {
+    await dbiPersist();
+    dbiSetStatus(ctx, 'Cleared.', 'ok');
+    // Restore the card to whatever the auto-fetch had previously found, if anything
+    setTimeout(() => location.reload(), 600);
+  } catch (e) {
+    dbiSetStatus(ctx, 'Save failed.', 'err');
+  }
+};
 
 // ── Render room collage spread ────────────────────────
 function renderRoomSpread(group, items) {
@@ -1016,8 +1158,25 @@ async function renderBook() {
   }
 
   const clientKey = p.selectionsClientKey || p.id;
-  const { answers, saved, rooms } = await loadSelections(clientKey);
+  const [{ answers, saved, rooms }, overrides] = await Promise.all([
+    loadSelections(clientKey),
+    loadImageOverrides(clientKey),
+  ]);
+  // Stash overrides in a module-level so the per-card save handlers can
+  // mutate + persist without re-fetching.
+  DBI_OVERRIDES = overrides;
+
   let items = parseSelections(answers, saved, rooms);
+
+  // Manual overrides win over everything. Apply BEFORE enrich so the auto
+  // fetcher knows it doesn't need to bother with these URLs (saves on
+  // Microlink quota).
+  items.forEach(it => {
+    if (overrides[it.itemKey]) {
+      it.image = overrides[it.itemKey];
+      it._manualImage = true;   // skip enrich for this item
+    }
+  });
 
   // Pull product images/titles for any items whose product field is a URL
   try {
@@ -1038,7 +1197,17 @@ async function renderBook() {
 
   const date = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
 
-  let html = `
+  // Edit mode banner — only when admin opened with ?editMode=1
+  const editBanner = p._editMode ? `
+  <div style="position:sticky;top:48px;z-index:50;background:#b8973e;color:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-family:var(--sans);box-shadow:0 2px 8px rgba(0,0,0,.12)">
+    <div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;opacity:.85">Edit Mode</div>
+      <div style="font-size:13px;font-weight:500;margin-top:2px">Paste an image URL into any product card to override its image. Each save is per-item.</div>
+    </div>
+    <a href="${location.pathname}${location.search.replace(/[?&]editMode=1/g,'').replace(/^\\?$/,'') || '?clientKey=' + esc(clientKey)}" style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.6);padding:7px 14px;border-radius:3px">Exit edit mode</a>
+  </div>` : '';
+
+  let html = editBanner + `
   <!-- COVER -->
   <div class="cover-page">
     <div style="position:absolute;top:40px;right:40px"><img src="assets/logo-light.png" alt="Six Arrows Co." style="width:140px;opacity:.6"></div>

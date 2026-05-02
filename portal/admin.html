@@ -1772,11 +1772,15 @@ function renderSelectionsView(p) {
           <a href="${dbUrl}" target="_blank" class="adm-btn" style="display:inline-flex;text-decoration:none;font-size:12px;padding:8px 14px">
             Open Design Book →
           </a>
+          <a href="${dbUrl}&editMode=1" target="_blank" class="adm-btn adm-btn-ghost" style="display:inline-flex;text-decoration:none;font-size:12px;padding:8px 14px">
+            Edit images
+          </a>
           <button class="adm-btn" style="font-size:12px;padding:8px 14px" onclick="refreshDesignBookImages('${ck}', this)">
             Refresh product images
           </button>
         </div>
       </div>
+      <div style="font-size:11px;color:var(--charcoal-4);margin-top:10px;line-height:1.5;max-width:680px"><strong style="color:var(--charcoal)">Edit images</strong> opens the Design Book in admin-only edit mode where you can paste a custom image URL onto any product card — useful for retailers our auto-fetcher can't reach (Lowe's, Home Depot, etc.) and for plain-text products with no URL at all. Manual overrides always win over auto-fetched images.</div>
       <div id="dbi-msg" class="adm-msg success" style="margin:8px 0 0;display:none"></div>
     </div>
 
