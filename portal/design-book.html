@@ -800,9 +800,10 @@ function parseSelections(answers, saved, rooms) {
 
 // ── Render a single collage cell ─────────────────────
 function renderCollageCell(item, tall = false) {
-  // Resolve image source (already enriched via product-meta when available)
-  const imgSrc = (item.image && !isUrlString(item.image)) ? item.image
-              : (item.image && isUrlString(item.image) ? '' : item.image);
+  // item.image may be either a real image URL fetched by product-meta or
+  // a URL the client pasted into a *_photo field. Trust whichever is set;
+  // the <img onerror> handler below catches anything that doesn't load.
+  const imgSrc = item.image || '';
   const hasImg = !!imgSrc;
   // Prefer the fetched product title over the raw URL string in product field
   const cleanedProduct = stripUrl(item.product) || item._fetchedTitle || item.product || '';
@@ -835,7 +836,7 @@ function renderCatalogCard(item, num) {
   const cleanedProduct = stripUrl(item.product) || item._fetchedTitle || item.product || '';
   const primaryVal = cleanedProduct || item.material || item.style || item.finish || '';
   const sourceUrl  = item._sourceUrl || extractUrl(item.product);
-  const imgSrc     = (item.image && !isUrlString(item.image)) ? item.image : '';
+  const imgSrc     = item.image || '';
 
   const details = [];
   if (item.material && item.material !== primaryVal) details.push(['Material', item.material]);
