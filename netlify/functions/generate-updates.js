@@ -91,6 +91,7 @@ function normalizeTask(page, schema) {
       isMilestone:      prop(page, 'Milestones')           || false,
       longLead:         prop(page, 'Long lead')            || false,
       leadTime:         prop(page, 'Lead time (days)')     || null,
+      clientDecision:   prop(page, 'Client Decision')      || false,
       clientNote:       prop(page, 'Client-facing note')   || null,
       definitionOfDone: prop(page, 'Definition of done')   || null,
       internalNote:     prop(page, 'Internal note')        || null,
@@ -106,6 +107,7 @@ function normalizeTask(page, schema) {
     isMilestone:      false,
     longLead:         prop(page, 'Long lead')        || false,
     leadTime:         prop(page, 'Lead time (days)') || null,
+    clientDecision:   prop(page, 'Client Decision')  || false,
     clientNote:       prop(page, 'Notes')            || prop(page, 'Client-facing note') || null,
     definitionOfDone: prop(page, 'Definition of done') || null,
     internalNote:     prop(page, 'Internal note')    || null,
@@ -134,15 +136,22 @@ const WEATHER_NAME_PATTERNS = [
 ];
 
 // Patterns suggesting the task represents a client decision / selection.
-// Used as a fallback when the client's Notion DB doesn't have a
-// "Waiting on Client" status (e.g. Hoops's old schema).
+// Used as a LAST-RESORT fallback when neither the explicit Client Decision
+// checkbox nor a "Waiting on Client" status is set.
+//
+// Tightened from the original to drop the bare /\border/ and /\bselected/
+// patterns, which falsely matched PM-side ordering and installation tasks
+// like "Countertop Order & Installation", "Order Garage Door", and
+// "Lumber Package Order". Now we only catch phrases that unambiguously
+// signal client input is the bottleneck.
 const DECISION_NAME_PATTERNS = [
-  /\bselect(ed|ion|ions)?\b/i,
-  /\border(ed|ing)?\b/i,
-  /\bapprov(e|ed|al)\b/i,
-  /\bdecision\b/i,
-  /\bchoose\b/i,
-  /\bclient\s+(decide|approval|sign[\s-]?off)/i,
+  /^select\b/i,                          // "Select fireplace stone"
+  /\bselect\s*&/i,                       // "Select & Order Tile"
+  /\bselection\b/i,                      // "Tile selection", "Final selections"
+  /\bselected\s+and\s+ordered\b/i,       // "Fireplace/Firebox Selected and Ordered"
+  /\bcustomer\s+decision\b/i,            // explicit parenthetical tag
+  /\bclient\s+(decision|approval|sign[\s-]?off)/i,
+  /\bapproval\s+needed\b/i,
 ];
 
 // Statuses considered "in this week's plan" — combines genuinely scheduled
@@ -162,11 +171,30 @@ function looksLikeDecision(task) {
   if (task.status === 'Completed') return false;
   // Active work — not a decision (someone is doing it)
   if (task.status === 'In Progress') return false;
-  // Explicit status flag (new-schema only) — definite decision
+  // Explicit Notion checkbox is the most reliable signal — wins over
+  // everything else. Cole tags any task he wants on the decisions list.
+  if (task.clientDecision) return true;
+  // Status flag (new-schema only) — definite decision
   if (task.status === 'Waiting on Client') return true;
-  // Heuristic — name suggests selection/approval AND task is not already in motion
+  // LAST resort: name heuristic — only when Cole hasn't started using the
+  // checkbox yet. Tightened patterns above to avoid catching PM ordering
+  // / installation tasks.
   if (DECISION_NAME_PATTERNS.some(p => p.test(task.name || ''))) return true;
   return false;
+}
+
+// True if the task is "carrying over" from a previous week — In Progress
+// AND its Start date is before the current Monday-anchored week.
+function isOngoing(task) {
+  if (task.status !== 'In Progress') return false;
+  if (!task.startDate) return false;
+  const start = new Date(task.startDate + 'T00:00:00');
+  const now   = new Date();
+  const day   = now.getDay();
+  const diff  = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now.getFullYear(), now.getMonth(), diff);
+  monday.setHours(0, 0, 0, 0);
+  return start < monday;
 }
 
 // "Could impede progress" = the decision is upstream of work happening
@@ -217,24 +245,29 @@ function buildContext(client, tasks, schema, type) {
   const totalTasks    = tasks.length;
   const donePct       = totalTasks > 0 ? Math.round(completed.length / totalTasks * 100) : 0;
 
+  // Decisions resolved first so we can exclude them from the scheduled
+  // bucket below — otherwise the same item would appear in two sections
+  // of the data context and the AI would have to guess which one wins.
+  const decisions         = tasks.filter(looksLikeDecision);
+  const decisionsImpeding = decisions.filter(decisionImpedesProgress);
+  const decisionIds       = new Set(decisions.map(d => d.name));
+
   // Tasks happening THIS week = active + scheduled with a Start date inside
   // the current week. Scheduled-without-date items go to "next up" instead.
+  // Decision-tagged items are explicitly removed so they only appear in
+  // the Decisions section of the context.
   const activeOrThisWeek = [
     ...active,
     ...scheduledRaw.filter(t => isThisWeek(t.startDate)),
-  ];
+  ].filter(t => !decisionIds.has(t.name));
+
   const upcoming = scheduledRaw
-    .filter(t => !isThisWeek(t.startDate))
+    .filter(t => !isThisWeek(t.startDate) && !decisionIds.has(t.name))
     .sort((a, b) => {
       const da = a.startDate ? new Date(a.startDate).getTime() : Infinity;
       const db = b.startDate ? new Date(b.startDate).getTime() : Infinity;
       return da - db;
     });
-
-  // Decisions: explicit Waiting-on-Client status OR name heuristic, minus
-  // anything already In Progress / Completed.
-  const decisions = tasks.filter(looksLikeDecision);
-  const decisionsImpeding = decisions.filter(decisionImpedesProgress);
 
   // Weather-sensitive tasks scheduled or in progress this week
   const weatherTasks = activeOrThisWeek.filter(looksWeatherSensitive);
@@ -242,9 +275,11 @@ function buildContext(client, tasks, schema, type) {
   const taskLine = (t, extraTags = []) => {
     const date = t.startDate ? ` (${fmtDate(t.startDate)})` : '';
     const tags = [...extraTags];
-    if (t.longLead)  tags.push('LONG LEAD');
-    if (t.leadTime)  tags.push(`Lead: ${t.leadTime}d`);
-    if (t.trade)     tags.push(`Trade: ${t.trade}`);
+    if (isOngoing(t))      tags.push('ONGOING');
+    if (t.longLead)        tags.push('LONG LEAD');
+    if (t.leadTime)        tags.push(`Lead: ${t.leadTime}d`);
+    if (t.clientDecision)  tags.push('CLIENT DECISION (checkbox)');
+    if (t.trade)           tags.push(`Trade: ${t.trade}`);
     const tagStr = tags.length ? ` [${tags.join(', ')}]` : '';
     const dod    = t.definitionOfDone ? `\n     Done when: ${t.definitionOfDone}` : '';
     const note   = t.clientNote ? `\n     Note: ${t.clientNote}` : '';
@@ -365,12 +400,14 @@ FORMATTING:
 - Skip any section heading entirely if it has zero items. Do not write "None" or leave an empty bullet.
 
 DATA TAGS:
-The data block uses bracket tags to flag attributes. Use these to choose what to surface:
+The data block uses bracket tags to flag attributes. Use these to choose what to surface AND to phrase the bullet correctly.
+- [ONGOING] → task is In Progress and started before this week. Phrase the bullet as a continuation: "X continues", "X carries over from last week", "Crews continue X." Do NOT phrase it as if it's just starting.
 - [WEATHER-SENSITIVE] → include in the weather section if the type instructions has one.
 - [IMPEDES PROGRESS] → include in the "Decisions that could impede progress" section.
 - [LONG LEAD] → consider this as urgent for the impedes-progress section, even if no other flag is set.
+- [CLIENT DECISION (checkbox)] → Cole has explicitly tagged this as awaiting client input. Treat as definitive — always include in Decisions needed.
 - [Trade: X] → use only when relevant for context; do not list trades just to fill space.
-- "Done when:" / "Note:" lines under a task are PM context — useful for understanding the task but do NOT quote them verbatim.
+- "Done when:" / "Note:" lines under a task are PM context — useful for understanding the task but do NOT quote them verbatim. The "Note:" line in particular is the client-facing note Cole has written and is safe to paraphrase.
 
 ${typeInstructions[type] || typeInstructions.monday}`;
 
