@@ -92,6 +92,7 @@ function normalizeTask(page, schema) {
       longLead:         prop(page, 'Long lead')            || false,
       leadTime:         prop(page, 'Lead time (days)')     || null,
       clientDecision:   prop(page, 'Client Decision')      || false,
+      weatherSensitive: prop(page, 'Weather Sensitive')    || false,
       clientNote:       prop(page, 'Client-facing note')   || null,
       definitionOfDone: prop(page, 'Definition of done')   || null,
       internalNote:     prop(page, 'Internal note')        || null,
@@ -108,6 +109,7 @@ function normalizeTask(page, schema) {
     longLead:         prop(page, 'Long lead')        || false,
     leadTime:         prop(page, 'Lead time (days)') || null,
     clientDecision:   prop(page, 'Client Decision')  || false,
+    weatherSensitive: prop(page, 'Weather Sensitive')|| false,
     clientNote:       prop(page, 'Notes')            || prop(page, 'Client-facing note') || null,
     definitionOfDone: prop(page, 'Definition of done') || null,
     internalNote:     prop(page, 'Internal note')    || null,
@@ -162,7 +164,11 @@ const SCHEDULED_STATUSES = new Set(['Scheduled', 'Estimated Time Frame']);
 const DECISION_STATUSES = new Set(['Waiting on Client', 'Needs Scheduling']);
 
 function looksWeatherSensitive(task) {
+  // Explicit Notion checkbox is the most reliable signal
+  if (task.weatherSensitive) return true;
+  // Trade-based heuristic for the obvious cases
   if (WEATHER_SENSITIVE_TRADES.has(task.trade)) return true;
+  // Name-pattern fallback for material deliveries / exterior installs
   return WEATHER_NAME_PATTERNS.some(p => p.test(task.name || ''));
 }
 
@@ -189,37 +195,79 @@ function isOngoing(task) {
   if (task.status !== 'In Progress') return false;
   if (!task.startDate) return false;
   const start = new Date(task.startDate + 'T00:00:00');
-  const now   = new Date();
-  const day   = now.getDay();
-  const diff  = now.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(now.getFullYear(), now.getMonth(), diff);
-  monday.setHours(0, 0, 0, 0);
-  return start < monday;
+  return start < weekBounds(0).start;
 }
 
-// "Could impede progress" = the decision is upstream of work happening
-// soon. Without traversing the Blocking relation we use proxies:
-//   - Long lead = true (long order time means selecting late delays the build)
-//   - Start date is within 21 days
-function decisionImpedesProgress(task) {
+// "Targeted" = Status is Estimated Time Frame. These are date windows
+// Cole wants to hit but hasn't yet booked subcontractors for. Surface
+// distinctly from firmly-scheduled work so the AI can phrase them as
+// aims rather than commitments.
+function isTargeted(task) {
+  return task.status === 'Estimated Time Frame';
+}
+
+// Window helpers — return Monday-anchored start/end dates for various
+// time windows used by the categorizers below.
+function weekBounds(offsetWeeks = 0) {
+  const now    = new Date();
+  const day    = now.getDay();
+  const diff   = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now.getFullYear(), now.getMonth(), diff);
+  monday.setHours(0, 0, 0, 0);
+  if (offsetWeeks) monday.setDate(monday.getDate() + 7 * offsetWeeks);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 7);
+  return { start: monday, end: sunday };
+}
+
+// Returns the time window THIS update is forward-looking on, by type:
+//   monday  → this week (Mon 00:00 → next Mon 00:00)
+//   midweek → today → end of this week
+//   friday  → next week (next Mon → following Mon)
+function updateForwardWindow(type) {
+  if (type === 'friday') return weekBounds(1);
+  if (type === 'midweek') {
+    const { end } = weekBounds(0);
+    const start   = new Date();
+    start.setHours(0, 0, 0, 0);
+    return { start, end };
+  }
+  return weekBounds(0);
+}
+
+// Window for "recently completed" — varies by type so the right items
+// surface in the right update:
+//   monday  → last week (so client sees what just wrapped going into the new week)
+//   friday  → this week (the recap)
+//   midweek → null (this section is skipped)
+function updateCompletedWindow(type) {
+  if (type === 'midweek') return null;
+  if (type === 'friday')  return weekBounds(0);
+  return weekBounds(-1);
+}
+
+function dateInWindow(dateStr, win) {
+  if (!win || !dateStr) return false;
+  const d = new Date(dateStr + 'T00:00:00');
+  return d >= win.start && d < win.end;
+}
+
+// "Could impede progress" = a client decision that's upstream of work
+// happening within this update's time window. Long-lead items are always
+// flagged regardless of date, since selecting late on a long-lead item
+// delays the whole build no matter what.
+function decisionImpedesProgress(task, forwardWindow) {
   if (task.longLead) return true;
   if (!task.startDate) return false;
-  const start = new Date(task.startDate + 'T00:00:00');
-  const days  = (start - Date.now()) / 86400000;
-  return days >= 0 && days <= 21;
+  return dateInWindow(task.startDate, forwardWindow);
 }
 
 function isThisWeek(dateStr) {
-  if (!dateStr) return false;
-  const date = new Date(dateStr + 'T00:00:00');
-  const now  = new Date();
-  // Monday-anchored week (handles Sunday correctly)
-  const day  = now.getDay();
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(now.getFullYear(), now.getMonth(), diff);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 7);
-  return date >= monday && date < sunday;
+  return dateInWindow(dateStr, weekBounds(0));
+}
+
+function isLastWeek(dateStr) {
+  return dateInWindow(dateStr, weekBounds(-1));
 }
 
 function isRecentlyCompleted(task) {
@@ -239,17 +287,25 @@ function buildContext(client, tasks, schema, type) {
   const completed     = tasks.filter(t => t.status === 'Completed');
   const active        = tasks.filter(t => t.status === 'In Progress');
   const scheduledRaw  = tasks.filter(t => SCHEDULED_STATUSES.has(t.status));
-  const recent        = completed.filter(t => isRecentlyCompleted(t));
   const milestones    = tasks.filter(t => t.isMilestone);
   const nextMilestone = milestones.find(m => m.status !== 'Completed');
   const totalTasks    = tasks.length;
   const donePct       = totalTasks > 0 ? Math.round(completed.length / totalTasks * 100) : 0;
 
+  // Time windows for THIS update
+  const forwardWindow   = updateForwardWindow(type);   // when current decisions impede progress
+  const completedWindow = updateCompletedWindow(type); // null for midweek (skip section)
+
+  // Recent completions, scoped to the right window for this update type
+  const recent = completedWindow
+    ? completed.filter(t => dateInWindow(t.startDate, completedWindow) || !t.startDate)
+    : [];
+
   // Decisions resolved first so we can exclude them from the scheduled
   // bucket below — otherwise the same item would appear in two sections
   // of the data context and the AI would have to guess which one wins.
   const decisions         = tasks.filter(looksLikeDecision);
-  const decisionsImpeding = decisions.filter(decisionImpedesProgress);
+  const decisionsImpeding = decisions.filter(d => decisionImpedesProgress(d, forwardWindow));
   const decisionIds       = new Set(decisions.map(d => d.name));
 
   // Tasks happening THIS week = active + scheduled with a Start date inside
@@ -269,17 +325,19 @@ function buildContext(client, tasks, schema, type) {
       return da - db;
     });
 
-  // Weather-sensitive tasks scheduled or in progress this week
+  // Weather-sensitive tasks happening this week
   const weatherTasks = activeOrThisWeek.filter(looksWeatherSensitive);
 
   const taskLine = (t, extraTags = []) => {
     const date = t.startDate ? ` (${fmtDate(t.startDate)})` : '';
     const tags = [...extraTags];
-    if (isOngoing(t))      tags.push('ONGOING');
-    if (t.longLead)        tags.push('LONG LEAD');
-    if (t.leadTime)        tags.push(`Lead: ${t.leadTime}d`);
-    if (t.clientDecision)  tags.push('CLIENT DECISION (checkbox)');
-    if (t.trade)           tags.push(`Trade: ${t.trade}`);
+    if (isOngoing(t))         tags.push('ONGOING');
+    if (isTargeted(t))        tags.push('TARGETED');                        // Estimated Time Frame
+    if (t.longLead)           tags.push('LONG LEAD');
+    if (t.leadTime)           tags.push(`Lead: ${t.leadTime}d`);
+    if (t.clientDecision)     tags.push('CLIENT DECISION (checkbox)');
+    if (t.weatherSensitive)   tags.push('WEATHER-SENSITIVE (checkbox)');
+    if (t.trade)              tags.push(`Trade: ${t.trade}`);
     const tagStr = tags.length ? ` [${tags.join(', ')}]` : '';
     const dod    = t.definitionOfDone ? `\n     Done when: ${t.definitionOfDone}` : '';
     const note   = t.clientNote ? `\n     Note: ${t.clientNote}` : '';
@@ -289,16 +347,30 @@ function buildContext(client, tasks, schema, type) {
   const fmtList = (arr, taggers = () => []) =>
     arr.length > 0 ? arr.map(t => taskLine(t, taggers(t))).join('\n') : '  - (none)';
 
+  // For Monday: last week's completions. For Friday: this week's. For midweek: skip.
+  const recentLabel = type === 'friday'
+    ? 'COMPLETED THIS WEEK:'
+    : type === 'midweek'
+      ? null
+      : 'COMPLETED LAST WEEK:';
+
+  const recentSection = recentLabel
+    ? `\n${recentLabel}\n${fmtList(recent)}\n`
+    : '';
+
+  // Forward window header for the impede-progress decision rule
+  const forwardWindowLabel = type === 'friday' ? 'next week'
+                            : type === 'midweek' ? 'rest of this week'
+                            : 'this week';
+
   return `
 CLIENT: ${client.client_name}
 PROJECT: ${client.project_name || 'Custom Home Build'}
 PROJECT MANAGER: ${client.pm_name || client.cx_name || 'Cole'}
 UPDATE TYPE: ${type === 'monday' ? 'Monday Week Preview' : type === 'friday' ? 'Friday Week Recap' : 'Midweek Progress Update'}
+TIME WINDOW THIS UPDATE COVERS: ${forwardWindowLabel}
 OVERALL PROGRESS: ${completed.length} of ${totalTasks} tasks complete (${donePct}%)
-
-RECENTLY COMPLETED (last 7 days):
-${fmtList(recent)}
-
+${recentSection}
 ACTIVE OR SCHEDULED THIS WEEK:
 ${fmtList(activeOrThisWeek, t => looksWeatherSensitive(t) ? ['WEATHER-SENSITIVE'] : [])}
 
@@ -309,7 +381,7 @@ NEXT MILESTONE:
 ${nextMilestone ? `  - ${nextMilestone.name}${nextMilestone.startDate ? ' (' + fmtDate(nextMilestone.startDate) + ')' : ''}` : '  - No upcoming milestones set'}
 
 OPEN CLIENT DECISIONS (selections, approvals, ordering):
-${fmtList(decisions, t => decisionImpedesProgress(t) ? ['IMPEDES PROGRESS'] : [])}
+${fmtList(decisions, t => decisionImpedesProgress(t, forwardWindow) ? ['IMPEDES PROGRESS'] : [])}
 
 WEATHER-SENSITIVE WORK SCHEDULED THIS WEEK:
 ${weatherTasks.length > 0 ? weatherTasks.map(t => `  - ${t.name}${t.trade ? ' [' + t.trade + ']' : ''}`).join('\n') : '  - (none)'}
@@ -326,8 +398,14 @@ OUTPUT EXACTLY this structure, in this order. Skip the entire heading + bullets 
 
 Monday project update:
 
+Completed last week:
+- One bullet per item in COMPLETED LAST WEEK. Be specific about what wrapped.
+
 Scheduled for this week:
-- One bullet per task in ACTIVE OR SCHEDULED THIS WEEK. Name the task plainly. If a task is starting before another task completes (e.g. siding before concrete porches), say so briefly.
+- One bullet per task in ACTIVE OR SCHEDULED THIS WEEK. Name the task plainly. If the data shows [ONGOING], phrase it as "X continues" or "X carries over from last week" — never as if it's just starting. If [TARGETED], phrase it as a target window not a firm commitment ("We're aiming to start X this week").
+
+Coming up after this week:
+- One bullet per item in UPCOMING, top 3-5. These are tasks scheduled beyond this week. If the upcoming list is empty, omit this heading entirely.
 
 Decisions needed:
 - One bullet per item in OPEN CLIENT DECISIONS. Be specific about WHAT decision the client owns (selection, vendor pick, equipment choice, approval).
@@ -345,10 +423,10 @@ OUTPUT EXACTLY this structure, in this order. Skip any section with zero items.
 Friday project update:
 
 Completed this week:
-- One bullet per item in RECENTLY COMPLETED.
+- One bullet per item in COMPLETED THIS WEEK.
 
 Currently in progress:
-- One bullet per active task that will carry into next week.
+- One bullet per active task that will carry into next week. If [ONGOING], phrase as "X continues" — not as if it's just starting.
 
 On deck for next week:
 - One bullet per upcoming item, top 3-5 by start date.
@@ -357,7 +435,7 @@ Decisions needed:
 - One bullet per open client decision.
 
 Decisions that could impede progress:
-- Subset flagged [IMPEDES PROGRESS]. Omit if none.`,
+- Subset flagged [IMPEDES PROGRESS]. These would block work scheduled for next week. Omit if none.`,
 
     midweek: `This is a MIDWEEK project update — short, focused on what is happening right now.
 
@@ -366,7 +444,7 @@ OUTPUT EXACTLY this structure, in this order. Skip any section with zero items.
 Midweek project update:
 
 In progress now:
-- One bullet per active task today.
+- One bullet per active task today. If [ONGOING], phrase as "X continues."
 
 Finishing up this week:
 - Tasks scheduled to wrap before Friday.
@@ -375,7 +453,7 @@ Decisions needed:
 - One bullet per open client decision.
 
 Decisions that could impede progress at current stage:
-- Subset flagged [IMPEDES PROGRESS]. Omit if none.
+- Subset flagged [IMPEDES PROGRESS]. These would block work in the rest of this week. Omit if none.
 
 Tasks susceptible to weather (rain) delays this week:
 - Weather-sensitive items remaining this week. Omit if none.`,
@@ -402,12 +480,17 @@ FORMATTING:
 DATA TAGS:
 The data block uses bracket tags to flag attributes. Use these to choose what to surface AND to phrase the bullet correctly.
 - [ONGOING] → task is In Progress and started before this week. Phrase the bullet as a continuation: "X continues", "X carries over from last week", "Crews continue X." Do NOT phrase it as if it's just starting.
+- [TARGETED] → task is in an Estimated Time Frame (a target window we want to hit, not yet booked with subs). Phrase as an aim, not a commitment: "We're aiming to start X this week", "X is targeted for this week pending sub confirmation", "Targeting X to begin midweek." Never write "X is scheduled for this week" — it isn't yet.
 - [WEATHER-SENSITIVE] → include in the weather section if the type instructions has one.
 - [IMPEDES PROGRESS] → include in the "Decisions that could impede progress" section.
 - [LONG LEAD] → consider this as urgent for the impedes-progress section, even if no other flag is set.
 - [CLIENT DECISION (checkbox)] → Cole has explicitly tagged this as awaiting client input. Treat as definitive — always include in Decisions needed.
+- [WEATHER-SENSITIVE (checkbox)] → Cole has explicitly tagged this as weather-sensitive. Include in the weather section regardless of trade.
 - [Trade: X] → use only when relevant for context; do not list trades just to fill space.
-- "Done when:" / "Note:" lines under a task are PM context — useful for understanding the task but do NOT quote them verbatim. The "Note:" line in particular is the client-facing note Cole has written and is safe to paraphrase.
+
+USING "DONE WHEN:" AND "NOTE:" LINES
+- The "Done when:" line under a task is the internal acceptance criteria for what counts as complete. For the focal active or in-progress tasks of the week — typically 1 to 3 bullets that represent the headline work — you may paraphrase this into the bullet to set client expectations. Example: instead of "Plumbing rough-in continues," write "Plumbing rough-in continues — testing supply lines and DWV before walls close." Keep it to one phrase. Do NOT do this for every bullet (it bloats the update). Do NOT quote verbatim. Do NOT add it to decision items, weather items, or upcoming items — only to the focal active work.
+- The "Note:" line is the client-facing note Cole has written and is safe to paraphrase. If a "Note:" exists for a task you're including, prefer using that phrasing over inventing your own.
 
 ${typeInstructions[type] || typeInstructions.monday}`;
 
