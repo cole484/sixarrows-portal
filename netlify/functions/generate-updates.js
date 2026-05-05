@@ -309,10 +309,17 @@ function fmtDateLong(d) {
 }
 
 function buildContext(client, tasks, schema, type) {
-  const completed     = tasks.filter(t => t.status === 'Completed');
-  const active        = tasks.filter(t => t.status === 'In Progress');
-  const scheduledRaw  = tasks.filter(t => SCHEDULED_STATUSES.has(t.status));
-  const milestones    = tasks.filter(t => t.isMilestone);
+  // Universal filter: a task without a Start date is not on the schedule
+  // and has no place in a client-facing weekly update. Backlog / undated
+  // tasks stay in Notion until Cole gives them a date. This applies to
+  // every section — active work, scheduled, completed, decisions,
+  // upcoming, weather, milestones — across the whole context.
+  const datedTasks = tasks.filter(t => t.startDate);
+
+  const completed     = datedTasks.filter(t => t.status === 'Completed');
+  const active        = datedTasks.filter(t => t.status === 'In Progress');
+  const scheduledRaw  = datedTasks.filter(t => SCHEDULED_STATUSES.has(t.status));
+  const milestones    = datedTasks.filter(t => t.isMilestone);
   const nextMilestone = milestones.find(m => m.status !== 'Completed');
   const totalTasks    = tasks.length;
   const donePct       = totalTasks > 0 ? Math.round(completed.length / totalTasks * 100) : 0;
@@ -322,10 +329,6 @@ function buildContext(client, tasks, schema, type) {
   const completedWindow = updateCompletedWindow(type); // null for midweek (skip section)
 
   // Recent completions, scoped to the right window for this update type.
-  // We DO require a Start date — without one, we can't tell when the task
-  // was actually completed, so a long-ago completion (Builders Risk Policy
-  // bound months ago) would otherwise leak into "last week" forever. If
-  // Cole wants such a task to show, he can add a Start date in Notion.
   const recent = completedWindow
     ? completed.filter(t => dateInWindow(t.startDate, completedWindow))
     : [];
@@ -333,7 +336,9 @@ function buildContext(client, tasks, schema, type) {
   // Decisions resolved first so we can exclude them from the scheduled
   // bucket below — otherwise the same item would appear in two sections
   // of the data context and the AI would have to guess which one wins.
-  const decisions         = tasks.filter(looksLikeDecision);
+  // Pulls from the dated-tasks list so a decision without a Start date
+  // (i.e. a wishlist / backlog item) doesn't surface in the update.
+  const decisions         = datedTasks.filter(looksLikeDecision);
   const decisionsImpeding = decisions.filter(d => decisionImpedesProgress(d, forwardWindow));
   const decisionIds       = new Set(decisions.map(d => d.name));
 
