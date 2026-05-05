@@ -292,7 +292,20 @@ function isRecentlyCompleted(task) {
 
 function fmtDate(d) {
   if (!d) return '';
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Include the weekday alongside the date so the AI never has to derive
+  // day-of-week from a bare date string. LLMs are unreliable at that
+  // arithmetic — they often slip a day, mapping Monday May 4 → Sunday.
+  // Format: "Mon, May 4"
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+  });
+}
+
+function fmtDateLong(d) {
+  if (!d) return '';
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
 }
 
 function buildContext(client, tasks, schema, type) {
@@ -308,9 +321,13 @@ function buildContext(client, tasks, schema, type) {
   const forwardWindow   = updateForwardWindow(type);   // when current decisions impede progress
   const completedWindow = updateCompletedWindow(type); // null for midweek (skip section)
 
-  // Recent completions, scoped to the right window for this update type
+  // Recent completions, scoped to the right window for this update type.
+  // We DO require a Start date — without one, we can't tell when the task
+  // was actually completed, so a long-ago completion (Builders Risk Policy
+  // bound months ago) would otherwise leak into "last week" forever. If
+  // Cole wants such a task to show, he can add a Start date in Notion.
   const recent = completedWindow
-    ? completed.filter(t => dateInWindow(t.startDate, completedWindow) || !t.startDate)
+    ? completed.filter(t => dateInWindow(t.startDate, completedWindow))
     : [];
 
   // Decisions resolved first so we can exclude them from the scheduled
@@ -376,6 +393,7 @@ function buildContext(client, tasks, schema, type) {
                             : 'this week';
 
   return `
+TODAY: ${fmtDateLong(new Date().toISOString().slice(0, 10))}
 CLIENT: ${client.client_name}
 PROJECT: ${client.project_name || 'Custom Home Build'}
 PROJECT MANAGER: ${client.pm_name || client.cx_name || 'Cole'}
@@ -488,6 +506,14 @@ FORMATTING:
 - No corporate jargon ("leverage", "synergy", "touch base", "circle back").
 - Use the EXACT section headers shown in the type instructions, including the colon and capitalization.
 - Skip any section heading entirely if it has zero items. Do not write "None" or leave an empty bullet.
+
+DATES AND TENSE:
+- The data block tells you TODAY's date and weekday at the top. Compare every task date to TODAY to decide tense.
+- Dates in the data are formatted as "Mon, May 4" — the weekday is given to you. Trust it. Do NOT compute day-of-week yourself; LLMs slip on that arithmetic.
+- For dates AT OR BEFORE today: use past tense ("rock delivered Sunday", "pour completed Tuesday").
+- For dates AFTER today: use forward-leaning verbs ("rock delivers Wednesday", "pour scheduled for Tuesday", "siding installation begins Wednesday"). Never write "delivered Wednesday" if Wednesday is in the future.
+- When referencing a specific day, include both the weekday AND the month/day if the date is more than a couple days away. "Sunday May 11" reads unambiguously regardless of when the client opens the email. "Sunday" alone gets confusing by mid-week.
+- For dates within the next two days, the weekday alone is fine ("starting Tuesday", "finishing Wednesday").
 
 DATA TAGS:
 The data block uses bracket tags to flag attributes. Use these to choose what to surface AND to phrase the bullet correctly.
