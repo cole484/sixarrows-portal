@@ -246,6 +246,46 @@ async function fetchMetadata(canonicalUrl) {
   return { title, image, price, priceCurrency, retailer };
 }
 
+// Extract a clean human-readable product name from a retailer URL slug.
+// Lowe's, Home Depot, Wayfair etc. all bake the product name into the
+// URL path, so we can recover a usable search query even when the page
+// itself blocks our scraper.
+//
+//   /pd/Project-Source-Pro-Flush-White-Toilet/5006032715
+//      → "Project Source Pro Flush White Toilet"
+//   /p/Delta-Classic-500-Tile-Bathtub-Kit/338165855
+//      → "Delta Classic 500 Tile Bathtub Kit"
+function extractQueryFromUrl(url) {
+  try {
+    const u = new URL(url);
+    // Pick the longest hyphenated path segment — that's almost always
+    // the product slug, not the category or numeric ID
+    const segs = u.pathname.split('/').filter(Boolean);
+    let best = '';
+    for (const s of segs) {
+      // Skip pure numbers (item IDs, SKUs) and very short bits
+      if (/^\d+$/.test(s)) continue;
+      if (s.length < 8) continue;
+      // Slug-like has multiple hyphens or underscores
+      if (!/[-_]/.test(s)) continue;
+      if (s.length > best.length) best = s;
+    }
+    if (!best) return '';
+    // Convert to space-separated, strip extension-y noise
+    return best
+      .replace(/\.html?$/i, '')
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  } catch { return ''; }
+}
+
+function buildErrorString(errs) {
+  if (!errs.length) return '';
+  // Most informative line is usually the last attempted fallback's reason
+  return errs.map(e => `${e.step}: ${e.msg}`).join(' · ').slice(0, 220);
+}
+
 // ── Wayback Machine fallback ────────────────────────────────────────────
 // Internet Archive saves snapshots of nearly every product page from
 // every major retailer. When the live page returns 4xx or no metadata,
@@ -460,17 +500,19 @@ async function getOrFetch(rawUrl, forceFresh) {
     }
   }
 
-  // Fetch fresh: try direct first, then fall back to Microlink for big-box
-  // retailers that block server fetches or JS-render their metadata.
+  // Fetch fresh: cascade through direct → Microlink → Wayback → Brave (via slug).
+  // Track each step's failure separately so the final error message can
+  // surface the most informative reason without runaway concatenation.
   let meta = null;
-  let directErr = '';
+  const errs = [];
   try {
     meta = await fetchMetadata(url);
   } catch (e) {
-    directErr = (e && e.message) ? e.message : 'direct fetch failed';
+    errs.push({ step: 'direct',  msg: (e && e.message) ? e.message.slice(0, 120) : 'failed' });
   }
 
-  // Retry via Microlink when direct failed OR returned no usable image
+  // Microlink fallback — handles antibot retailers ON PAID PRO TIER.
+  // On free tier most big-box retailers still fail with "EPROXYNEEDED".
   if (!meta || !meta.image) {
     try {
       const ml = await microlinkFetch(url);
@@ -485,13 +527,14 @@ async function getOrFetch(rawUrl, forceFresh) {
         };
       }
     } catch (e) {
-      if (!meta) directErr = `${directErr || 'no direct metadata'}; microlink: ${e.message || 'failed'}`;
+      if (!meta) errs.push({ step: 'microlink', msg: (e && e.message) ? e.message.slice(0, 120) : 'failed' });
     }
   }
 
-  // Wayback fallback — for blocked/dead retailer URLs (Lowe's antibot,
-  // pages that 404'd, etc.). Always free, no API key, often has cached
-  // snapshots from when the link still worked.
+  // Wayback fallback. Honest caveat: most big-box retailers (Lowe's,
+  // Home Depot, etc.) block the Wayback crawler via robots.txt so no
+  // snapshots exist of their product pages. This layer mainly catches
+  // smaller retailers and pages that 404'd after the URL was saved.
   if (!meta || !meta.image) {
     try {
       const wb = await waybackFetch(url);
@@ -506,10 +549,39 @@ async function getOrFetch(rawUrl, forceFresh) {
         };
       }
     } catch (e) {
-      if (!meta) directErr = `${directErr || 'no direct metadata'}; wayback: ${e.message || 'failed'}`;
+      if (!meta) errs.push({ step: 'wayback', msg: (e && e.message) ? e.message.slice(0, 120) : 'failed' });
     }
   }
 
+  // Final fallback: pull the product description out of the URL slug
+  // and search Brave for it. This is what actually rescues Lowe's,
+  // Home Depot, etc. — their URL slugs contain the human-readable
+  // product name, and the same product is indexed across many other
+  // sites that Brave can return images from. Requires BRAVE_SEARCH_API_KEY.
+  if ((!meta || !meta.image) && BR_KEY()) {
+    try {
+      const slugQuery = extractQueryFromUrl(url);
+      if (slugQuery) {
+        let polished = slugQuery;
+        try { polished = await polishQueryWithClaude(slugQuery, ''); } catch {}
+        const br = await braveImageSearch(polished);
+        if (br.image) {
+          const directPrice = (meta && meta.price !== undefined) ? meta.price : null;
+          meta = {
+            title:         br.title    || (meta && meta.title) || slugQuery,
+            image:         br.image,
+            price:         (meta && meta.price) ?? directPrice,
+            priceCurrency: (meta && meta.priceCurrency) || '',
+            retailer:      `${retailer} (via search)`,
+          };
+        }
+      }
+    } catch (e) {
+      if (!meta) errs.push({ step: 'brave-slug', msg: (e && e.message) ? e.message.slice(0, 120) : 'failed' });
+    }
+  }
+
+  const errorStr = buildErrorString(errs);
   const result = meta ? {
     url_hash:       urlHash,
     url,
@@ -518,7 +590,7 @@ async function getOrFetch(rawUrl, forceFresh) {
     image:          meta.image    || '',
     price:          meta.price ?? null,
     price_currency: meta.priceCurrency || '',
-    error:          (!meta.image && !meta.title) ? (directErr || 'no metadata') : '',
+    error:          (!meta.image && !meta.title) ? (errorStr || 'no metadata') : '',
     fetched_at:     new Date().toISOString(),
   } : {
     url_hash:       urlHash,
@@ -528,7 +600,7 @@ async function getOrFetch(rawUrl, forceFresh) {
     image:          '',
     price:          null,
     price_currency: '',
-    error:          directErr.slice(0, 240) || 'fetch failed',
+    error:          errorStr || 'fetch failed',
     fetched_at:     new Date().toISOString(),
   };
 
