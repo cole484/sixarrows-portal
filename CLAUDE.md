@@ -129,10 +129,13 @@ Optional, for product-meta image fetching cascade:
   Without it, Microlink uses ~50/day shared anonymous tier, which doesn't
   bypass antibot (so Lowe's, Home Depot etc. still fail). Free tier signup
   works for friendly sites.
-- `BRAVE_SEARCH_API_KEY` — required to enable image-search fallback for
-  plain-text products with no URL. Free tier: 2000 queries/month. Sign
-  up at brave.com/search/api. Without this set, plain-text products
-  always render as placeholders (no fallback).
+- `BRAVE_SEARCH_API_KEY` — required to enable image-search fallback
+  for plain-text products with no URL. Brave's "free tier" is actually
+  a $5/month free credit on their Search plan ($5 per 1k requests), so
+  effectively ~1,000 free requests/month. Signup requires a credit
+  card (anti-fraud measure — not charged unless you exceed credits).
+  Sign up at brave.com/search/api. Without this set, plain-text
+  products always render as placeholders (no fallback).
 
 ## Recent / in-flight work (May 2026)
 
