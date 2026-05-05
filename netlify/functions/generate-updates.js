@@ -175,11 +175,15 @@ function looksWeatherSensitive(task) {
 function looksLikeDecision(task) {
   // Already done — not a decision
   if (task.status === 'Completed') return false;
-  // Active work — not a decision (someone is doing it)
-  if (task.status === 'In Progress') return false;
-  // Explicit Notion checkbox is the most reliable signal — wins over
-  // everything else. Cole tags any task he wants on the decisions list.
+  // Explicit Notion checkbox always wins — even if Status is In Progress.
+  // The In-Progress part may reflect PM-side ordering work that has begun,
+  // while the Client Decision checkbox flags that the actual client
+  // selection / approval is still gating. Cole's intent: if I checked
+  // the box, it stays a decision.
   if (task.clientDecision) return true;
+  // Active work without the explicit decision flag is not a decision —
+  // someone is doing the work, no client input is gating it.
+  if (task.status === 'In Progress') return false;
   // Status flag (new-schema only) — definite decision
   if (task.status === 'Waiting on Client') return true;
   // LAST resort: name heuristic — only when Cole hasn't started using the
@@ -252,14 +256,22 @@ function dateInWindow(dateStr, win) {
   return d >= win.start && d < win.end;
 }
 
-// "Could impede progress" = a client decision that's upstream of work
-// happening within this update's time window. Long-lead items are always
-// flagged regardless of date, since selecting late on a long-lead item
-// delays the whole build no matter what.
+// "Could impede progress" = a client decision that's overdue OR running
+// through OR starting within this update's time window. Anything whose
+// Start date is at or before the END of the forward window qualifies —
+// that catches overdue decisions (Start way in the past), currently
+// active decisions, and decisions slated to start this window.
+//
+// Long-lead items are always flagged regardless of date — selecting late
+// on a long-lead item delays the whole build no matter what.
+//
+// Decisions with no Start date have no signal here. Cole can flag urgency
+// either by setting a Start date or by checking the Long lead box.
 function decisionImpedesProgress(task, forwardWindow) {
   if (task.longLead) return true;
   if (!task.startDate) return false;
-  return dateInWindow(task.startDate, forwardWindow);
+  const start = new Date(task.startDate + 'T00:00:00');
+  return start < forwardWindow.end;
 }
 
 function isThisWeek(dateStr) {
