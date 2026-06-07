@@ -147,6 +147,19 @@ export const handler = async (event) => {
       }
     }
 
+    // ── 3b. Fetch the linked Project for its title ────────────────────────
+    const projectRel = prop(task, 'Project') || [];
+    let projectName = null;
+    if (projectRel.length) {
+      try {
+        const projectPage = await notionGet(`/pages/${projectRel[0]}`, token);
+        projectName = prop(projectPage, 'Name')
+                   || prop(projectPage, 'Project Name')
+                   || prop(projectPage, 'Title')
+                   || null;
+      } catch (e) { /* project not accessible — leave null */ }
+    }
+
     // ── 4. Merge: task overrides win, template values as fallback ─────────
     const merged = {
       trade,
@@ -160,6 +173,7 @@ export const handler = async (event) => {
       longLead:               firstNonEmpty(prop(task, 'Long lead'),        template && prop(template, 'Default Long Lead'), false),
       leadTimeDays:           firstNonEmpty(prop(task, 'Lead time (days)'), template && prop(template, 'Default Lead Time (days)')),
       plansNeeded:            firstNonEmpty(prop(task, 'Plans or Blueprints Needed?'), template && prop(template, 'Plans/Blueprints Required'), false),
+      contractValue:          prop(task, 'Contract Value'),
     };
 
     // ── 5. Schedule info from the task ────────────────────────────────────
@@ -173,8 +187,18 @@ export const handler = async (event) => {
       clientDecisionPending: prop(task, 'Client Decision'),
     };
 
+    // Compute end date from start + duration (Notion stores only start).
+    if (schedule.startDate && schedule.duration && schedule.duration > 0) {
+      const d = new Date(schedule.startDate + 'T00:00:00');
+      d.setDate(d.getDate() + Math.max(0, parseInt(schedule.duration, 10) - 1));
+      schedule.endDate = d.toISOString().slice(0, 10);
+    } else {
+      schedule.endDate = schedule.startDate;
+    }
+
     // ── 6. Project info from rollups on the task ──────────────────────────
     const project = {
+      name:       projectName,
       address:    prop(task, 'Project Address (rollup)') || prop(task, 'Project Address'),
       pmName:     prop(task, 'Project Manager (rollup)') || prop(task, 'Project Manager'),
       pmEmail:    prop(task, 'PM Email (rollup)')        || prop(task, 'PM Email'),
@@ -194,6 +218,7 @@ export const handler = async (event) => {
     if (!sub)             warnings.push('No subcontractor assigned yet.');
     if (bothSubFieldsUsed) warnings.push('Both "Subcontractor" and "Sub Contractor" relations are populated — used "Subcontractor". Clean up the duplicate column in Notion.');
     if (!project.address) warnings.push('No site address — link this task to a Project in Notion so the address/PM rollups populate. A work order without an address can\'t be sent.');
+    if (!merged.contractValue) warnings.push('No Contract Value set — add a "Contract Value" (number) column to the timeline DB and set it before sending to the sub.');
     if (merged.plansNeeded && !prop(task, 'Files & media')?.length) {
       warnings.push('Plans/Blueprints flagged as required but no Files & media attached to the task.');
     }
