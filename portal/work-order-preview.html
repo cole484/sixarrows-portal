@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Work Order — Six Arrows</title>
+<link rel="stylesheet" href="style.css"/>
+<style>
+  body { background:var(--cream-pale); padding:2rem 1rem; }
+  .wo-page {
+    max-width: 820px; margin: 0 auto;
+    background: var(--white);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-xl);
+    box-shadow: var(--sh-md);
+    padding: 2.5rem 2.75rem;
+  }
+  .wo-header {
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding-bottom: 1.25rem;
+    border-bottom: 2px solid var(--charcoal);
+    margin-bottom: 1.75rem;
+  }
+  .wo-brand {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .18em; color: var(--green);
+  }
+  .wo-title {
+    font-size: 28px; font-weight: 700;
+    letter-spacing: -.02em; color: var(--charcoal);
+    margin-top: 4px; line-height: 1.1;
+  }
+  .wo-meta {
+    text-align: right; font-size: 11px;
+    color: var(--charcoal-3); line-height: 1.6;
+  }
+  .wo-meta strong { color: var(--charcoal); font-weight: 600; }
+
+  .wo-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1.25rem 2rem; margin-bottom: 1.75rem;
+  }
+  .wo-block {
+    background: var(--cream-pale);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-md);
+    padding: .875rem 1rem;
+  }
+  .wo-block.full { grid-column: 1 / -1; }
+  .wo-label {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .14em; color: var(--green-dk);
+    margin-bottom: 6px;
+  }
+  .wo-value {
+    font-size: 14px; color: var(--charcoal);
+    line-height: 1.5; word-break: break-word;
+  }
+  .wo-value.big { font-size: 18px; font-weight: 600; }
+  .wo-value .muted { color: var(--charcoal-4); font-style: italic; }
+  .wo-value pre {
+    font-family: inherit; white-space: pre-wrap;
+    margin: 0; font-size: 14px;
+  }
+
+  .wo-section {
+    margin-bottom: 1.5rem;
+  }
+  .wo-section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .16em; color: var(--green);
+    margin-bottom: .625rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  .wo-section-body {
+    font-size: 14px; line-height: 1.6; color: var(--charcoal);
+    white-space: pre-wrap;
+  }
+
+  .wo-warnings {
+    background: var(--warning-lt);
+    border: 1px solid #f0c878;
+    border-radius: var(--r-md);
+    padding: .875rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .wo-warnings-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .14em; color: var(--warning); margin-bottom: .375rem;
+  }
+  .wo-warnings ul { list-style: none; padding: 0; margin: 0; }
+  .wo-warnings li {
+    font-size: 13px; color: var(--charcoal);
+    padding: 3px 0 3px 14px; position: relative;
+  }
+  .wo-warnings li::before {
+    content: '⚠'; position: absolute; left: 0; color: var(--warning);
+  }
+
+  .wo-pill {
+    display: inline-block; padding: 2px 8px;
+    background: var(--green-lt); color: var(--green-deep);
+    border-radius: 12px; font-size: 11px; font-weight: 600;
+    margin-right: 4px;
+  }
+
+  .wo-footer {
+    margin-top: 2rem; padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--charcoal-3);
+    text-align: center;
+  }
+
+  .wo-loading, .wo-error {
+    text-align: center; padding: 3rem 1rem;
+    color: var(--charcoal-3);
+  }
+  .wo-error {
+    background: var(--danger-lt); color: var(--danger);
+    border-radius: var(--r-md);
+    border: 1px solid #f0b4b4;
+  }
+
+  @media print {
+    body { background: white; padding: 0; }
+    .wo-page { box-shadow: none; border: none; padding: 1rem; max-width: 100%; }
+    .wo-no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="root" class="wo-loading">Loading work order…</div>
+
+<script>
+const root = document.getElementById('root');
+
+const params = new URLSearchParams(window.location.search);
+const taskId = params.get('taskId');
+
+if (!taskId) {
+  root.className = 'wo-error';
+  root.textContent = 'Missing taskId in URL. Append ?taskId=<notion-page-id>.';
+} else {
+  fetch(`/.netlify/functions/notion-work-order?taskId=${encodeURIComponent(taskId)}`)
+    .then(r => r.json())
+    .then(render)
+    .catch(err => {
+      root.className = 'wo-error';
+      root.textContent = 'Fetch failed: ' + err.message;
+    });
+}
+
+function esc(s) {
+  if (s === null || s === undefined || s === '') return null;
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function val(s) {
+  const e = esc(s);
+  return e === null ? '<span class="muted">— not set —</span>' : e;
+}
+
+function valPre(s) {
+  const e = esc(s);
+  return e === null ? '<span class="muted">— not set —</span>' : `<pre>${e}</pre>`;
+}
+
+function fmtDate(d) {
+  if (!d) return null;
+  try {
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US',
+      { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
+  } catch (e) { return d; }
+}
+
+function render(data) {
+  if (data.error) {
+    root.className = 'wo-error';
+    root.innerHTML = `<strong>Error:</strong> ${esc(data.error)}`;
+    return;
+  }
+
+  const { workOrder, schedule, project, sub, notes, warnings } = data;
+
+  const warningsHtml = (warnings && warnings.length) ? `
+    <div class="wo-warnings">
+      <div class="wo-warnings-title">Heads up</div>
+      <ul>${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>
+    </div>
+  ` : '';
+
+  const subBlock = sub && !sub.error ? `
+    <div class="wo-value big">${val(sub.name)}</div>
+    <div class="wo-value" style="margin-top:6px;">
+      ${val(sub.contactName)}<br>
+      ${sub.phone ? esc(sub.phone) : '<span class="muted">no phone</span>'}
+      &nbsp;·&nbsp;
+      ${sub.email ? esc(sub.email) : '<span class="muted">no email</span>'}
+    </div>
+    <div style="margin-top:8px;">
+      ${sub.status ? `<span class="wo-pill">${esc(sub.status)}</span>` : ''}
+      ${sub.rating ? `<span class="wo-pill">${esc(sub.rating)}</span>` : ''}
+      ${sub.w9OnFile ? '<span class="wo-pill">W9 ✓</span>' : '<span class="wo-pill" style="background:#fdf0f0;color:#b83232;">W9 missing</span>'}
+      ${sub.insuranceOnFile ? '<span class="wo-pill">Insurance ✓</span>' : '<span class="wo-pill" style="background:#fdf0f0;color:#b83232;">Insurance missing</span>'}
+    </div>
+  ` : sub && sub.error ? `<span class="muted">Sub lookup failed: ${esc(sub.error)}</span>`
+    : `<span class="muted">— no subcontractor assigned —</span>`;
+
+  root.className = '';
+  root.innerHTML = `
+    <div class="wo-page">
+
+      <div class="wo-header">
+        <div>
+          <div class="wo-brand">Six Arrows Construction</div>
+          <div class="wo-title">Work Order — ${val(workOrder.trade)}</div>
+        </div>
+        <div class="wo-meta">
+          <strong>Task:</strong> ${val(workOrder.taskName)}<br>
+          <strong>Status:</strong> ${val(schedule.status)}<br>
+          <strong>Issued:</strong> ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        </div>
+      </div>
+
+      ${warningsHtml}
+
+      <div class="wo-grid">
+
+        <div class="wo-block">
+          <div class="wo-label">Project Address</div>
+          <div class="wo-value big">${val(project.address)}</div>
+        </div>
+
+        <div class="wo-block">
+          <div class="wo-label">Project Manager</div>
+          <div class="wo-value">
+            ${val(project.pmName)}<br>
+            ${project.pmPhone ? esc(project.pmPhone) : '<span class="muted">no phone</span>'}
+            &nbsp;·&nbsp;
+            ${project.pmEmail ? esc(project.pmEmail) : '<span class="muted">no email</span>'}
+          </div>
+        </div>
+
+        <div class="wo-block full">
+          <div class="wo-label">Subcontractor</div>
+          ${subBlock}
+        </div>
+
+        <div class="wo-block">
+          <div class="wo-label">Start Date</div>
+          <div class="wo-value big">${val(fmtDate(schedule.startDate))}</div>
+        </div>
+
+        <div class="wo-block">
+          <div class="wo-label">Duration / Lead Time</div>
+          <div class="wo-value">
+            ${schedule.duration ? esc(schedule.duration) + ' days work' : '<span class="muted">duration not set</span>'}
+            ${workOrder.leadTimeDays ? '<br>' + esc(workOrder.leadTimeDays) + ' day lead time' : ''}
+            ${workOrder.longLead ? '<br><span class="wo-pill" style="background:#fef8ec;color:#956200;">Long Lead</span>' : ''}
+          </div>
+        </div>
+
+        <div class="wo-block">
+          <div class="wo-label">Phase</div>
+          <div class="wo-value">${val(schedule.phase)}</div>
+        </div>
+
+        <div class="wo-block">
+          <div class="wo-label">Workstream</div>
+          <div class="wo-value">${val(schedule.workstream)}</div>
+        </div>
+
+      </div>
+
+      <div class="wo-section">
+        <div class="wo-section-title">Scope of Work</div>
+        <div class="wo-section-body">${val(workOrder.scope)}</div>
+      </div>
+
+      <div class="wo-section">
+        <div class="wo-section-title">Completion Standard</div>
+        <div class="wo-section-body">${val(workOrder.completionStandard)}</div>
+      </div>
+
+      ${workOrder.definitionOfDone && workOrder.definitionOfDone !== workOrder.completionStandard ? `
+        <div class="wo-section">
+          <div class="wo-section-title">Definition of Done (this job)</div>
+          <div class="wo-section-body">${val(workOrder.definitionOfDone)}</div>
+        </div>
+      ` : ''}
+
+      <div class="wo-section">
+        <div class="wo-section-title">Pre-Scheduling Requirements</div>
+        <div class="wo-section-body">${val(workOrder.preSchedulingReqs)}</div>
+      </div>
+
+      ${workOrder.plansNeeded ? `
+        <div class="wo-section">
+          <div class="wo-section-title">Plans / Blueprints Required</div>
+          <div class="wo-section-body">Reference plans must be reviewed before work begins. Plans are attached to the task in Notion.</div>
+        </div>
+      ` : ''}
+
+      ${notes.forClient || notes.internal ? `
+        <div class="wo-section">
+          <div class="wo-section-title">Notes</div>
+          <div class="wo-section-body">${val(notes.forClient || notes.internal)}</div>
+        </div>
+      ` : ''}
+
+      <div class="wo-footer wo-no-print">
+        Generated from Notion task <a href="${esc(workOrder.taskUrl) || '#'}" target="_blank" style="color:var(--green-dk);text-decoration:underline;">${esc(workOrder.taskId)}</a>
+        &nbsp;·&nbsp;
+        <a href="javascript:window.print()" style="color:var(--green-dk);text-decoration:underline;">Print this work order</a>
+      </div>
+
+    </div>
+  `;
+}
+</script>
+
+</body>
+</html>

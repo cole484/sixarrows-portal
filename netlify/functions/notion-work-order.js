@@ -193,6 +193,7 @@ export const handler = async (event) => {
     if (!template)        warnings.push(`No Trade Template found for "${trade}" — using task values only.`);
     if (!sub)             warnings.push('No subcontractor assigned yet.');
     if (bothSubFieldsUsed) warnings.push('Both "Subcontractor" and "Sub Contractor" relations are populated — used "Subcontractor". Clean up the duplicate column in Notion.');
+    if (!project.address) warnings.push('No site address — link this task to a Project in Notion so the address/PM rollups populate. A work order without an address can\'t be sent.');
     if (merged.plansNeeded && !prop(task, 'Files & media')?.length) {
       warnings.push('Plans/Blueprints flagged as required but no Files & media attached to the task.');
     }
