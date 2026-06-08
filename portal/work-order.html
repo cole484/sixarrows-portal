@@ -915,14 +915,33 @@ function escHtml(s) {
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function _hasTaskId() {
+  return !!new URLSearchParams(window.location.search).get('taskId');
+}
+
 function bindText(id, val) {
   const el = document.getElementById(id);
-  if (el && val != null && val !== '') el.textContent = val;
+  if (!el) return;
+  if (val != null && val !== '') {
+    el.textContent = val;
+  } else if (_hasTaskId()) {
+    // In real-data mode: surface missing data as a visible "—" so we don't
+    // silently fall back to the sample's hardcoded text.
+    el.textContent = '—';
+    el.style.color = '#b83232';
+    el.style.fontStyle = 'italic';
+  }
 }
 
 function bindAllByClass(cls, val) {
-  if (val == null || val === '') return;
-  document.querySelectorAll('.' + cls).forEach(el => el.textContent = val);
+  document.querySelectorAll('.' + cls).forEach(el => {
+    if (val != null && val !== '') {
+      el.textContent = val;
+    } else if (_hasTaskId()) {
+      el.textContent = '—';
+      el.style.color = '#b83232';
+    }
+  });
 }
 
 function bindBullets(id, text) {
