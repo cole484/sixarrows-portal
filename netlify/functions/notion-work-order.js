@@ -110,9 +110,26 @@ export const handler = async (event) => {
   const taskId = event.queryStringParameters?.taskId;
   if (!taskId) return { statusCode: 400, headers: corsH, body: JSON.stringify({ error: 'taskId required' }) };
 
+  const debug = event.queryStringParameters?.debug === '1';
+
   try {
     // ── 1. Fetch the timeline task ─────────────────────────────────────────
     const task = await notionGet(`/pages/${taskId}`, token);
+
+    if (debug) {
+      // Dump every property name + type + a tiny preview, so we can see what
+      // Notion is actually returning when fields look missing on the page.
+      const summary = {};
+      for (const [k, v] of Object.entries(task.properties || {})) {
+        let preview = null;
+        try { preview = prop(task, k); } catch (e) { preview = '[parse error: ' + e.message + ']'; }
+        summary[k] = { type: v.type, value: preview };
+      }
+      return {
+        statusCode: 200, headers: corsH,
+        body: JSON.stringify({ debug: true, taskId, properties: summary }, null, 2),
+      };
+    }
 
     const trade = prop(task, 'Trade');
     if (!trade) {
