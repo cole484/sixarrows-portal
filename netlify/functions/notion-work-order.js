@@ -162,6 +162,7 @@ export const handler = async (event) => {
     // ── 3b. Fetch the linked Project for its title ────────────────────────
     const projectRel = prop(task, 'Project') || [];
     let projectName = null;
+    let projectFromPage = {};
     if (projectRel.length) {
       try {
         const projectPage = await notionGet(`/pages/${projectRel[0]}`, token);
@@ -169,6 +170,25 @@ export const handler = async (event) => {
                    || prop(projectPage, 'Project Name')
                    || prop(projectPage, 'Title')
                    || null;
+        // Read project fields directly — bypasses rollup brittleness.
+        // The rollup on the task remains as a fallback below.
+        projectFromPage = {
+          address: prop(projectPage, 'Address')
+                || prop(projectPage, 'Project Address')
+                || prop(projectPage, 'Site Address')
+                || null,
+          pmName:  prop(projectPage, 'Project Manager')
+                || prop(projectPage, 'PM')
+                || prop(projectPage, 'Manager')
+                || null,
+          pmEmail: prop(projectPage, 'PM Email')
+                || prop(projectPage, 'Email')
+                || null,
+          pmPhone: prop(projectPage, 'PM Phone')
+                || prop(projectPage, 'Phone')
+                || prop(projectPage, 'Phone Number')
+                || null,
+        };
       } catch (e) { /* project not accessible — leave null */ }
     }
 
@@ -208,13 +228,14 @@ export const handler = async (event) => {
       schedule.endDate = schedule.startDate;
     }
 
-    // ── 6. Project info from rollups on the task ──────────────────────────
+    // ── 6. Project info — prefer reading the Project page directly,
+    //         fall back to rollups on the task if Project columns aren't set.
     const project = {
       name:       projectName,
-      address:    prop(task, 'Project Address (rollup)') || prop(task, 'Project Address'),
-      pmName:     prop(task, 'Project Manager (rollup)') || prop(task, 'Project Manager'),
-      pmEmail:    prop(task, 'PM Email (rollup)')        || prop(task, 'PM Email'),
-      pmPhone:    prop(task, 'PM Phone (rollup)')        || prop(task, 'PM Phone'),
+      address:    firstNonEmpty(projectFromPage.address, prop(task, 'Project Address (rollup)'), prop(task, 'Project Address')),
+      pmName:     firstNonEmpty(projectFromPage.pmName,  prop(task, 'Project Manager (rollup)'), prop(task, 'Project Manager')),
+      pmEmail:    firstNonEmpty(projectFromPage.pmEmail, prop(task, 'PM Email (rollup)'),        prop(task, 'PM Email')),
+      pmPhone:    firstNonEmpty(projectFromPage.pmPhone, prop(task, 'PM Phone (rollup)'),        prop(task, 'PM Phone')),
     };
 
     // ── 7. Notes & files ──────────────────────────────────────────────────
