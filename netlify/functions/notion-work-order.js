@@ -268,10 +268,16 @@ export const handler = async (event) => {
     if (!sub)             warnings.push('No subcontractor assigned yet.');
     if (bothSubFieldsUsed) warnings.push('Both "Subcontractor" and "Sub Contractor" relations are populated — used "Subcontractor". Clean up the duplicate column in Notion.');
     if (!project.address) {
-      if (!projectRel.length) {
-        warnings.push('No Project relation set on this task — link it to a project record in the Projects DB so the address/PM rollups can populate.');
+      if (!projectRel.length && !projectName) {
+        // Both empty — could be no relation set, OR Projects DB not shared
+        // with the integration (Notion redacts both silently in that case).
+        warnings.push(
+          'Project info is empty. Two possible causes: (a) no Project relation is set on this task, or (b) the Projects DB is not shared with the "Six Arrows Portal" integration (Notion silently returns empty for relations/rollups whose target DB the integration can\'t see). Check both.'
+        );
       } else {
-        warnings.push(`Project Address rollup is empty. The Project relation is set (id: ${projectRel[0].slice(0,8)}…) but the linked project record may have its Address field blank. Open the project page in Notion and fill in Address + PM Name / Email / Phone.`);
+        warnings.push(
+          `Project relation is set (id: ${projectRel[0]?.slice(0,8) || '?'}…) but Address came back empty. Fill in the Address field on the linked Project record in Notion, OR confirm the Projects DB is shared with the "Six Arrows Portal" integration.`
+        );
       }
     }
     if (!merged.contractValue) warnings.push('No Contract Value set on this task — fill it in on the timeline row before sending to the sub.');
