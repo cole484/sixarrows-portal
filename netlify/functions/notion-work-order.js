@@ -58,14 +58,26 @@ function prop(page, name) {
     case 'phone_number': return p.phone_number || null;
     case 'url':          return p.url || null;
     case 'relation':     return p.relation?.map(r => r.id) || [];
+    case 'people':       return p.people?.map(u => u.name || u.id).filter(Boolean).join(', ') || null;
+    case 'files':        return p.files?.map(f => f.file?.url || f.external?.url).filter(Boolean) || [];
     case 'rollup': {
       const r = p.rollup;
       if (!r) return null;
+      // Aggregated rollups (sum, count, etc) return a scalar.
+      if (r.type === 'number')  return r.number ?? null;
+      if (r.type === 'date')    return r.date?.start ?? null;
+      if (r.type === 'string')  return r.string || null;
+      if (r.type === 'boolean') return r.boolean ?? null;
       if (r.type === 'array') {
-        // "Show original" rollups: each entry is itself a property object.
-        const first = r.array?.[0];
-        if (!first) return null;
-        return prop({ properties: { _: first } }, '_');
+        // show_original / show_unique: each entry is a property object.
+        // Walk all of them, extract values, dedupe, join.
+        const vals = (r.array || [])
+          .map(entry => prop({ properties: { _: entry } }, '_'))
+          .flatMap(v => Array.isArray(v) ? v : [v])
+          .filter(v => v != null && v !== '');
+        if (!vals.length) return null;
+        const unique = [...new Set(vals.map(String))];
+        return unique.length === 1 ? unique[0] : unique.join(', ');
       }
       return r[r.type] ?? null;
     }
@@ -217,8 +229,15 @@ export const handler = async (event) => {
     if (!template)        warnings.push(`No Trade Template found for "${trade}" — using task values only.`);
     if (!sub)             warnings.push('No subcontractor assigned yet.');
     if (bothSubFieldsUsed) warnings.push('Both "Subcontractor" and "Sub Contractor" relations are populated — used "Subcontractor". Clean up the duplicate column in Notion.');
-    if (!project.address) warnings.push('No site address — link this task to a Project in Notion so the address/PM rollups populate. A work order without an address can\'t be sent.');
-    if (!merged.contractValue) warnings.push('No Contract Value set — add a "Contract Value" (number) column to the timeline DB and set it before sending to the sub.');
+    if (!project.address) {
+      if (!projectRel.length) {
+        warnings.push('No Project relation set on this task — link it to a project record in the Projects DB so the address/PM rollups can populate.');
+      } else {
+        warnings.push(`Project Address rollup is empty. The Project relation is set (id: ${projectRel[0].slice(0,8)}…) but the linked project record may have its Address field blank. Open the project page in Notion and fill in Address + PM Name / Email / Phone.`);
+      }
+    }
+    if (!merged.contractValue) warnings.push('No Contract Value set on this task — fill it in on the timeline row before sending to the sub.');
+    if (!schedule.duration) warnings.push('No Duration (days) set — the requested window can\'t be calculated. Set Duration on the timeline row.');
     if (merged.plansNeeded && !prop(task, 'Files & media')?.length) {
       warnings.push('Plans/Blueprints flagged as required but no Files & media attached to the task.');
     }

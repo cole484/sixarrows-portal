@@ -953,7 +953,14 @@ function bindBullets(id, text) {
     .map(s => s.replace(/^[-*\u2022\u2023\s]+/, '').trim())
     .filter(Boolean);
   if (!items.length) return;
-  el.innerHTML = items.map(it => '<li>' + escHtml(it) + '</li>').join('');
+  if (items.length === 1) {
+    // Single paragraph \u2014 render as prose, not a forced one-item bullet list.
+    el.style.listStyle = 'none';
+    el.style.paddingLeft = '0';
+    el.innerHTML = '<li style="display:block;">' + escHtml(items[0]) + '</li>';
+  } else {
+    el.innerHTML = items.map(it => '<li>' + escHtml(it) + '</li>').join('');
+  }
 }
 
 function fmtDateLong(dStr) {
