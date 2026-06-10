@@ -98,6 +98,9 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
 .scope-list li{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--dark);line-height:1.5;}
 .scope-list li::before{content:'';flex-shrink:0;width:6px;height:6px;border-radius:50%;background:var(--green);margin-top:7px;}
 .scope-block.standard .scope-list li::before{background:var(--dark-30);}
+.scope-block.expectations{border-left-color:var(--green-deep);}
+.scope-block.expectations .scope-title{color:var(--green-deep);}
+.scope-block.expectations .scope-list li::before{background:var(--green-deep);}
 
 /* ── Trade-specific required docs ── */
 .required-docs{background:var(--amber-lt);border:1px solid #e8d0a0;border-left:3px solid var(--amber);border-radius:6px;padding:14px 16px;margin-bottom:14px;}
@@ -341,8 +344,16 @@ body.no-holdback .cost-grid{grid-template-columns:1fr;}
           <li>Spray foam where beams come through exterior walls</li>
           <li>Batt insulation in all interior wall and ceiling cavities</li>
           <li>No spray foam in the interior of the home</li>
-          <li>Site kept clean daily - all trash, debris, packaging, and waste materials removed from the work area before leaving each day. Tools and staged materials may remain on site but work areas must be left clean.</li>
           <li>Ready to pass insulation inspection before notifying Six Arrows of completion</li>
+        </ul>
+      </div>
+
+      <div class="scope-block expectations">
+        <div class="scope-title">Expectations</div>
+        <ul class="scope-list" id="bind-expectations-list">
+          <li>Site kept clean daily — all trash, debris, packaging, and waste materials removed from the work area before leaving each day. Tools and staged materials may remain on site, but work areas must be left clean.</li>
+          <li>Communicate any blockers, delays, or scope questions to the project manager as soon as you are aware — not after the fact.</li>
+          <li>Adhere to committed start and completion dates; the next trade depends on your window.</li>
         </ul>
       </div>
     </div>
@@ -1071,6 +1082,7 @@ function renderData(data) {
   // ── Scope and Completion bullets ──────────────────────────────────────
   bindBullets('bind-scope-list', workOrder.scope);
   bindBullets('bind-completion-list', workOrder.completionStandard);
+  bindBullets('bind-expectations-list', workOrder.siteStandards);
 
   // ── Contract value ────────────────────────────────────────────────────
   if (workOrder.contractValue != null) {

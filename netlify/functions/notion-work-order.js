@@ -219,18 +219,17 @@ export const handler = async (event) => {
     }
 
     // ── 4. Merge: task overrides win, template values as fallback ─────────
-    // Universal site standards are appended after the trade-specific completion
-    // standard, so the sub reads one continuous list of "what done looks like".
-    const tradeCompletion = template && prop(template, 'Completion Standard');
-    const completionStandard = [tradeCompletion, SITE_STANDARDS].filter(Boolean).join('\n');
-
+    // Completion Standard is trade-specific (from the template). Universal site
+    // expectations (cleanliness, communication, date adherence) are returned as
+    // a separate `siteStandards` field, rendered in its own block on the page.
     const merged = {
       trade,
       taskName:      prop(task, 'Task'),
       taskId:        task.id,
       taskUrl:       task.url,
       scope:                  firstNonEmpty(prop(task, 'Scope of Work'),    template && prop(template, 'Scope')),
-      completionStandard,
+      completionStandard:                                                   template && prop(template, 'Completion Standard'),
+      siteStandards:          SITE_STANDARDS,
       definitionOfDone:       firstNonEmpty(prop(task, 'Definition of done'), template && prop(template, 'Completion Standard')),
       preSchedulingReqs:                                                    template && prop(template, 'Pre-Scheduling Requirements'),
       longLead:               firstNonEmpty(prop(task, 'Long lead'),        template && prop(template, 'Default Long Lead'), false),
