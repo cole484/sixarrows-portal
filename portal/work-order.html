@@ -916,35 +916,144 @@ function updateProgress() {
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
-function submitForm() {
-  const name = document.getElementById('sigName').value.trim();
-  if (!name) return;
+function collectMilestones() {
+  if (currentPaymentType === 'single') {
+    return [{ pct: payoutPctTotal(), milestone: 'On completion and approval' }];
+  }
+  if (currentPaymentType === 'two') {
+    const pct1 = parseFloat(document.getElementById('two-pct1').value) || 0;
+    const pct2 = parseFloat(document.getElementById('two-pct2').value) || 0;
+    return [
+      { pct: pct1, milestone: document.getElementById('two-m1').value.trim() || 'Milestone 1' },
+      { pct: pct2, milestone: 'On completion and approval' },
+    ];
+  }
+  if (currentPaymentType === 'three') {
+    const pct1 = parseFloat(document.getElementById('three-pct1').value) || 0;
+    const pct2 = parseFloat(document.getElementById('three-pct2').value) || 0;
+    const pct3 = parseFloat(document.getElementById('three-pct3').value) || 0;
+    return [
+      { pct: pct1, milestone: document.getElementById('three-m1').value.trim() || 'Deposit milestone' },
+      { pct: pct2, milestone: document.getElementById('three-m2').value.trim() || 'Milestone 2' },
+      { pct: pct3, milestone: 'On completion and approval' },
+    ];
+  }
+  return [];
+}
+
+function showSuccessScreen(payload) {
   const startVal = document.getElementById('displayStart').textContent;
-  const endVal = document.getElementById('displayEnd').textContent;
-  const costVal = document.getElementById('costValue').value;
-  const holdVal = document.getElementById('holdbackAmount').textContent;
-  const wdVal = document.getElementById('workingDays').value;
-  const payType = currentPaymentType === 'single' ? 'Single payment on completion'
-    : currentPaymentType === 'two' ? 'Two-payment schedule'
-    : 'Three-payment schedule';
+  const endVal   = document.getElementById('displayEnd').textContent;
+  const wdVal    = document.getElementById('workingDays').value;
+  const costVal  = document.getElementById('costValue').value;
+  const holdVal  = document.getElementById('holdbackAmount').textContent;
+  const payTypeLabel = payload.paymentType === 'single' ? 'Single payment on completion'
+    : payload.paymentType === 'two' ? 'Two-payment schedule'
+    : payload.paymentType === 'three' ? 'Three-payment schedule'
+    : '';
 
   document.querySelectorAll('.section, .submit-wrap, .progress-bar-wrap, .status-row').forEach(el => {
     el.style.display = 'none';
   });
 
-  document.getElementById('successName').textContent = name;
+  document.getElementById('successName').textContent = payload.signatureName;
   document.getElementById('successStart').textContent = startVal;
+
+  const projLabel = (payload.projectName ? payload.projectName + ' — ' : '') + (payload.trade || '');
   document.getElementById('successSummary').innerHTML = `
-    <strong>Project:</strong> <span id="bind-success-project">Hoops - Insulation</span><br>
-    <strong>Window:</strong> ${startVal} - ${endVal}${wdVal ? ' (' + wdVal + ' days on site)' : ''}<br>
-    <strong>Contract Value:</strong> $${costVal}<br>
-    <strong>Holdback:</strong> ${holdVal}<br>
-    <strong>Payment:</strong> ${payType}<br>
-    <strong>Signed:</strong> ${name}
+    <strong>Project:</strong> ${escHtml(projLabel)}<br>
+    <strong>Window:</strong> ${startVal} – ${endVal}${wdVal ? ' (' + wdVal + ' days on site)' : ''}<br>
+    <strong>Contract Value:</strong> $${escHtml(costVal)}<br>
+    ${window.WO_HOLDBACK_PCT > 0 ? `<strong>Holdback (${window.WO_HOLDBACK_PCT}%):</strong> ${escHtml(holdVal)}<br>` : ''}
+    <strong>Payment:</strong> ${escHtml(payTypeLabel)}<br>
+    <strong>Signed:</strong> ${escHtml(payload.signatureName)}
   `;
 
   document.getElementById('successScreen').classList.add('visible');
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showSubmitError(msg) {
+  let bar = document.getElementById('submitError');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'submitError';
+    bar.style.cssText =
+      'max-width:560px;margin:14px auto 0;padding:12px 16px;background:var(--danger-lt);' +
+      'border:1px solid #f0b4b4;border-left:3px solid var(--danger);border-radius:6px;' +
+      'font-size:13px;color:var(--danger);line-height:1.5;';
+    const wrap = document.querySelector('.submit-wrap');
+    if (wrap) wrap.appendChild(bar);
+  }
+  bar.textContent = 'Submit failed: ' + msg;
+}
+
+async function submitForm() {
+  const name = document.getElementById('sigName').value.trim();
+  if (!name) return;
+
+  const params = new URLSearchParams(window.location.search);
+  const taskId = params.get('taskId');
+
+  const payload = {
+    taskId,
+    committedStart:    document.getElementById('startDate').value,
+    committedEnd:      document.getElementById('endDate').value,
+    workingDays:       parseInt(document.getElementById('workingDays').value, 10) || null,
+    paymentType:       currentPaymentType,
+    paymentMilestones: collectMilestones(),
+    preStartBlockers:  (document.querySelector('.optional-notes')?.value || '').trim(),
+    notes:             (document.querySelector('.notes-input')?.value || '').trim(),
+    signatureName:     name,
+    contractValue:     getCostValue(),
+    holdbackPct:       window.WO_HOLDBACK_PCT || 0,
+    trade:             document.getElementById('bind-trade')?.textContent || null,
+    projectName:       document.getElementById('bind-project-name')?.textContent || null,
+    pmName:            document.getElementById('bind-pm-name')?.textContent || null,
+  };
+
+  // Preview mode (no taskId in URL): skip persistence, just show success.
+  if (!taskId) {
+    showSuccessScreen(payload);
+    return;
+  }
+
+  const btn  = document.getElementById('submitBtn');
+  const hint = document.getElementById('submitHint');
+  const origBtnText = btn.textContent;
+  btn.style.pointerEvents = 'none';
+  btn.style.opacity = '0.6';
+  btn.textContent = 'Submitting…';
+  if (hint) hint.textContent = 'Saving to Notion…';
+  const oldErr = document.getElementById('submitError');
+  if (oldErr) oldErr.remove();
+
+  try {
+    const res = await fetch('/.netlify/functions/submit-work-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      const msg = data.notionError
+        ? `${data.error || 'Notion error'} — ${data.notionError}`
+        : (data.error || `HTTP ${res.status}`);
+      showSubmitError(msg);
+      btn.style.pointerEvents = 'all';
+      btn.style.opacity = '1';
+      btn.textContent = origBtnText;
+      if (hint) hint.textContent = 'All steps complete - ready to submit';
+      return;
+    }
+    showSuccessScreen(payload);
+  } catch (e) {
+    showSubmitError(e.message || 'network error');
+    btn.style.pointerEvents = 'all';
+    btn.style.opacity = '1';
+    btn.textContent = origBtnText;
+    if (hint) hint.textContent = 'All steps complete - ready to submit';
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
