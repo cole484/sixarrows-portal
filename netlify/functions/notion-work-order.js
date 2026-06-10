@@ -226,24 +226,41 @@ export const handler = async (event) => {
     };
 
     // ── 5. Schedule info from the task ────────────────────────────────────
+    // Notion's `date` property type natively supports ranges (start + end).
+    // Read both from the raw property so we can use the range when set.
+    const startProp = task.properties?.['Start']?.date;
+    const rangeStart = startProp?.start || null;
+    const rangeEnd   = startProp?.end   || null;
+
+    let endDate  = rangeEnd;
+    let duration = prop(task, 'Duration (days)');
+
+    // If no end-of-range, derive end from duration. If no duration, derive
+    // duration from range. Either input works; both are fine; neither = warn.
+    if (!endDate && rangeStart && duration && duration > 0) {
+      const d = new Date(rangeStart + 'T00:00:00');
+      d.setDate(d.getDate() + Math.max(0, parseInt(duration, 10) - 1));
+      endDate = d.toISOString().slice(0, 10);
+    } else if (!endDate) {
+      endDate = rangeStart;
+    }
+    if (!duration && rangeStart && endDate) {
+      const s = new Date(rangeStart + 'T00:00:00');
+      const e = new Date(endDate     + 'T00:00:00');
+      const diff = Math.round((e - s) / 86400000) + 1;
+      if (diff > 0) duration = diff;
+    }
+
     const schedule = {
       status:      prop(task, 'Status'),
-      startDate:   prop(task, 'Start'),
-      duration:    prop(task, 'Duration (days)'),
+      startDate:   rangeStart,
+      endDate,
+      duration,
       phase:       prop(task, 'Phase'),
       workstream:  prop(task, 'Workstream'),
       sequence:    prop(task, 'Sequence #'),
       clientDecisionPending: prop(task, 'Client Decision'),
     };
-
-    // Compute end date from start + duration (Notion stores only start).
-    if (schedule.startDate && schedule.duration && schedule.duration > 0) {
-      const d = new Date(schedule.startDate + 'T00:00:00');
-      d.setDate(d.getDate() + Math.max(0, parseInt(schedule.duration, 10) - 1));
-      schedule.endDate = d.toISOString().slice(0, 10);
-    } else {
-      schedule.endDate = schedule.startDate;
-    }
 
     // ── 6. Project info — prefer reading the Project page directly,
     //         fall back to rollups on the task if Project columns aren't set.
@@ -281,7 +298,9 @@ export const handler = async (event) => {
       }
     }
     if (!merged.contractValue) warnings.push('No Contract Value set on this task — fill it in on the timeline row before sending to the sub.');
-    if (!schedule.duration) warnings.push('No Duration (days) set — the requested window can\'t be calculated. Set Duration on the timeline row.');
+    if (!schedule.duration) {
+      warnings.push('Cannot determine the requested window. Either: (a) set the Start field as a date range (start + end) in Notion — easiest, or (b) fill in the Duration (days) field.');
+    }
     if (merged.plansNeeded && !prop(task, 'Files & media')?.length) {
       warnings.push('Plans/Blueprints flagged as required but no Files & media attached to the task.');
     }

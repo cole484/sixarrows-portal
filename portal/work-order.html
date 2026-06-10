@@ -1050,9 +1050,9 @@ function renderData(data) {
     const ed = document.getElementById('endDate');
     if (ed) ed.value = schedule.endDate;
   }
-  if (schedule.duration) {
-    bindText('bind-req-window', schedule.duration + (schedule.duration === 1 ? ' Day' : ' Days'));
-  }
+  bindText('bind-req-window', schedule.duration
+    ? schedule.duration + (schedule.duration === 1 ? ' Day' : ' Days')
+    : null);
 
   // ── Inline references to client and PM ────────────────────────────────
   bindAllByClass('bind-client', clientShortName(project.name));
