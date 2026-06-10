@@ -18,6 +18,15 @@ const NOTION_VERSION = '2022-06-28';
 // rows are discovered from the task being queried.
 const TRADE_TEMPLATES_DB_ID = 'be4cee0b-6334-492b-a2d4-e6eeb2ec5edc';
 
+// Universal site standards appended to every work order's Completion Standard.
+// These apply to all subs on every trade — separate from the trade-specific
+// finish requirements in the Trade Templates DB.
+const SITE_STANDARDS = [
+  'Site kept clean daily — all trash, debris, packaging, and waste materials removed from the work area before leaving each day. Tools and staged materials may remain on site, but work areas must be left clean.',
+  'Communicate any blockers, delays, or scope questions to the project manager as soon as you are aware — not after the fact.',
+  'Adhere to committed start and completion dates; the next trade depends on your window.',
+].join('\n');
+
 function notionHeaders(token) {
   return {
     'Authorization':  `Bearer ${token}`,
@@ -210,19 +219,25 @@ export const handler = async (event) => {
     }
 
     // ── 4. Merge: task overrides win, template values as fallback ─────────
+    // Universal site standards are appended after the trade-specific completion
+    // standard, so the sub reads one continuous list of "what done looks like".
+    const tradeCompletion = template && prop(template, 'Completion Standard');
+    const completionStandard = [tradeCompletion, SITE_STANDARDS].filter(Boolean).join('\n');
+
     const merged = {
       trade,
       taskName:      prop(task, 'Task'),
       taskId:        task.id,
       taskUrl:       task.url,
       scope:                  firstNonEmpty(prop(task, 'Scope of Work'),    template && prop(template, 'Scope')),
-      completionStandard:                                                   template && prop(template, 'Completion Standard'),
+      completionStandard,
       definitionOfDone:       firstNonEmpty(prop(task, 'Definition of done'), template && prop(template, 'Completion Standard')),
       preSchedulingReqs:                                                    template && prop(template, 'Pre-Scheduling Requirements'),
       longLead:               firstNonEmpty(prop(task, 'Long lead'),        template && prop(template, 'Default Long Lead'), false),
       leadTimeDays:           firstNonEmpty(prop(task, 'Lead time (days)'), template && prop(template, 'Default Lead Time (days)')),
       plansNeeded:            firstNonEmpty(prop(task, 'Plans or Blueprints Needed?'), template && prop(template, 'Plans/Blueprints Required'), false),
       contractValue:          prop(task, 'Contract Value'),
+      holdbackPct:            prop(task, 'Holdback %'),
     };
 
     // ── 5. Schedule info from the task ────────────────────────────────────

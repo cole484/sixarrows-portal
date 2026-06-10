@@ -137,6 +137,9 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
 
 /* ── Estimated cost ── */
 .cost-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;margin-bottom:0;}
+body.no-holdback .holdback-col,
+body.no-holdback .terms-item-holdback{display:none;}
+body.no-holdback .cost-grid{grid-template-columns:1fr;}
 .cost-input-wrap{position:relative;}
 .cost-dollar{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-family:'Industry',Arial Black,sans-serif;font-size:16px;color:var(--dark-30);pointer-events:none;}
 .cost-input{width:100%;padding:10px 10px 10px 28px;background:#f0ede6;border:1px solid var(--border);border-radius:6px;font-family:'Industry',Arial Black,sans-serif;font-size:16px;letter-spacing:.02em;color:var(--dark);outline:none;}
@@ -365,13 +368,13 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
           </div>
           <div class="cost-note">Pre-filled from project budget. Contact Cole if this is incorrect.</div>
         </div>
-        <div>
+        <div class="holdback-col">
           <div class="info-label-row" style="margin-bottom:6px;">
             <div class="info-label">Six Arrows Holdback</div>
-            <div class="tooltip-wrap"><span class="tooltip-icon">?</span><div class="tooltip-box">Six Arrows retains 10% of your total contract value until all work on this project is complete and approved. This is standard on all Six Arrows projects and protects the client's interest.</div></div>
+            <div class="tooltip-wrap"><span class="tooltip-icon">?</span><div class="tooltip-box" data-holdback-label="Six Arrows retains {pct}% of your total contract value until all work on this project is complete and approved. This applies to a subset of trades and protects the client's interest.">Six Arrows retains 10% of your total contract value until all work on this project is complete and approved. This applies to a subset of trades and protects the client's interest.</div></div>
           </div>
           <div class="holdback-block">
-            <div class="holdback-label">10% Retained Until Final Approval</div>
+            <div class="holdback-label" data-holdback-label="{pct}% Retained Until Final Approval">10% Retained Until Final Approval</div>
             <div class="holdback-amount" id="holdbackAmount">$420</div>
             <div class="holdback-desc">Released when all work is complete and approved by Cole Borders</div>
           </div>
@@ -380,7 +383,7 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
 
       <div class="info-label-row" style="margin-bottom:10px;">
         <div class="info-label">Your Payment Schedule</div>
-        <div class="tooltip-wrap"><span class="tooltip-icon">?</span><div class="tooltip-box">Tell Six Arrows how you would like to be paid. Select the structure that matches how you typically invoice for this type of work. The 10% holdback applies regardless of schedule chosen.</div></div>
+        <div class="tooltip-wrap"><span class="tooltip-icon">?</span><div class="tooltip-box" data-holdback-label="Tell Six Arrows how you would like to be paid. Select the structure that matches how you typically invoice for this type of work. The {pct}% holdback applies regardless of schedule chosen.">Tell Six Arrows how you would like to be paid. Select the structure that matches how you typically invoice for this type of work. The 10% holdback applies regardless of schedule chosen.</div></div>
       </div>
 
       <div class="payment-type-options">
@@ -600,7 +603,7 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
           <li><span class="terms-num">2.</span><span>I understand that the next trade is being scheduled based on my completion date. A delay in my portion directly affects the project schedule and <span class="bind-client">the Hoops family</span>.</span></li>
           <li><span class="terms-num">3.</span><span>If anything changes that will affect my start date or completion date, I will notify <span class="bind-pm">Cole Borders</span> by phone or text as soon as I am aware - not the day of or after the fact.</span></li>
           <li><span class="terms-num">4.</span><span>I understand that repeated failure to meet committed windows or communicate changes in advance may affect my ability to be scheduled on future Six Arrows projects.</span></li>
-          <li><span class="terms-num">5.</span><span>I acknowledge the 10% holdback on my contract and agree to the payment schedule I entered above.</span></li>
+          <li class="terms-item-holdback"><span class="terms-num">5.</span><span data-holdback-label="I acknowledge the {pct}% holdback on my contract and agree to the payment schedule I entered above.">I acknowledge the 10% holdback on my contract and agree to the payment schedule I entered above.</span></li>
         </ul>
       </div>
       <div class="check-item" id="checkTerms" onclick="toggleCheck('checkTerms')">
@@ -692,12 +695,27 @@ function formatMoney(n) {
   return '$' + n.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0});
 }
 
+// Holdback percentage — default to 10 for the sample view; renderData() may
+// set it to 0 (hides the section entirely) or a different value per-task.
+window.WO_HOLDBACK_PCT = 10;
+
+function holdbackFrac() { return (window.WO_HOLDBACK_PCT || 0) / 100; }
+function payoutPctTotal() { return 100 - (window.WO_HOLDBACK_PCT || 0); }
+
 function updateHoldback() {
   const cost = getCostValue();
-  const holdback = cost * 0.10;
-  document.getElementById('holdbackAmount').textContent = formatMoney(holdback);
+  const holdback = cost * holdbackFrac();
+  const el = document.getElementById('holdbackAmount');
+  if (el) el.textContent = formatMoney(holdback);
 }
 updateHoldback();
+
+// Render the holdback line if pct > 0, otherwise nothing.
+function holdbackSummaryLine(hold) {
+  if (!window.WO_HOLDBACK_PCT) return '';
+  return `<div class="ps-divider"></div>
+    <div class="ps-row holdback"><span class="ps-row-label">${window.WO_HOLDBACK_PCT}% holdback (released after final approval)</span><span class="ps-row-amount">${formatMoney(hold)}</span></div>`;
+}
 
 // ── Payment type selection ────────────────────────────────────────────────────
 function selectPaymentType(type, el) {
@@ -721,20 +739,19 @@ function updatePaymentSummary() {
 
 function updateSingleSummary() {
   const cost = getCostValue();
-  const hold = cost * 0.10;
+  const hold = cost * holdbackFrac();
   const pay = cost - hold;
   document.getElementById('ps-single-rows').innerHTML = `
     <div class="ps-row"><span class="ps-row-label">On completion and approval</span><span class="ps-row-amount">${formatMoney(pay)}</span></div>
-    <div class="ps-divider"></div>
-    <div class="ps-row holdback"><span class="ps-row-label">10% holdback (released after final approval)</span><span class="ps-row-amount">${formatMoney(hold)}</span></div>
+    ${holdbackSummaryLine(hold)}
   `;
 }
 
 function updateTwoSummary() {
   const cost = getCostValue();
-  const hold = cost * 0.10;
+  const hold = cost * holdbackFrac();
   const pct1 = parseFloat(document.getElementById('two-pct1').value) || 0;
-  const pct2 = Math.max(0, 90 - pct1);
+  const pct2 = Math.max(0, payoutPctTotal() - pct1);
   document.getElementById('two-pct2').value = pct2;
   const m1 = document.getElementById('two-m1').value || 'Milestone 1';
   const amt1 = cost * pct1 / 100;
@@ -742,17 +759,16 @@ function updateTwoSummary() {
   document.getElementById('ps-two-rows').innerHTML = `
     <div class="ps-row"><span class="ps-row-label">Payment 1 (${pct1}%) - ${m1}</span><span class="ps-row-amount">${formatMoney(amt1)}</span></div>
     <div class="ps-row"><span class="ps-row-label">Payment 2 (${pct2}%) - On completion</span><span class="ps-row-amount">${formatMoney(amt2)}</span></div>
-    <div class="ps-divider"></div>
-    <div class="ps-row holdback"><span class="ps-row-label">10% holdback (released after final approval)</span><span class="ps-row-amount">${formatMoney(hold)}</span></div>
+    ${holdbackSummaryLine(hold)}
   `;
 }
 
 function updateThreeSummary() {
   const cost = getCostValue();
-  const hold = cost * 0.10;
+  const hold = cost * holdbackFrac();
   const pct1 = parseFloat(document.getElementById('three-pct1').value) || 0;
   const pct2 = parseFloat(document.getElementById('three-pct2').value) || 0;
-  const pct3 = Math.max(0, 90 - pct1 - pct2);
+  const pct3 = Math.max(0, payoutPctTotal() - pct1 - pct2);
   document.getElementById('three-pct3').value = pct3;
   const m1 = document.getElementById('three-m1').value || 'Deposit milestone';
   const m2 = document.getElementById('three-m2').value || 'Milestone 2';
@@ -763,9 +779,34 @@ function updateThreeSummary() {
     <div class="ps-row"><span class="ps-row-label">Payment 1 (${pct1}%) - ${m1}</span><span class="ps-row-amount">${formatMoney(amt1)}</span></div>
     <div class="ps-row"><span class="ps-row-label">Payment 2 (${pct2}%) - ${m2}</span><span class="ps-row-amount">${formatMoney(amt2)}</span></div>
     <div class="ps-row"><span class="ps-row-label">Payment 3 (${pct3}%) - On completion</span><span class="ps-row-amount">${formatMoney(amt3)}</span></div>
-    <div class="ps-divider"></div>
-    <div class="ps-row holdback"><span class="ps-row-label">10% holdback (released after final approval)</span><span class="ps-row-amount">${formatMoney(hold)}</span></div>
+    ${holdbackSummaryLine(hold)}
   `;
+}
+
+// Set the holdback percentage from data + toggle UI elements accordingly.
+function setupHoldback(pct) {
+  const p = parseFloat(pct);
+  window.WO_HOLDBACK_PCT = (p > 0 && p < 100) ? p : 0;
+
+  const hasHoldback = window.WO_HOLDBACK_PCT > 0;
+  document.body.classList.toggle('no-holdback', !hasHoldback);
+
+  // Update single-payment option wording.
+  const singleSpan = document.querySelector('.payment-type-option .pt-text span');
+  if (singleSpan) {
+    singleSpan.textContent = hasHoldback
+      ? 'Full contract value (minus holdback) paid when work is approved complete'
+      : 'Full contract value paid when work is approved complete';
+  }
+
+  // Update labels that mention 10% to the actual percentage.
+  document.querySelectorAll('[data-holdback-label]').forEach(el => {
+    const tmpl = el.getAttribute('data-holdback-label');
+    el.textContent = tmpl.replace('{pct}', window.WO_HOLDBACK_PCT);
+  });
+
+  updateHoldback();
+  updatePaymentSummary();
 }
 
 // ── Date / window calculation ─────────────────────────────────────────────────
@@ -1034,8 +1075,11 @@ function renderData(data) {
   // ── Contract value ────────────────────────────────────────────────────
   if (workOrder.contractValue != null) {
     document.getElementById('costValue').value = Number(workOrder.contractValue).toLocaleString('en-US');
-    if (typeof updateHoldback === 'function') updateHoldback();
   }
+
+  // ── Holdback ──────────────────────────────────────────────────────────
+  // Per-task: number > 0 shows the block; null/0 hides it entirely.
+  setupHoldback(workOrder.holdbackPct);
 
   // ── Requested window ──────────────────────────────────────────────────
   if (schedule.startDate) {
