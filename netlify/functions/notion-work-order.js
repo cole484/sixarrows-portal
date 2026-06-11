@@ -291,6 +291,17 @@ export const handler = async (event) => {
       internal:   prop(task, 'Internal note'),
       forClient:  prop(task, 'Notes'),
       chronological: prop(task, 'Chronological Order'),
+      subCommitment: prop(task, 'Sub Commitment'),
+      performanceNotes: prop(task, 'Subcontractor performance notes'),
+    };
+
+    // ── 7b. Existing scorecard ratings (filled in by PM after completion) ─
+    const scorecard = {
+      scopeCompliance:   prop(task, 'Scope compliance'),
+      scheduleAdherence: prop(task, 'Schedule adherence'),
+      cleanliness:       prop(task, 'Cleanliness'),
+      communication:     prop(task, 'Communication'),
+      invoiceVsEstimate: prop(task, 'Invoice vs estimate'),
     };
 
     // ── 8. Warnings worth surfacing to the admin UI ───────────────────────
@@ -328,6 +339,7 @@ export const handler = async (event) => {
         project,
         sub,
         notes,
+        scorecard,
         warnings,
       }),
     };
