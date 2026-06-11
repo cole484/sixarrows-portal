@@ -2,40 +2,66 @@
 //
 // POST endpoint that records the PM's scorecard for a completed task.
 //
-// Updates the timeline task with:
-//   - Scope compliance              (select)
-//   - Schedule adherence            (select)
-//   - Cleanliness                   (select)
-//   - Communication                 (select)
-//   - Invoice vs estimate           (select)
-//   - Subcontractor performance notes (rich_text)
+// Scoring model: 4 categories × 25 points = 100 total.
+//   - Schedule Adherence (number 0–25)
+//   - Site Cleanliness   (number 0–25)
+//   - Budget Adherence   (number 0–25)
+//   - Quality of Work    (number 0–25)
+//   - Sub Score          (number 0–100, computed total)
+//
+// Plus three free-text fields:
+//   - Score: Positives                (rich_text, shared with sub)
+//   - Score: Improvements             (rich_text, shared with sub)
+//   - Subcontractor performance notes (rich_text, internal only)
 //
 // Body (JSON):
 //   {
-//     taskId:            notion page id
-//     scopeCompliance:   "Excellent" | "Good" | "Fair" | "Poor" | "N/A" | null
-//     scheduleAdherence: ...
-//     cleanliness:       ...
-//     communication:     ...
-//     invoiceVsEstimate: ...
-//     performanceNotes:  string (optional)
+//     taskId:             notion page id
+//     scheduleAdherence:  number 0–25 | null
+//     siteCleanliness:    number 0–25 | null
+//     budgetAdherence:    number 0–25 | null
+//     qualityOfWork:      number 0–25 | null
+//     subScore:           number 0–100 | null   (optional — recomputed if all 4 categories present)
+//     positives:          string (optional)
+//     improvements:       string (optional)
+//     internalNotes:      string (optional)
 //   }
 //
-// Null/missing rating fields are skipped (not cleared) so the PM can submit
-// partial updates without wiping a rating they didn't intend to change.
+// Null/missing fields are skipped (not cleared) so the PM can submit partial
+// updates without wiping a value they didn't intend to change.
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 
-const VALID_RATINGS = ['Excellent', 'Good', 'Fair', 'Poor', 'N/A'];
-
-const RATING_FIELDS = {
-  scopeCompliance:   'Scope compliance',
-  scheduleAdherence: 'Schedule adherence',
-  cleanliness:       'Cleanliness',
-  communication:     'Communication',
-  invoiceVsEstimate: 'Invoice vs estimate',
+const CATEGORY_FIELDS = {
+  scheduleAdherence: 'Schedule Adherence',
+  siteCleanliness:   'Site Cleanliness',
+  budgetAdherence:   'Budget Adherence',
+  qualityOfWork:     'Quality of Work',
 };
+
+const TEXT_FIELDS = {
+  positives:     'Score: Positives',
+  improvements:  'Score: Improvements',
+  internalNotes: 'Subcontractor performance notes',
+};
+
+function richText(text) {
+  const t = (text || '').toString().trim();
+  return {
+    rich_text: t
+      ? [{ type: 'text', text: { content: t.slice(0, 2000) } }]
+      : [],
+  };
+}
+
+function validInt(v, min, max) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 'NaN';
+  if (n < min || n > max) return 'OOR';
+  return n;
+}
 
 export const handler = async (event) => {
   const corsH = {
@@ -59,37 +85,42 @@ export const handler = async (event) => {
 
   if (!payload.taskId) return reply(400, { error: 'taskId is required' });
 
-  // Validate each rating value.
-  for (const [key, fieldName] of Object.entries(RATING_FIELDS)) {
-    const v = payload[key];
-    if (v != null && v !== '' && !VALID_RATINGS.includes(v)) {
-      return reply(400, {
-        error: `Invalid value for ${fieldName}: "${v}". Must be one of ${VALID_RATINGS.join(', ')}.`,
-      });
+  // Validate each category score (0–25 integer).
+  const categoryNumbers = {};
+  for (const [key, fieldName] of Object.entries(CATEGORY_FIELDS)) {
+    const v = validInt(payload[key], 0, 25);
+    if (v === 'NaN' || v === 'OOR') {
+      return reply(400, { error: `${fieldName} must be a number between 0 and 25.` });
     }
+    if (v !== null) categoryNumbers[fieldName] = v;
   }
 
   // Build the properties patch.
   const properties = {};
-  for (const [key, fieldName] of Object.entries(RATING_FIELDS)) {
-    const v = payload[key];
-    if (v != null && v !== '') {
-      properties[fieldName] = { select: { name: v } };
-    }
+  for (const [fieldName, num] of Object.entries(categoryNumbers)) {
+    properties[fieldName] = { number: num };
   }
-  if (typeof payload.performanceNotes === 'string') {
-    // Allow clearing by sending empty string; otherwise truncate to Notion's
-    // 2000-char rich_text block limit.
-    const text = payload.performanceNotes.trim();
-    properties['Subcontractor performance notes'] = {
-      rich_text: text
-        ? [{ type: 'text', text: { content: text.slice(0, 2000) } }]
-        : [],
-    };
+
+  // Sub Score: use payload value if provided, otherwise sum the 4 categories
+  // if all four are present.
+  let subScore = validInt(payload.subScore, 0, 100);
+  if (subScore === 'NaN' || subScore === 'OOR') {
+    return reply(400, { error: 'subScore must be a number between 0 and 100.' });
+  }
+  if (subScore === null && Object.keys(categoryNumbers).length === 4) {
+    subScore = Object.values(categoryNumbers).reduce((a, b) => a + b, 0);
+  }
+  if (subScore !== null) properties['Sub Score'] = { number: subScore };
+
+  // Text fields.
+  for (const [key, fieldName] of Object.entries(TEXT_FIELDS)) {
+    if (typeof payload[key] === 'string') {
+      properties[fieldName] = richText(payload[key]);
+    }
   }
 
   if (Object.keys(properties).length === 0) {
-    return reply(400, { error: 'Nothing to update — send at least one rating or notes.' });
+    return reply(400, { error: 'Nothing to update — send at least one score or note.' });
   }
 
   try {
@@ -113,9 +144,10 @@ export const handler = async (event) => {
     }
 
     return reply(200, {
-      success:    true,
-      taskId:     payload.taskId,
+      success:     true,
+      taskId:      payload.taskId,
       submittedAt: new Date().toISOString(),
+      subScore,
       updatedFields: Object.keys(properties),
     });
   } catch (err) {
