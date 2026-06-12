@@ -293,15 +293,18 @@ export const handler = async (event) => {
       chronological: prop(task, 'Chronological Order'),
       subCommitment: prop(task, 'Sub Commitment'),
       performanceNotes: prop(task, 'Subcontractor performance notes'),
+      scorePositives:    prop(task, 'Score: Positives'),
+      scoreImprovements: prop(task, 'Score: Improvements'),
     };
 
-    // ── 7b. Existing scorecard ratings (filled in by PM after completion) ─
+    // ── 7b. Existing scorecard scores (filled in by PM after completion) ──
+    // Four categories, each 0–25, summing to a Sub Score 0–100.
     const scorecard = {
-      scopeCompliance:   prop(task, 'Scope compliance'),
-      scheduleAdherence: prop(task, 'Schedule adherence'),
-      cleanliness:       prop(task, 'Cleanliness'),
-      communication:     prop(task, 'Communication'),
-      invoiceVsEstimate: prop(task, 'Invoice vs estimate'),
+      scheduleAdherence: prop(task, 'Schedule Adherence'),
+      siteCleanliness:   prop(task, 'Site Cleanliness'),
+      budgetAdherence:   prop(task, 'Budget Adherence'),
+      qualityOfWork:     prop(task, 'Quality of Work'),
+      subScore:          prop(task, 'Sub Score'),
     };
 
     // ── 8. Warnings worth surfacing to the admin UI ───────────────────────
