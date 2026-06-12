@@ -333,6 +333,19 @@ export const handler = async (event) => {
       warnings.push('Plans/Blueprints flagged as required but no Files & media attached to the task.');
     }
 
+    // Strip internal-only fields if the request is for the sub-facing view.
+    // Anyone with a taskId can hit the URL, so don't leak internal notes.
+    const audience = event.queryStringParameters?.audience;
+    let outNotes = notes;
+    let outWarnings = warnings;
+    if (audience === 'sub') {
+      outNotes = {
+        scorePositives:    notes.scorePositives,
+        scoreImprovements: notes.scoreImprovements,
+      };
+      outWarnings = [];
+    }
+
     return {
       statusCode: 200,
       headers:    corsH,
@@ -341,9 +354,9 @@ export const handler = async (event) => {
         schedule,
         project,
         sub,
-        notes,
+        notes:    outNotes,
         scorecard,
-        warnings,
+        warnings: outWarnings,
       }),
     };
 

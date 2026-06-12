@@ -569,16 +569,92 @@ function showError(msg) {
 async function loadTask() {
   const params = new URLSearchParams(window.location.search);
   const taskId = params.get('taskId');
-  if (!taskId) return; // sample mode
+  const viewSub = params.get('view') === 'sub';
+  if (!taskId) {
+    if (viewSub) lockReadonly();
+    return;
+  }
 
+  const qs = 'taskId=' + encodeURIComponent(taskId) + (viewSub ? '&audience=sub' : '');
   try {
-    const res = await fetch('/.netlify/functions/notion-work-order?taskId=' + encodeURIComponent(taskId));
+    const res = await fetch('/.netlify/functions/notion-work-order?' + qs);
     const data = await res.json();
     if (data.error) return console.error('Load failed:', data.error);
     renderTaskData(data);
+    if (viewSub) lockReadonly();
   } catch (e) {
     console.error('Load exception:', e);
   }
+}
+
+// Read-only / sub-facing view: lock all inputs, hide internal-only fields,
+// hide unselected score options, swap submit for an attribution footer.
+function lockReadonly() {
+  document.body.dataset.view = 'sub';
+
+  // Hide all unselected score options in each category.
+  document.querySelectorAll('.score-card').forEach(card => {
+    const opts = card.querySelectorAll('.score-option');
+    const sel = card.querySelector('.score-option.selected-high, .score-option.selected-good, .score-option.selected-mid, .score-option.selected-low');
+    if (sel) {
+      opts.forEach(o => { if (o !== sel) o.style.display = 'none'; });
+      sel.style.cursor = 'default';
+      sel.style.pointerEvents = 'none';
+      const radio = sel.querySelector('.score-radio');
+      if (radio) radio.style.display = 'none';
+    } else {
+      // No score recorded yet — show a discreet "Not scored" placeholder.
+      opts.forEach(o => o.style.display = 'none');
+      const body = card.querySelector('.score-card-body');
+      if (body) body.innerHTML = '<div style="font-size:13px;color:var(--dark-30);font-style:italic;">Not scored.</div>';
+    }
+  });
+
+  // Internal-notes field: hide entirely.
+  const internal = document.getElementById('comment-internal');
+  if (internal) {
+    const field = internal.closest('.comment-field');
+    if (field) field.style.display = 'none';
+  }
+
+  // Other comment textareas: make read-only and visually static.
+  ['comment-positives', 'comment-improvements'].forEach(id => {
+    const ta = document.getElementById(id);
+    if (!ta) return;
+    ta.setAttribute('readonly', '');
+    ta.style.resize = 'none';
+    ta.style.background = 'transparent';
+    ta.style.border = 'none';
+    ta.style.padding = '0';
+    ta.style.minHeight = '0';
+    ta.style.cursor = 'default';
+    if (!ta.value.trim()) {
+      ta.style.display = 'none';
+      const label = ta.previousElementSibling;
+      if (label && label.classList.contains('comment-label')) label.style.display = 'none';
+    }
+  });
+
+  // Hide the entire feedback section if both visible textareas are empty.
+  const positives = document.getElementById('comment-positives');
+  const improvements = document.getElementById('comment-improvements');
+  if (positives && improvements && !positives.value.trim() && !improvements.value.trim()) {
+    const section = positives.closest('.comments-section');
+    if (section) section.style.display = 'none';
+  }
+
+  // Submit area → reviewer attribution.
+  const wrap = document.querySelector('.submit-wrap');
+  if (wrap) {
+    const reviewer = document.getElementById('bind-reviewed-by')?.textContent || '';
+    wrap.innerHTML =
+      `<div style="font-family:'Industry',Arial Black,sans-serif;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dark-30);margin-bottom:6px;">Reviewed by</div>` +
+      `<div style="font-size:13px;color:var(--dark-60);">${escHtml(reviewer)}</div>`;
+  }
+
+  // Hero eyebrow → reframe for the sub.
+  const eyebrow = document.querySelector('.hero-eyebrow');
+  if (eyebrow) eyebrow.textContent = 'Subcontractor Report Card';
 }
 
 function escHtml(s) {
