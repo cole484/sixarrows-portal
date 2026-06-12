@@ -55,6 +55,78 @@ function richText(text) {
   };
 }
 
+// Recompute one sub's aggregate score (avg of Sub Score across every scored
+// task) and write Aggregate Score / # Scored Jobs / Last Reviewed back to
+// the Subcontractors DB row. Returns a small status object — never throws,
+// since save-the-task must still succeed even if writeback fails.
+async function writebackSubAggregate(subId, token) {
+  const dbIdsRaw = process.env.TIMELINE_DB_IDS || '';
+  const timelineDbIds = dbIdsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  if (!timelineDbIds.length) {
+    return { ok: false, reason: 'TIMELINE_DB_IDS env var not set' };
+  }
+
+  const headers = {
+    'Authorization':  `Bearer ${token}`,
+    'Notion-Version': NOTION_VERSION,
+    'Content-Type':   'application/json',
+  };
+
+  const scores = [];
+  let lastReviewed = null;
+
+  for (const dbId of timelineDbIds) {
+    let cursor;
+    do {
+      const body = {
+        page_size: 100,
+        filter: {
+          and: [
+            { property: 'Sub Score',     number: { is_not_empty: true } },
+            { property: 'Subcontractor', relation: { contains: subId } },
+          ],
+        },
+      };
+      if (cursor) body.start_cursor = cursor;
+      const res = await fetch(`${NOTION_API}/databases/${dbId}/query`, {
+        method: 'POST', headers, body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        return { ok: false, reason: `Query failed on db ${dbId.slice(0,8)}…: HTTP ${res.status}` };
+      }
+      const data = await res.json();
+      for (const task of (data.results || [])) {
+        const s = task.properties?.['Sub Score']?.number;
+        if (s != null) scores.push(s);
+        const startProp = task.properties?.['Start']?.date;
+        const d = startProp?.end || startProp?.start;
+        if (d && (!lastReviewed || d > lastReviewed)) lastReviewed = d;
+      }
+      cursor = data.has_more ? data.next_cursor : null;
+    } while (cursor);
+  }
+
+  const avgScore = scores.length
+    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    : null;
+
+  const props = {
+    'Aggregate Score': { number: avgScore },
+    '# Scored Jobs':   { number: scores.length },
+  };
+  if (lastReviewed) {
+    props['Last Reviewed'] = { date: { start: lastReviewed } };
+  }
+
+  const patchRes = await fetch(`${NOTION_API}/pages/${subId}`, {
+    method: 'PATCH', headers, body: JSON.stringify({ properties: props }),
+  });
+  if (!patchRes.ok) {
+    return { ok: false, reason: `PATCH sub failed: HTTP ${patchRes.status}` };
+  }
+  return { ok: true, avgScore, jobsScored: scores.length, lastReviewed };
+}
+
 function validInt(v, min, max) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
@@ -143,12 +215,42 @@ export const handler = async (event) => {
       });
     }
 
+    // Fetch the task we just saved to discover which Subcontractor it links
+    // to, then recompute that sub's aggregate score and write it back to the
+    // Subcontractors DB. Best-effort — never fails the task save.
+    let aggregate = null;
+    try {
+      const taskRes = await fetch(`${NOTION_API}/pages/${payload.taskId}`, {
+        headers: {
+          'Authorization':  `Bearer ${token}`,
+          'Notion-Version': NOTION_VERSION,
+        },
+      });
+      if (taskRes.ok) {
+        const task = await taskRes.json();
+        const subRel = task.properties?.['Subcontractor']?.relation
+                   || task.properties?.['Sub Contractor']?.relation
+                   || [];
+        const subId = subRel[0]?.id || null;
+        if (subId) {
+          aggregate = await writebackSubAggregate(subId, token);
+        } else {
+          aggregate = { ok: false, reason: 'Task has no Subcontractor relation' };
+        }
+      } else {
+        aggregate = { ok: false, reason: `Task fetch failed: HTTP ${taskRes.status}` };
+      }
+    } catch (e) {
+      aggregate = { ok: false, reason: e.message?.slice(0, 200) || 'aggregate writeback failed' };
+    }
+
     return reply(200, {
       success:     true,
       taskId:      payload.taskId,
       submittedAt: new Date().toISOString(),
       subScore,
       updatedFields: Object.keys(properties),
+      aggregate,
     });
   } catch (err) {
     console.error('submit-scorecard error:', err);

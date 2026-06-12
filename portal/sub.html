@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subcontractor Detail - Six Arrows Construction</title>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --dark:#2e2e2e; --green:#757f69; --cream:#ebe9de;
+  --green-dk:#5a6355; --green-lt:#9aaa8e; --green-xs:#edf0eb;
+  --dark-60:#737373; --dark-30:#b5b5b5; --dark-10:#e8e8e5;
+  --border:#d8d5c8; --bg:#f5f3ee; --white:#ffffff;
+  --red:#7a3030; --red-lt:#f5eaea;
+  --amber:#9a6020; --amber-lt:#f5f0e0;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);}
+body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;line-height:1.55;min-height:100vh;}
+
+.header{background:var(--dark);padding:16px 32px;display:flex;align-items:center;justify-content:space-between;}
+.header-left{display:flex;align-items:center;gap:14px;}
+.header-mark{width:30px;height:30px;border:1.5px solid var(--green-lt);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--green-lt);font-weight:700;font-size:14px;}
+.header-title{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream);font-weight:600;}
+.header-sub{font-size:11px;color:rgba(235,233,222,.4);letter-spacing:.06em;margin-top:2px;}
+.back-link{color:rgba(235,233,222,.6);text-decoration:none;font-size:12px;letter-spacing:.04em;}
+.back-link:hover{color:var(--cream);}
+
+.hero{background:var(--green);padding:26px 32px;}
+.hero-eyebrow{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:rgba(235,233,222,.65);margin-bottom:6px;font-weight:600;}
+.hero-title{font-size:clamp(22px,4vw,32px);color:var(--cream);text-transform:uppercase;letter-spacing:.02em;line-height:1.05;font-weight:700;}
+.hero-sub{font-size:14px;color:rgba(235,233,222,.78);font-weight:300;margin-top:8px;}
+.hero-trades{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.hero-trade-pill{font-size:11px;padding:3px 10px;background:rgba(235,233,222,.15);border:1px solid rgba(235,233,222,.25);border-radius:10px;color:var(--cream);letter-spacing:.04em;}
+
+.main{max-width:980px;margin:0 auto;padding:28px 24px 60px;}
+
+.summary{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:24px;}
+.summary-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 16px;}
+.summary-label{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dark-30);font-weight:700;margin-bottom:6px;}
+.summary-value{font-size:24px;font-weight:700;color:var(--dark);line-height:1;}
+.summary-note{font-size:11px;color:var(--dark-60);margin-top:4px;}
+.summary-card.tier-elite{border-color:#bcc8b0;background:#f1f4ec;}
+.summary-card.tier-strong{border-color:#ccd6c0;background:#f4f7ee;}
+.summary-card.tier-adequate{border-color:#e0c890;background:var(--amber-lt);}
+.summary-card.tier-poor{border-color:#e8b8b8;background:var(--red-lt);}
+
+.section-head{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--dark-60);font-weight:700;margin-bottom:12px;margin-top:8px;}
+
+.job{background:var(--white);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden;}
+.job-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.job-meta{flex:1;min-width:220px;}
+.job-project{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dark-30);font-weight:700;margin-bottom:4px;}
+.job-task{font-size:17px;font-weight:600;color:var(--dark);line-height:1.3;}
+.job-date{font-size:12px;color:var(--dark-60);margin-top:4px;}
+.job-score-block{text-align:right;flex-shrink:0;}
+.job-score{font-size:30px;font-weight:700;line-height:1;color:var(--dark);}
+.job-score-max{font-size:13px;color:var(--dark-30);font-weight:400;}
+.job-tier{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:3px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;}
+.tier-elite{background:#dde3d6;color:var(--green-dk);border:1px solid #bcc8b0;}
+.tier-strong{background:#e6ecdf;color:var(--green-dk);border:1px solid #ccd6c0;}
+.tier-adequate{background:var(--amber-lt);color:var(--amber);border:1px solid #e0c890;}
+.tier-poor{background:var(--red-lt);color:var(--red);border:1px solid #e8b8b8;}
+
+.cat-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;padding:16px 20px;background:var(--bg);border-bottom:1px solid var(--border);}
+.cat{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:10px 12px;}
+.cat-label{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dark-30);font-weight:700;margin-bottom:6px;line-height:1.3;}
+.cat-row{display:flex;align-items:baseline;gap:6px;}
+.cat-pts{font-size:18px;font-weight:700;color:var(--dark);}
+.cat-max{font-size:11px;color:var(--dark-30);}
+.cat-bar{height:4px;background:var(--dark-10);border-radius:2px;margin-top:6px;overflow:hidden;}
+.cat-fill{height:100%;border-radius:2px;}
+
+.feedback{padding:18px 20px;display:flex;flex-direction:column;gap:14px;}
+.feedback-field{}
+.feedback-label{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dark-30);font-weight:700;margin-bottom:6px;}
+.feedback-text{font-size:13.5px;color:var(--dark);line-height:1.55;white-space:pre-wrap;}
+.feedback-text.empty{color:var(--dark-30);font-style:italic;}
+.feedback-internal{background:#fafaf8;border-left:3px solid var(--amber);padding:12px 14px;border-radius:0 4px 4px 0;}
+.feedback-internal .feedback-label{color:var(--amber);}
+
+.empty-state{padding:48px 24px;text-align:center;background:var(--white);border:1px solid var(--border);border-radius:10px;}
+.empty-title{font-size:18px;font-weight:600;color:var(--dark);margin-bottom:8px;}
+.empty-msg{font-size:13.5px;color:var(--dark-60);max-width:480px;margin:0 auto;line-height:1.6;}
+
+.error-bar{padding:12px 16px;background:var(--red-lt);border:1px solid #f0b4b4;border-left:3px solid var(--red);border-radius:6px;font-size:13px;color:var(--red);line-height:1.5;margin-bottom:14px;display:none;}
+.loading{padding:48px;text-align:center;color:var(--dark-30);font-size:13px;letter-spacing:.04em;background:var(--white);border:1px solid var(--border);border-radius:10px;}
+
+.footer{background:var(--dark);padding:18px 32px;display:flex;align-items:center;justify-content:space-between;}
+.footer-brand{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(235,233,222,.4);font-weight:600;}
+.footer-contact{font-size:12px;color:rgba(235,233,222,.4);text-align:right;}
+
+@media(max-width:700px){
+  .summary{grid-template-columns:1fr 1fr;}
+  .cat-grid{grid-template-columns:1fr 1fr;}
+  .header,.hero{padding:14px 18px;}
+  .main{padding:18px 14px 40px;}
+  .footer{flex-direction:column;gap:6px;text-align:center;}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="header-mark">SA</div>
+    <div>
+      <div class="header-title">Subcontractor Detail</div>
+      <div class="header-sub">sixarrowsconstruction.com</div>
+    </div>
+  </div>
+  <a class="back-link" href="/subs.html">← Back to Leaderboard</a>
+</header>
+
+<section class="hero">
+  <div class="hero-eyebrow">Performance History</div>
+  <div class="hero-title" id="subName">—</div>
+  <div class="hero-sub" id="subContact"></div>
+  <div class="hero-trades" id="subTrades"></div>
+</section>
+
+<div class="main">
+
+  <div class="error-bar" id="errorBar"></div>
+
+  <div class="summary" id="summary">
+    <div class="summary-card"><div class="summary-label">Aggregate Score</div><div class="summary-value" id="aggScore">—</div><div class="summary-note">Across all scored jobs</div></div>
+    <div class="summary-card"><div class="summary-label">Jobs Scored</div><div class="summary-value" id="jobsCount">—</div><div class="summary-note">Completed + graded</div></div>
+    <div class="summary-card"><div class="summary-label">Last Reviewed</div><div class="summary-value" id="lastReviewed" style="font-size:16px;">—</div><div class="summary-note">Most recent grade</div></div>
+    <div class="summary-card" id="tierCard"><div class="summary-label">Current Tier</div><div class="summary-value" id="tierValue" style="font-size:18px;">—</div><div class="summary-note" id="tierNote"></div></div>
+  </div>
+
+  <div class="section-head" id="jobsHead">Job History</div>
+  <div id="jobs"><div class="loading">Loading…</div></div>
+
+</div>
+
+<footer class="footer">
+  <div class="footer-brand">Six Arrows Construction — Bowling Green, KY</div>
+  <div class="footer-contact">Cole Borders — 270-996-8670<br>cole@sixarrowsconstruction.com</div>
+</footer>
+
+<script>
+function tierClass(tier) {
+  if (!tier) return '';
+  if (tier === 'Elite')    return 'tier-elite';
+  if (tier === 'Strong')   return 'tier-strong';
+  if (tier === 'Adequate') return 'tier-adequate';
+  return 'tier-poor';
+}
+
+function tierNote(tier) {
+  if (tier === 'Elite')        return 'Preferred contractor — first call.';
+  if (tier === 'Strong')       return 'Preferred — reliable performer.';
+  if (tier === 'Adequate')     return 'Conditional — improvement required.';
+  if (tier === 'Poor')         return 'Probationary — one more chance.';
+  if (tier === 'Unacceptable') return 'Removed from preferred list.';
+  return 'Not yet scored.';
+}
+
+function fillColor(pts, max) {
+  const pct = pts / max;
+  if (pct >= 0.8) return 'var(--green)';
+  if (pct >= 0.6) return 'var(--green-lt)';
+  if (pct >= 0.4) return 'var(--amber)';
+  return 'var(--red)';
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBar');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function renderSub(sub) {
+  document.title = (sub.name || 'Subcontractor') + ' — Six Arrows';
+  document.getElementById('subName').textContent = sub.name || '(no name)';
+  const contactBits = [sub.contactName, sub.email, sub.phone].filter(Boolean).join(' · ');
+  document.getElementById('subContact').textContent = contactBits;
+  const tradesEl = document.getElementById('subTrades');
+  tradesEl.innerHTML = (sub.trades || []).map(t =>
+    `<span class="hero-trade-pill">${escHtml(t)}</span>`
+  ).join('');
+
+  document.getElementById('aggScore').textContent = sub.avgScore != null ? sub.avgScore : '—';
+  document.getElementById('jobsCount').textContent = sub.jobsScored || 0;
+  document.getElementById('lastReviewed').textContent = sub.jobsScored
+    ? fmtDate(sub.jobs?.[0]?.completedDate)
+    : '—';
+
+  const tier = sub.tier || 'Not scored';
+  document.getElementById('tierValue').textContent = tier;
+  document.getElementById('tierNote').textContent = tierNote(sub.tier);
+  const tCard = document.getElementById('tierCard');
+  tCard.className = 'summary-card ' + tierClass(sub.tier);
+}
+
+function renderJob(j) {
+  const cats = [
+    { label:'Schedule Adherence', pts:j.scheduleAdherence },
+    { label:'Site Cleanliness',   pts:j.siteCleanliness },
+    { label:'Budget Adherence',   pts:j.budgetAdherence },
+    { label:'Quality of Work',    pts:j.qualityOfWork },
+  ];
+  const catHtml = cats.map(c => {
+    const pts = c.pts != null ? c.pts : 0;
+    const pct = Math.max(0, Math.min(100, (pts / 25) * 100));
+    return `
+      <div class="cat">
+        <div class="cat-label">${c.label}</div>
+        <div class="cat-row"><div class="cat-pts">${c.pts != null ? c.pts : '—'}</div><div class="cat-max">/ 25</div></div>
+        <div class="cat-bar"><div class="cat-fill" style="width:${pct}%;background:${fillColor(pts, 25)};"></div></div>
+      </div>`;
+  }).join('');
+
+  const tCls = tierClass(j.tier);
+  const projectLine = [j.projectName, j.projectAddress].filter(Boolean).join(' — ');
+
+  const fbField = (label, text, extraCls) => {
+    const t = (text || '').trim();
+    return `
+      <div class="feedback-field ${extraCls || ''}">
+        <div class="feedback-label">${label}</div>
+        <div class="feedback-text ${t ? '' : 'empty'}">${t ? escHtml(t) : '(nothing recorded)'}</div>
+      </div>`;
+  };
+
+  return `
+    <article class="job">
+      <div class="job-header">
+        <div class="job-meta">
+          <div class="job-project">${escHtml(projectLine || 'Project')}</div>
+          <div class="job-task">${escHtml(j.taskName || '(untitled task)')}</div>
+          <div class="job-date">Completed ${fmtDate(j.completedDate)}</div>
+        </div>
+        <div class="job-score-block">
+          <div class="job-score">${j.subScore != null ? j.subScore : '—'}<span class="job-score-max"> / 100</span></div>
+          ${j.tier ? `<div class="job-tier ${tCls}">${escHtml(j.tier)}</div>` : ''}
+        </div>
+      </div>
+      <div class="cat-grid">${catHtml}</div>
+      <div class="feedback">
+        ${fbField('What went well', j.positives)}
+        ${fbField('What needs to improve', j.improvements)}
+        <div class="feedback-internal">${fbField('Internal notes', j.internalNotes)}</div>
+      </div>
+    </article>`;
+}
+
+async function loadSub() {
+  const params = new URLSearchParams(window.location.search);
+  const subId = params.get('subId');
+  if (!subId) {
+    showError('No subId in URL. Add ?subId=<sub-page-id> to the address bar.');
+    document.getElementById('jobs').innerHTML = '';
+    return;
+  }
+
+  try {
+    const res = await fetch('/.netlify/functions/notion-sub-history?subId=' + encodeURIComponent(subId));
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      showError(data.error || ('HTTP ' + res.status));
+      document.getElementById('jobs').innerHTML = '';
+      return;
+    }
+    const subWithJobs = { ...data.sub, jobs: data.jobs };
+    renderSub(subWithJobs);
+
+    const jobsEl = document.getElementById('jobs');
+    if (!data.jobs.length) {
+      jobsEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-title">No scored jobs yet</div>
+          <div class="empty-msg">This subcontractor hasn't been graded on any completed tasks. Their first scorecard will land here.</div>
+        </div>`;
+      document.getElementById('jobsHead').style.display = 'none';
+      return;
+    }
+    jobsEl.innerHTML = data.jobs.map(renderJob).join('');
+  } catch (e) {
+    showError('Network error: ' + (e.message || 'failed to load'));
+    document.getElementById('jobs').innerHTML = '';
+  }
+}
+
+window.addEventListener('load', loadSub);
+</script>
+</body>
+</html>

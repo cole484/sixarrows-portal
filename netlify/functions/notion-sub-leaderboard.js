@@ -65,6 +65,7 @@ function prop(page, name) {
     case 'rich_text':    return p.rich_text?.map(t => t.plain_text).join('') || null;
     case 'number':       return p.number ?? null;
     case 'select':       return p.select?.name || null;
+    case 'multi_select': return p.multi_select?.map(o => o.name) || [];
     case 'status':       return p.status?.name || null;
     case 'email':        return p.email || null;
     case 'phone_number': return p.phone_number || null;
@@ -72,6 +73,16 @@ function prop(page, name) {
     case 'relation':     return p.relation?.map(r => r.id) || [];
     default: return null;
   }
+}
+
+// Read the Trade(s) the sub does. Try a multi-select "Trades" first,
+// fall back to a single-select "Trade".
+function readTrades(page) {
+  const multi = prop(page, 'Trades');
+  if (Array.isArray(multi) && multi.length) return multi;
+  const single = prop(page, 'Trade');
+  if (single) return [single];
+  return [];
 }
 
 function tierFor(score) {
@@ -122,6 +133,7 @@ export const handler = async (event) => {
         phone:       prop(page, 'Phone Number'),
         status:      prop(page, 'Status'),
         rating:      prop(page, 'Rating'),
+        trades:      readTrades(page),
         jobsScored:  0,
         scores:      [],
         lastReviewed: null,
@@ -160,7 +172,7 @@ export const handler = async (event) => {
           // Sub appears in a task but not in the Subcontractors DB (deleted? unshared?).
           entry = {
             id: subId, name: '(Unknown sub)', contactName: null, email: null,
-            phone: null, status: null, rating: null,
+            phone: null, status: null, rating: null, trades: [],
             jobsScored: 0, scores: [], lastReviewed: null,
           };
           subById.set(subId, entry);
@@ -187,6 +199,7 @@ export const handler = async (event) => {
         phone:       s.phone,
         status:      s.status,
         rating:      s.rating,
+        trades:      s.trades || [],
         jobsScored:  s.jobsScored,
         avgScore,
         lastReviewed: s.lastReviewed,
@@ -202,7 +215,40 @@ export const handler = async (event) => {
       return (a.name || '').localeCompare(b.name || '');
     });
 
-    return reply(200, { subs, scannedDbs, warnings });
+    // Optional: write each sub's computed aggregate back to the
+    // Subcontractors DB. Used by the "Sync to Notion" button on /subs.html.
+    let writeback = null;
+    if (event.queryStringParameters?.writeback === '1') {
+      const headers = notionHeaders(token);
+      let updated = 0, failed = 0;
+      const failures = [];
+      for (const s of subs) {
+        if (!s.jobsScored) continue; // Only push aggregates for scored subs.
+        const props = {
+          'Aggregate Score': { number: s.avgScore },
+          '# Scored Jobs':   { number: s.jobsScored },
+        };
+        if (s.lastReviewed) {
+          props['Last Reviewed'] = { date: { start: s.lastReviewed } };
+        }
+        try {
+          const pr = await fetch(`${NOTION_API}/pages/${s.id}`, {
+            method: 'PATCH', headers, body: JSON.stringify({ properties: props }),
+          });
+          if (pr.ok) updated++;
+          else {
+            failed++;
+            failures.push(`${s.name || s.id.slice(0,8)}: HTTP ${pr.status}`);
+          }
+        } catch (e) {
+          failed++;
+          failures.push(`${s.name || s.id.slice(0,8)}: ${e.message?.slice(0, 100)}`);
+        }
+      }
+      writeback = { updated, failed, failures: failures.slice(0, 10) };
+    }
+
+    return reply(200, { subs, scannedDbs, warnings, writeback });
   } catch (err) {
     console.error('notion-sub-leaderboard error:', err);
     return reply(500, { error: err.message });

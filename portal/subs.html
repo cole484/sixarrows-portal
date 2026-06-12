@@ -51,12 +51,24 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
 .refresh-btn{padding:7px 14px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--dark-60);font-family:inherit;font-size:12px;cursor:pointer;}
 .refresh-btn:hover{border-color:var(--green);color:var(--green-dk);}
 
+/* Trade filter chips */
+.trade-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center;}
+.trade-row-label{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--dark-30);font-weight:700;margin-right:6px;}
+.trade-chip{padding:5px 12px;background:var(--white);border:1px solid var(--border);border-radius:14px;font-family:inherit;font-size:12px;color:var(--dark-60);cursor:pointer;transition:all .15s;}
+.trade-chip:hover{border-color:var(--green-lt);color:var(--dark);}
+.trade-chip.active{background:var(--green);color:var(--cream);border-color:var(--green);font-weight:600;}
+.trade-chip-count{font-size:10.5px;opacity:.6;margin-left:4px;}
+
 /* Leaderboard table */
 .board{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
-.row{display:grid;grid-template-columns:38px 1.5fr 1.3fr 80px 110px 110px;gap:14px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);}
+.row{display:grid;grid-template-columns:38px 1.5fr 1.3fr 80px 110px 110px;gap:14px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);text-decoration:none;color:inherit;transition:background .12s;}
 .row:last-child{border-bottom:none;}
 .row.head{background:var(--bg);padding:10px 18px;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--dark-30);font-weight:700;}
+.row.head:hover{background:var(--bg);}
+a.row:hover{background:var(--green-xs);}
 .row.unscored{opacity:.7;}
+.sub-trades{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
+.sub-trade-pill{font-size:10px;padding:1px 8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--dark-60);letter-spacing:.02em;}
 .rank{font-size:13px;font-weight:700;color:var(--dark-30);text-align:center;}
 .rank.top{color:var(--green-dk);}
 .sub-info .sub-name{font-size:14.5px;font-weight:600;color:var(--dark);line-height:1.3;}
@@ -141,8 +153,13 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
       <button class="sort-btn" data-sort="recent">Recent</button>
       <button class="sort-btn" data-sort="name">Name</button>
     </div>
-    <button class="refresh-btn" onclick="loadBoard()">Refresh</button>
+    <div style="display:flex;gap:6px;">
+      <button class="refresh-btn" onclick="loadBoard()">Refresh</button>
+      <button class="refresh-btn" id="syncBtn" onclick="syncToNotion()" title="Write each sub's aggregate score back to the Subcontractors DB in Notion">Sync to Notion</button>
+    </div>
   </div>
+
+  <div class="trade-row" id="tradeRow"></div>
 
   <div class="board" id="board">
     <div class="loading">Loading…</div>
@@ -158,6 +175,7 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
 <script>
 let SUBS = [];
 let currentSort = 'score';
+let currentTrade = 'all';
 
 function tierClass(tier) {
   if (!tier) return 'tier-unscored';
@@ -203,14 +221,44 @@ function sortSubs(subs, mode) {
   return arr;
 }
 
+function filterSubs(subs, trade) {
+  if (!trade || trade === 'all') return subs;
+  return subs.filter(s => Array.isArray(s.trades) && s.trades.includes(trade));
+}
+
+function renderTradeChips() {
+  const counts = new Map();
+  for (const s of SUBS) {
+    for (const t of (s.trades || [])) {
+      counts.set(t, (counts.get(t) || 0) + 1);
+    }
+  }
+  const trades = [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const row = document.getElementById('tradeRow');
+  if (!trades.length) { row.innerHTML = ''; return; }
+
+  const chips = [
+    `<span class="trade-row-label">Trade</span>`,
+    `<button class="trade-chip ${currentTrade==='all'?'active':''}" data-trade="all">All<span class="trade-chip-count">${SUBS.length}</span></button>`,
+    ...trades.map(([t, n]) =>
+      `<button class="trade-chip ${currentTrade===t?'active':''}" data-trade="${escHtml(t)}">${escHtml(t)}<span class="trade-chip-count">${n}</span></button>`
+    ),
+  ];
+  row.innerHTML = chips.join('');
+}
+
 function renderBoard() {
   const board = document.getElementById('board');
-  const sorted = sortSubs(SUBS, currentSort);
+  const filtered = filterSubs(SUBS, currentTrade);
+  const sorted = sortSubs(filtered, currentSort);
   if (!sorted.length) {
+    const emptyMsg = currentTrade === 'all'
+      ? `The Subcontractors database is empty, or the env var <code>SUBCONTRACTORS_DB_ID</code> isn't configured yet.`
+      : `No subs found for trade "${escHtml(currentTrade)}". Try a different filter.`;
     board.innerHTML = `
       <div class="empty">
         <div class="empty-title">No subcontractors found</div>
-        <div class="empty-msg">The Subcontractors database is empty, or the env var <code>SUBCONTRACTORS_DB_ID</code> isn't configured yet.</div>
+        <div class="empty-msg">${emptyMsg}</div>
       </div>`;
     return;
   }
@@ -236,18 +284,22 @@ function renderBoard() {
       ? `<div class="score-bar"><div class="score-num">${s.avgScore}</div><div class="score-track"><div class="score-fill" style="width:${pct}%;background:${fill};"></div></div></div>`
       : `<div class="score-num none">No scored jobs</div>`;
     const contactBits = [s.contactName, s.email, s.phone].filter(Boolean).join(' · ');
+    const tradePills = (s.trades && s.trades.length)
+      ? `<div class="sub-trades">${s.trades.map(t => `<span class="sub-trade-pill">${escHtml(t)}</span>`).join('')}</div>`
+      : '';
     return `
-      <div class="row ${s.jobsScored ? '' : 'unscored'}">
+      <a class="row ${s.jobsScored ? '' : 'unscored'}" href="/sub.html?subId=${encodeURIComponent(s.id)}">
         <div class="${rankCls}">${rank}</div>
         <div class="sub-info">
           <div class="sub-name">${escHtml(s.name || '(no name)')}</div>
           ${contactBits ? `<div class="sub-contact">${escHtml(contactBits)}</div>` : ''}
+          ${tradePills}
         </div>
         <div>${scoreHtml}</div>
         <div class="jobs ${s.jobsScored ? '' : 'zero'} col-jobs">${s.jobsScored || 0}</div>
         <div class="last-reviewed col-last">${fmtDate(s.lastReviewed)}</div>
         <div><span class="tier ${tCls}">${escHtml(tier)}</span></div>
-      </div>`;
+      </a>`;
   }).join('');
 
   board.innerHTML = head + rows;
@@ -280,6 +332,41 @@ function showWarning(msgs) {
   el.style.display = 'block';
 }
 
+async function syncToNotion() {
+  const btn = document.getElementById('syncBtn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  document.getElementById('errorBar').style.display = 'none';
+  document.getElementById('warningBar').style.display = 'none';
+
+  const params = new URLSearchParams(window.location.search);
+  const dbIds = params.get('dbIds');
+  const qs = 'writeback=1' + (dbIds ? '&dbIds=' + encodeURIComponent(dbIds) : '');
+
+  try {
+    const res = await fetch('/.netlify/functions/notion-sub-leaderboard?' + qs);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      showError(data.error || ('HTTP ' + res.status));
+    } else {
+      const wb = data.writeback || {};
+      const msg = `Synced ${wb.updated || 0} sub(s) to Notion.` +
+        (wb.failed ? ` ${wb.failed} failed: ${(wb.failures || []).join('; ')}` : '');
+      showWarning([msg]);
+      // Re-render with fresh data.
+      SUBS = data.subs || [];
+      renderStats();
+      renderTradeChips();
+      renderBoard();
+    }
+  } catch (e) {
+    showError('Sync failed: ' + (e.message || 'network error'));
+  }
+  btn.disabled = false;
+  btn.textContent = orig;
+}
+
 async function loadBoard() {
   document.getElementById('errorBar').style.display = 'none';
   document.getElementById('warningBar').style.display = 'none';
@@ -302,6 +389,7 @@ async function loadBoard() {
     SUBS = data.subs || [];
     showWarning(data.warnings);
     renderStats();
+    renderTradeChips();
     renderBoard();
   } catch (e) {
     showError('Network error: ' + (e.message || 'failed to load'));
@@ -314,6 +402,14 @@ document.getElementById('sortGroup').addEventListener('click', e => {
   if (!btn) return;
   currentSort = btn.dataset.sort;
   document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b === btn));
+  renderBoard();
+});
+
+document.getElementById('tradeRow').addEventListener('click', e => {
+  const chip = e.target.closest('.trade-chip');
+  if (!chip) return;
+  currentTrade = chip.dataset.trade;
+  document.querySelectorAll('.trade-chip').forEach(c => c.classList.toggle('active', c === chip));
   renderBoard();
 });
 
