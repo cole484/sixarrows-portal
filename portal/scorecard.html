@@ -875,18 +875,21 @@ function renderTaskData(data) {
     prefillScore('clean', scorecard.siteCleanliness);
   }
 
-  // If the stored score for Schedule / Budget / Quality doesn't match what
-  // the auto formula would produce from the raw inputs, the PM must have
-  // overridden it — open the manual card and select the stored value.
-  const ovChecks = [
-    { cat:'schedule', stored:scorecard?.scheduleAdherence, computed:scores.schedule },
-    { cat:'budget',   stored:scorecard?.budgetAdherence,   computed:scores.budget },
-    { cat:'quality',  stored:scorecard?.qualityOfWork,     computed:scores.quality },
-  ];
-  for (const c of ovChecks) {
-    if (c.stored != null && c.stored !== c.computed) {
-      toggleOverride(c.cat, true);
-      prefillScore(c.cat, c.stored);
+  // If the PM previously used manual override on this task, flip the
+  // affected cards to override mode and pre-select the stored score.
+  // Triggered only when an override reason is on record — otherwise we
+  // default to the auto cards even if stored scores already exist.
+  if ((notes?.scoreOverrideReason || '').trim()) {
+    const ovChecks = [
+      { cat:'schedule', stored:scorecard?.scheduleAdherence, computed:scores.schedule },
+      { cat:'budget',   stored:scorecard?.budgetAdherence,   computed:scores.budget },
+      { cat:'quality',  stored:scorecard?.qualityOfWork,     computed:scores.quality },
+    ];
+    for (const c of ovChecks) {
+      if (c.stored != null && c.stored !== c.computed) {
+        toggleOverride(c.cat, true);
+        prefillScore(c.cat, c.stored);
+      }
     }
   }
 
