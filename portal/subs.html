@@ -214,9 +214,9 @@ function sortSubs(subs, mode) {
   } else if (mode === 'jobs') {
     arr.sort((a, b) => b.jobsScored - a.jobsScored || (b.avgScore || 0) - (a.avgScore || 0));
   } else if (mode === 'recent') {
-    arr.sort((a, b) => (b.lastReviewed || '').localeCompare(a.lastReviewed || ''));
+    arr.sort((a, b) => String(b.lastReviewed || '').localeCompare(String(a.lastReviewed || '')));
   } else if (mode === 'name') {
-    arr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    arr.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   }
   return arr;
 }
@@ -230,10 +230,15 @@ function renderTradeChips() {
   const counts = new Map();
   for (const s of SUBS) {
     for (const t of (s.trades || [])) {
-      counts.set(t, (counts.get(t) || 0) + 1);
+      // Defensive: a Trades column created as something other than a
+      // multi-select (e.g. relation, rollup) can yield non-string keys.
+      // Coerce + skip empties so chip rendering never crashes the page.
+      const key = typeof t === 'string' ? t : (t && typeof t === 'object' ? (t.name || t.title || '') : String(t ?? ''));
+      if (!key) continue;
+      counts.set(key, (counts.get(key) || 0) + 1);
     }
   }
-  const trades = [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const trades = [...counts.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
   const row = document.getElementById('tradeRow');
   if (!trades.length) { row.innerHTML = ''; return; }
 

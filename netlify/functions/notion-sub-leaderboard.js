@@ -76,12 +76,21 @@ function prop(page, name) {
 }
 
 // Read the Trade(s) the sub does. Try a multi-select "Trades" first,
-// fall back to a single-select "Trade".
+// fall back to a single-select "Trade". Coerce to strings + drop empties
+// so a column accidentally created as the wrong type can't break callers.
 function readTrades(page) {
+  const cleanArr = (arr) => arr
+    .map(v => typeof v === 'string' ? v : (v && typeof v === 'object' ? (v.name || v.title || '') : String(v ?? '')))
+    .map(s => s.trim())
+    .filter(Boolean);
+
   const multi = prop(page, 'Trades');
-  if (Array.isArray(multi) && multi.length) return multi;
+  if (Array.isArray(multi) && multi.length) {
+    const cleaned = cleanArr(multi);
+    if (cleaned.length) return cleaned;
+  }
   const single = prop(page, 'Trade');
-  if (single) return [single];
+  if (single) return cleanArr([single]);
   return [];
 }
 

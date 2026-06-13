@@ -90,12 +90,21 @@ function tierFor(score) {
 }
 
 // Read the Trade(s) the sub does. Try a multi-select named "Trades" first,
-// fall back to a single-select named "Trade".
+// fall back to a single-select named "Trade". Coerce to strings + drop
+// empties so an unexpected column type can't break the caller.
 function readTrades(page) {
+  const cleanArr = (arr) => arr
+    .map(v => typeof v === 'string' ? v : (v && typeof v === 'object' ? (v.name || v.title || '') : String(v ?? '')))
+    .map(s => s.trim())
+    .filter(Boolean);
+
   const multi = prop(page, 'Trades');
-  if (Array.isArray(multi) && multi.length) return multi;
+  if (Array.isArray(multi) && multi.length) {
+    const cleaned = cleanArr(multi);
+    if (cleaned.length) return cleaned;
+  }
   const single = prop(page, 'Trade');
-  if (single) return [single];
+  if (single) return cleanArr([single]);
   return [];
 }
 
