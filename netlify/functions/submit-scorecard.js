@@ -41,10 +41,13 @@ const CATEGORY_FIELDS = {
 };
 
 const TEXT_FIELDS = {
-  positives:     'Score: Positives',
-  improvements:  'Score: Improvements',
-  internalNotes: 'Subcontractor performance notes',
+  positives:           'Score: Positives',
+  improvements:        'Score: Improvements',
+  internalNotes:       'Subcontractor performance notes',
+  scoreOverrideReason: 'Score Override Reason',
 };
+
+const VALID_CLEAN_RATINGS = ['Clean', 'Mostly Clean', 'Not Cleaned'];
 
 function richText(text) {
   const t = (text || '').toString().trim();
@@ -189,6 +192,33 @@ export const handler = async (event) => {
     if (typeof payload[key] === 'string') {
       properties[fieldName] = richText(payload[key]);
     }
+  }
+
+  // Raw auto-scoring inputs (so revisiting the scorecard pre-populates them).
+  if (typeof payload.actualCompletionDate === 'string' && payload.actualCompletionDate) {
+    properties['Actual Completion Date'] = { date: { start: payload.actualCompletionDate } };
+  }
+  if (payload.finalInvoiceAmount != null && payload.finalInvoiceAmount !== '') {
+    const n = Number(payload.finalInvoiceAmount);
+    if (!Number.isFinite(n) || n < 0) {
+      return reply(400, { error: 'Final Invoice Amount must be a non-negative number.' });
+    }
+    properties['Final Invoice Amount'] = { number: n };
+  }
+  if (payload.punchListItems != null && payload.punchListItems !== '') {
+    const n = Number(payload.punchListItems);
+    if (!Number.isInteger(n) || n < 0) {
+      return reply(400, { error: 'Punch List Items must be a non-negative integer.' });
+    }
+    properties['Punch List Items'] = { number: n };
+  }
+  if (payload.cleanlinessRating != null && payload.cleanlinessRating !== '') {
+    if (!VALID_CLEAN_RATINGS.includes(payload.cleanlinessRating)) {
+      return reply(400, {
+        error: `Invalid Cleanliness Rating: "${payload.cleanlinessRating}". Must be one of ${VALID_CLEAN_RATINGS.join(', ')}.`,
+      });
+    }
+    properties['Cleanliness Rating'] = { select: { name: payload.cleanlinessRating } };
   }
 
   if (Object.keys(properties).length === 0) {
