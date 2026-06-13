@@ -75,6 +75,27 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
 .score-option.selected-low .score-pts{color:var(--red);}
 .score-desc{font-size:12px;color:var(--dark-60);line-height:1.4;flex:1;}
 
+/* Auto-scoring (input-driven) cards */
+.auto-mode{display:flex;flex-direction:column;gap:10px;}
+.auto-mode.hidden{display:none;}
+.auto-context{font-size:11.5px;color:var(--dark-60);}
+.auto-context strong{color:var(--dark);font-weight:600;}
+.auto-input-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.auto-label{font-family:'Industry',Arial Black,sans-serif;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dark-30);flex:1;min-width:140px;}
+.auto-input{padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-family:'Work Sans',Arial,sans-serif;font-size:13.5px;color:var(--dark);background:var(--white);outline:none;width:160px;}
+.auto-input:focus{border-color:var(--green);}
+.auto-result{display:flex;align-items:baseline;gap:8px;padding:10px 12px;background:var(--bg);border-radius:6px;border-left:3px solid var(--dark-30);}
+.auto-result.computed-high{border-left-color:var(--green);}
+.auto-result.computed-mid{border-left-color:var(--amber);}
+.auto-result.computed-low{border-left-color:var(--red);}
+.auto-result-label{font-family:'Industry',Arial Black,sans-serif;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dark-30);}
+.auto-result-value{font-family:'Industry',Arial Black,sans-serif;font-size:18px;color:var(--dark);}
+.auto-result-detail{font-size:12px;color:var(--dark-60);margin-left:auto;font-style:italic;}
+.override-link{background:none;border:none;color:var(--dark-30);font-family:inherit;font-size:11px;cursor:pointer;text-decoration:underline;padding:0;text-align:left;margin-top:2px;align-self:flex-start;}
+.override-link:hover{color:var(--green-dk);}
+.manual-mode{display:flex;flex-direction:column;gap:10px;}
+.manual-mode.hidden{display:none;}
+
 /* Total score display */
 .total-block{background:var(--dark);border-radius:10px;padding:28px;margin-bottom:18px;display:flex;align-items:center;gap:28px;}
 .total-ring{flex-shrink:0;position:relative;width:100px;height:100px;}
@@ -177,37 +198,29 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
         <div class="score-card-max">/ 25 pts</div>
       </div>
       <div class="score-card-body">
-        <div class="score-options" id="cat-schedule">
-          <div class="score-option" onclick="selectScore('schedule', 25, this)" data-pts="25">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Started on time, completed within window, proactive communication</div>
-            <div class="score-pts">25</div>
+        <div class="auto-mode" id="auto-schedule">
+          <div class="auto-context">Committed end date: <strong id="committed-end">—</strong> · Formula: <strong>25 − 3 × days late</strong></div>
+          <div class="auto-input-row">
+            <label class="auto-label" for="input-actual-completion">Actual completion date</label>
+            <input type="date" class="auto-input" id="input-actual-completion" onchange="recomputeSchedule()">
           </div>
-          <div class="score-option" onclick="selectScore('schedule', 20, this)" data-pts="20">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Minor deviation, communicated early and adjusted</div>
-            <div class="score-pts">20</div>
+          <div class="auto-result" id="result-schedule">
+            <span class="auto-result-label">Score</span>
+            <span class="auto-result-value">—</span>
+            <span class="auto-result-detail">Enter actual completion date</span>
           </div>
-          <div class="score-option" onclick="selectScore('schedule', 15, this)" data-pts="15">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Missed window by 1-2 days with adequate notice</div>
-            <div class="score-pts">15</div>
+          <button type="button" class="override-link" onclick="toggleOverride('schedule', true)">Override — use manual scoring</button>
+        </div>
+        <div class="manual-mode hidden" id="manual-schedule">
+          <div class="score-options" id="cat-schedule">
+            <div class="score-option" onclick="selectScore('schedule', 25, this)" data-pts="25"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">On time, no issues</div><div class="score-pts">25</div></div>
+            <div class="score-option" onclick="selectScore('schedule', 20, this)" data-pts="20"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">1-2 days late, communicated early</div><div class="score-pts">20</div></div>
+            <div class="score-option" onclick="selectScore('schedule', 15, this)" data-pts="15"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">3-4 days late with notice</div><div class="score-pts">15</div></div>
+            <div class="score-option" onclick="selectScore('schedule', 10, this)" data-pts="10"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">5-6 days late or late notice</div><div class="score-pts">10</div></div>
+            <div class="score-option" onclick="selectScore('schedule', 5, this)" data-pts="5"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">7+ days late, poor communication</div><div class="score-pts">5</div></div>
+            <div class="score-option" onclick="selectScore('schedule', 0, this)" data-pts="0"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">Walked off or never finished</div><div class="score-pts">0</div></div>
           </div>
-          <div class="score-option" onclick="selectScore('schedule', 10, this)" data-pts="10">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Missed window by 3+ days or gave late notice</div>
-            <div class="score-pts">10</div>
-          </div>
-          <div class="score-option" onclick="selectScore('schedule', 5, this)" data-pts="5">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Significant delay, no communication until day of or after</div>
-            <div class="score-pts">5</div>
-          </div>
-          <div class="score-option" onclick="selectScore('schedule', 0, this)" data-pts="0">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">No show or abandoned the job</div>
-            <div class="score-pts">0</div>
-          </div>
+          <button type="button" class="override-link" onclick="toggleOverride('schedule', false)">← Back to automatic scoring</button>
         </div>
       </div>
     </div>
@@ -220,34 +233,19 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
       </div>
       <div class="score-card-body">
         <div class="score-options" id="cat-clean">
-          <div class="score-option" onclick="selectScore('clean', 25, this)" data-pts="25">
+          <div class="score-option" onclick="selectScore('clean', 25, this)" data-pts="25" data-clean-rating="Clean">
             <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Site left clean every day without exception</div>
+            <div class="score-desc"><strong>Clean</strong> — site kept clean daily, no reminders needed</div>
             <div class="score-pts">25</div>
           </div>
-          <div class="score-option" onclick="selectScore('clean', 20, this)" data-pts="20">
+          <div class="score-option" onclick="selectScore('clean', 12, this)" data-pts="12" data-clean-rating="Mostly Clean">
             <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Mostly clean, minor lapses corrected quickly when flagged</div>
-            <div class="score-pts">20</div>
+            <div class="score-desc"><strong>Mostly clean</strong> — not daily, or had to be asked to pick up</div>
+            <div class="score-pts">12</div>
           </div>
-          <div class="score-option" onclick="selectScore('clean', 15, this)" data-pts="15">
+          <div class="score-option" onclick="selectScore('clean', 0, this)" data-pts="0" data-clean-rating="Not Cleaned">
             <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Required reminders but complied when asked</div>
-            <div class="score-pts">15</div>
-          </div>
-          <div class="score-option" onclick="selectScore('clean', 10, this)" data-pts="10">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Consistently messy, required multiple reminders</div>
-            <div class="score-pts">10</div>
-          </div>
-          <div class="score-option" onclick="selectScore('clean', 5, this)" data-pts="5">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Left significant debris despite reminders</div>
-            <div class="score-pts">5</div>
-          </div>
-          <div class="score-option" onclick="selectScore('clean', 0, this)" data-pts="0">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Site left in unacceptable condition requiring Six Arrows cleanup</div>
+            <div class="score-desc"><strong>Not cleaned</strong> — required Six Arrows to clean up after</div>
             <div class="score-pts">0</div>
           </div>
         </div>
@@ -261,37 +259,29 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
         <div class="score-card-max">/ 25 pts</div>
       </div>
       <div class="score-card-body">
-        <div class="score-options" id="cat-budget">
-          <div class="score-option" onclick="selectScore('budget', 25, this)" data-pts="25">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Final invoice matched committed contract value exactly</div>
-            <div class="score-pts">25</div>
+        <div class="auto-mode" id="auto-budget">
+          <div class="auto-context">Contract value: <strong id="contract-value">—</strong> · Formula: <strong>25 − 2 × % over budget</strong></div>
+          <div class="auto-input-row">
+            <label class="auto-label" for="input-final-invoice">Final invoice amount ($)</label>
+            <input type="number" min="0" step="0.01" class="auto-input" id="input-final-invoice" onchange="recomputeBudget()" oninput="recomputeBudget()">
           </div>
-          <div class="score-option" onclick="selectScore('budget', 20, this)" data-pts="20">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Minor variance within 5% with prior communication</div>
-            <div class="score-pts">20</div>
+          <div class="auto-result" id="result-budget">
+            <span class="auto-result-label">Score</span>
+            <span class="auto-result-value">—</span>
+            <span class="auto-result-detail">Enter final invoice amount</span>
           </div>
-          <div class="score-option" onclick="selectScore('budget', 15, this)" data-pts="15">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Variance 5-10% with reasonable justification</div>
-            <div class="score-pts">15</div>
+          <button type="button" class="override-link" onclick="toggleOverride('budget', true)">Override — use manual scoring</button>
+        </div>
+        <div class="manual-mode hidden" id="manual-budget">
+          <div class="score-options" id="cat-budget">
+            <div class="score-option" onclick="selectScore('budget', 25, this)" data-pts="25"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">At or under contract</div><div class="score-pts">25</div></div>
+            <div class="score-option" onclick="selectScore('budget', 20, this)" data-pts="20"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">Under 2.5% over with communication</div><div class="score-pts">20</div></div>
+            <div class="score-option" onclick="selectScore('budget', 15, this)" data-pts="15"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">2.5-5% over with justification</div><div class="score-pts">15</div></div>
+            <div class="score-option" onclick="selectScore('budget', 10, this)" data-pts="10"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">5-7.5% over with justification</div><div class="score-pts">10</div></div>
+            <div class="score-option" onclick="selectScore('budget', 5, this)" data-pts="5"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">7.5-12.5% over, poor communication</div><div class="score-pts">5</div></div>
+            <div class="score-option" onclick="selectScore('budget', 0, this)" data-pts="0"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">12.5%+ over or surprise invoice</div><div class="score-pts">0</div></div>
           </div>
-          <div class="score-option" onclick="selectScore('budget', 10, this)" data-pts="10">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Variance above 10% with justification</div>
-            <div class="score-pts">10</div>
-          </div>
-          <div class="score-option" onclick="selectScore('budget', 5, this)" data-pts="5">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Significant overage without prior communication</div>
-            <div class="score-pts">5</div>
-          </div>
-          <div class="score-option" onclick="selectScore('budget', 0, this)" data-pts="0">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Surprise invoice substantially above committed value</div>
-            <div class="score-pts">0</div>
-          </div>
+          <button type="button" class="override-link" onclick="toggleOverride('budget', false)">← Back to automatic scoring</button>
         </div>
       </div>
     </div>
@@ -303,37 +293,29 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
         <div class="score-card-max">/ 25 pts</div>
       </div>
       <div class="score-card-body">
-        <div class="score-options" id="cat-quality">
-          <div class="score-option" onclick="selectScore('quality', 25, this)" data-pts="25">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Passed inspection first time, met all Completion Standard criteria</div>
-            <div class="score-pts">25</div>
+        <div class="auto-mode" id="auto-quality">
+          <div class="auto-context">Punch list = items found at final walkthrough that need rework · Formula: <strong>25 − 3 × items</strong></div>
+          <div class="auto-input-row">
+            <label class="auto-label" for="input-punch-items">Punch list items</label>
+            <input type="number" min="0" step="1" class="auto-input" id="input-punch-items" onchange="recomputeQuality()" oninput="recomputeQuality()">
           </div>
-          <div class="score-option" onclick="selectScore('quality', 20, this)" data-pts="20">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Minor punch list items corrected promptly without pushback</div>
-            <div class="score-pts">20</div>
+          <div class="auto-result" id="result-quality">
+            <span class="auto-result-label">Score</span>
+            <span class="auto-result-value">—</span>
+            <span class="auto-result-detail">Enter punch list item count</span>
           </div>
-          <div class="score-option" onclick="selectScore('quality', 15, this)" data-pts="15">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Required multiple corrections but ultimately met standard</div>
-            <div class="score-pts">15</div>
+          <button type="button" class="override-link" onclick="toggleOverride('quality', true)">Override — use manual scoring</button>
+        </div>
+        <div class="manual-mode hidden" id="manual-quality">
+          <div class="score-options" id="cat-quality">
+            <div class="score-option" onclick="selectScore('quality', 25, this)" data-pts="25"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">No punch list items</div><div class="score-pts">25</div></div>
+            <div class="score-option" onclick="selectScore('quality', 20, this)" data-pts="20"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">1-2 items, corrected without pushback</div><div class="score-pts">20</div></div>
+            <div class="score-option" onclick="selectScore('quality', 15, this)" data-pts="15"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">3-4 items</div><div class="score-pts">15</div></div>
+            <div class="score-option" onclick="selectScore('quality', 10, this)" data-pts="10"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">5-6 items requiring rework</div><div class="score-pts">10</div></div>
+            <div class="score-option" onclick="selectScore('quality', 5, this)" data-pts="5"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">7+ items, failed inspection</div><div class="score-pts">5</div></div>
+            <div class="score-option" onclick="selectScore('quality', 0, this)" data-pts="0"><div class="score-radio"><div class="score-radio-dot"></div></div><div class="score-desc">Had to be redone by another sub</div><div class="score-pts">0</div></div>
           </div>
-          <div class="score-option" onclick="selectScore('quality', 10, this)" data-pts="10">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Significant quality issues requiring substantial rework</div>
-            <div class="score-pts">10</div>
-          </div>
-          <div class="score-option" onclick="selectScore('quality', 5, this)" data-pts="5">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Work failed inspection, required extensive correction</div>
-            <div class="score-pts">5</div>
-          </div>
-          <div class="score-option" onclick="selectScore('quality', 0, this)" data-pts="0">
-            <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc">Work had to be redone by another sub</div>
-            <div class="score-pts">0</div>
-          </div>
+          <button type="button" class="override-link" onclick="toggleOverride('quality', false)">← Back to automatic scoring</button>
         </div>
       </div>
     </div>
@@ -382,6 +364,10 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
         <div class="comment-label">Internal notes (not shared with sub)</div>
         <textarea class="comment-input" style="background:#fafaf8;" id="comment-internal" placeholder="Notes for Cole only - internal performance notes, not shared with the sub..."></textarea>
       </div>
+      <div class="comment-field">
+        <div class="comment-label">Score override reason (only if you manually adjusted a score)</div>
+        <textarea class="comment-input" id="comment-override-reason" style="background:#fafaf8;min-height:50px;" placeholder="If you overrode any auto-computed score, briefly explain why (weather delay, client-requested change, etc.)..."></textarea>
+      </div>
     </div>
   </div>
 
@@ -415,6 +401,143 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
 const scores = { schedule: null, clean: null, budget: null, quality: null };
 const circ = 2 * Math.PI * 42;
 
+// Auto-scoring state: which categories have been overridden to manual mode,
+// and the raw inputs that drive the auto-computed scores (sent to Notion
+// alongside the final scores so the next visit can pre-populate them).
+const OVERRIDES = { schedule: false, budget: false, quality: false };
+const RAW_INPUTS = {
+  actualCompletionDate: null,
+  finalInvoiceAmount:   null,
+  cleanlinessRating:    null,
+  punchListItems:       null,
+};
+let COMMITTED_END = null;
+let CONTRACT_VALUE = null;
+
+function fmtUsd(n) {
+  return new Intl.NumberFormat('en-US', { style:'currency', currency:'USD', maximumFractionDigits:0 }).format(n);
+}
+
+function fmtDateLong(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+}
+
+function daysDiff(actualISO, committedISO) {
+  const a = new Date(actualISO + 'T00:00:00');
+  const c = new Date(committedISO + 'T00:00:00');
+  return Math.round((a - c) / 86400000);
+}
+
+function setAutoResult(cat, pts, detail) {
+  const el = document.getElementById('result-' + cat);
+  if (!el) return;
+  const v = el.querySelector('.auto-result-value');
+  const d = el.querySelector('.auto-result-detail');
+  el.classList.remove('computed-high', 'computed-mid', 'computed-low');
+  if (pts == null) {
+    v.textContent = '—';
+    d.textContent = detail;
+  } else {
+    v.textContent = pts + ' / 25';
+    d.textContent = detail;
+    if (pts >= 20)      el.classList.add('computed-high');
+    else if (pts >= 10) el.classList.add('computed-mid');
+    else                el.classList.add('computed-low');
+  }
+}
+
+function recomputeSchedule() {
+  if (OVERRIDES.schedule) return;
+  const input = document.getElementById('input-actual-completion');
+  const actual = input.value || null;
+  RAW_INPUTS.actualCompletionDate = actual;
+  if (!actual) {
+    scores.schedule = null;
+    setAutoResult('schedule', null, 'Enter actual completion date');
+    updateTotal();
+    return;
+  }
+  if (!COMMITTED_END) {
+    setAutoResult('schedule', null, 'No committed end date on this task');
+    return;
+  }
+  const days = daysDiff(actual, COMMITTED_END);
+  const late = Math.max(0, days);
+  const pts = Math.max(0, 25 - 3 * late);
+  const detail = days <= 0
+    ? (days === 0 ? 'On time' : `${-days} day${days === -1 ? '' : 's'} early`)
+    : `${late} day${late === 1 ? '' : 's'} late`;
+  setAutoResult('schedule', pts, detail);
+  scores.schedule = pts;
+  updateTotal();
+}
+
+function recomputeBudget() {
+  if (OVERRIDES.budget) return;
+  const input = document.getElementById('input-final-invoice');
+  const val = parseFloat(input.value);
+  RAW_INPUTS.finalInvoiceAmount = isFinite(val) ? val : null;
+  if (RAW_INPUTS.finalInvoiceAmount == null) {
+    scores.budget = null;
+    setAutoResult('budget', null, 'Enter final invoice amount');
+    updateTotal();
+    return;
+  }
+  if (!CONTRACT_VALUE) {
+    setAutoResult('budget', null, 'No contract value on this task');
+    return;
+  }
+  const pctOver = ((RAW_INPUTS.finalInvoiceAmount - CONTRACT_VALUE) / CONTRACT_VALUE) * 100;
+  const overClamped = Math.max(0, pctOver);
+  const pts = Math.max(0, Math.round(25 - 2 * overClamped));
+  const detail = pctOver <= 0
+    ? `At or under contract (${fmtUsd(CONTRACT_VALUE - RAW_INPUTS.finalInvoiceAmount)} under)`
+    : `${pctOver.toFixed(1)}% over (${fmtUsd(RAW_INPUTS.finalInvoiceAmount - CONTRACT_VALUE)} over)`;
+  setAutoResult('budget', pts, detail);
+  scores.budget = pts;
+  updateTotal();
+}
+
+function recomputeQuality() {
+  if (OVERRIDES.quality) return;
+  const input = document.getElementById('input-punch-items');
+  const raw = input.value;
+  const val = parseInt(raw, 10);
+  if (raw === '' || !isFinite(val) || val < 0) {
+    RAW_INPUTS.punchListItems = null;
+    scores.quality = null;
+    setAutoResult('quality', null, 'Enter punch list item count');
+    updateTotal();
+    return;
+  }
+  RAW_INPUTS.punchListItems = val;
+  const pts = Math.max(0, 25 - 3 * val);
+  const detail = val === 0 ? 'No punch list items' : `${val} item${val === 1 ? '' : 's'}`;
+  setAutoResult('quality', pts, detail);
+  scores.quality = pts;
+  updateTotal();
+}
+
+function toggleOverride(cat, on) {
+  OVERRIDES[cat] = on;
+  const auto = document.getElementById('auto-' + cat);
+  const manual = document.getElementById('manual-' + cat);
+  if (on) {
+    if (auto) auto.classList.add('hidden');
+    if (manual) manual.classList.remove('hidden');
+    // Don't clear the score — Cole may want to keep whatever was auto-computed
+    // and just nudge it. He picks from the manual buttons to change it.
+  } else {
+    if (auto) auto.classList.remove('hidden');
+    if (manual) manual.classList.add('hidden');
+    // Re-run the auto computation so the displayed result reflects the input.
+    if (cat === 'schedule') recomputeSchedule();
+    if (cat === 'budget')   recomputeBudget();
+    if (cat === 'quality')  recomputeQuality();
+  }
+}
+
 const ratings = [
   { min: 90, label: 'Elite', desc: 'Preferred contractor - first call on every project.', cls: 'status-elite' },
   { min: 75, label: 'Strong', desc: 'Preferred contractor - reliable performer.', cls: 'status-strong' },
@@ -442,6 +565,13 @@ function selectScore(cat, pts, el) {
   const colorClass = getColorClass(pts, 25);
   el.classList.add(colorClass);
   scores[cat] = pts;
+
+  // Cleanliness rating: track the categorical label so we can write it back
+  // to Notion as a select column (in addition to the numeric Site Cleanliness).
+  if (cat === 'clean') {
+    RAW_INPUTS.cleanlinessRating = el.getAttribute('data-clean-rating') || null;
+  }
+
   updateTotal();
 }
 
@@ -500,6 +630,13 @@ async function submitCard() {
     positives:         document.getElementById('comment-positives').value.trim(),
     improvements:      document.getElementById('comment-improvements').value.trim(),
     internalNotes:     document.getElementById('comment-internal').value.trim(),
+
+    // Raw auto-scoring inputs (persisted so the next visit pre-populates them).
+    actualCompletionDate: RAW_INPUTS.actualCompletionDate,
+    finalInvoiceAmount:   RAW_INPUTS.finalInvoiceAmount,
+    cleanlinessRating:    RAW_INPUTS.cleanlinessRating,
+    punchListItems:       RAW_INPUTS.punchListItems,
+    scoreOverrideReason:  document.getElementById('comment-override-reason').value.trim(),
   };
 
   // No taskId → preview mode (no save). Show success screen with no persistence.
@@ -592,8 +729,18 @@ async function loadTask() {
 function lockReadonly() {
   document.body.dataset.view = 'sub';
 
-  // Hide all unselected score options in each category.
   document.querySelectorAll('.score-card').forEach(card => {
+    const auto   = card.querySelector('.auto-mode');
+    const autoVisible = auto && !auto.classList.contains('hidden');
+
+    if (autoVisible) {
+      // Auto card — keep the computed result row visible, hide the editable
+      // input + override link so subs see only the score and context detail.
+      auto.querySelectorAll('.auto-input-row, .override-link').forEach(el => el.style.display = 'none');
+      return;
+    }
+
+    // Manual mode (cleanliness or overridden category): hide unselected options.
     const opts = card.querySelectorAll('.score-option');
     const sel = card.querySelector('.score-option.selected-high, .score-option.selected-good, .score-option.selected-mid, .score-option.selected-low');
     if (sel) {
@@ -603,19 +750,22 @@ function lockReadonly() {
       const radio = sel.querySelector('.score-radio');
       if (radio) radio.style.display = 'none';
     } else {
-      // No score recorded yet — show a discreet "Not scored" placeholder.
       opts.forEach(o => o.style.display = 'none');
       const body = card.querySelector('.score-card-body');
       if (body) body.innerHTML = '<div style="font-size:13px;color:var(--dark-30);font-style:italic;">Not scored.</div>';
     }
+    // Hide any "back to auto" links in the manual block.
+    card.querySelectorAll('.override-link').forEach(el => el.style.display = 'none');
   });
 
-  // Internal-notes field: hide entirely.
-  const internal = document.getElementById('comment-internal');
-  if (internal) {
-    const field = internal.closest('.comment-field');
-    if (field) field.style.display = 'none';
-  }
+  // Internal-notes + Override-reason fields: hide entirely (Cole-only).
+  ['comment-internal', 'comment-override-reason'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      const field = el.closest('.comment-field');
+      if (field) field.style.display = 'none';
+    }
+  });
 
   // Other comment textareas: make read-only and visually static.
   ['comment-positives', 'comment-improvements'].forEach(id => {
@@ -690,18 +840,61 @@ function renderTaskData(data) {
   const reviewer = [project?.pmName, today].filter(Boolean).join(' — ');
   setText('bind-reviewed-by', reviewer);
 
-  // Pre-populate existing scores (if revisiting)
-  if (scorecard) {
-    if (scorecard.scheduleAdherence != null) prefillScore('schedule', scorecard.scheduleAdherence);
-    if (scorecard.siteCleanliness  != null) prefillScore('clean',    scorecard.siteCleanliness);
-    if (scorecard.budgetAdherence  != null) prefillScore('budget',   scorecard.budgetAdherence);
-    if (scorecard.qualityOfWork    != null) prefillScore('quality',  scorecard.qualityOfWork);
+  // Auto-scoring context: pull contract value + committed end date from the
+  // work order so the input cards can show what the sub committed to.
+  CONTRACT_VALUE = workOrder?.contractValue ?? null;
+  COMMITTED_END  = schedule?.endDate ?? null;
+  if (CONTRACT_VALUE) {
+    document.getElementById('contract-value').textContent = fmtUsd(CONTRACT_VALUE);
+  }
+  if (COMMITTED_END) {
+    document.getElementById('committed-end').textContent = fmtDateLong(COMMITTED_END);
+  }
+
+  // Pre-populate raw auto-scoring inputs from Notion (if revisiting).
+  if (scorecard?.actualCompletionDate) {
+    document.getElementById('input-actual-completion').value = scorecard.actualCompletionDate;
+  }
+  if (scorecard?.finalInvoiceAmount != null) {
+    document.getElementById('input-final-invoice').value = scorecard.finalInvoiceAmount;
+  }
+  if (scorecard?.punchListItems != null) {
+    document.getElementById('input-punch-items').value = scorecard.punchListItems;
+  }
+  // Run computations so the result rows show the prefilled scores.
+  recomputeSchedule();
+  recomputeBudget();
+  recomputeQuality();
+
+  // Cleanliness: click the matching 3-tier button if a rating is stored,
+  // otherwise fall back to matching the numeric Site Cleanliness value.
+  if (scorecard?.cleanlinessRating) {
+    const opt = document.querySelector(`#cat-clean .score-option[data-clean-rating="${scorecard.cleanlinessRating}"]`);
+    if (opt) opt.click();
+  } else if (scorecard?.siteCleanliness != null) {
+    prefillScore('clean', scorecard.siteCleanliness);
+  }
+
+  // If the stored score for Schedule / Budget / Quality doesn't match what
+  // the auto formula would produce from the raw inputs, the PM must have
+  // overridden it — open the manual card and select the stored value.
+  const ovChecks = [
+    { cat:'schedule', stored:scorecard?.scheduleAdherence, computed:scores.schedule },
+    { cat:'budget',   stored:scorecard?.budgetAdherence,   computed:scores.budget },
+    { cat:'quality',  stored:scorecard?.qualityOfWork,     computed:scores.quality },
+  ];
+  for (const c of ovChecks) {
+    if (c.stored != null && c.stored !== c.computed) {
+      toggleOverride(c.cat, true);
+      prefillScore(c.cat, c.stored);
+    }
   }
 
   // Pre-populate existing comments
   if (notes?.scorePositives) document.getElementById('comment-positives').value = notes.scorePositives;
   if (notes?.scoreImprovements) document.getElementById('comment-improvements').value = notes.scoreImprovements;
   if (notes?.performanceNotes) document.getElementById('comment-internal').value = notes.performanceNotes;
+  if (notes?.scoreOverrideReason) document.getElementById('comment-override-reason').value = notes.scoreOverrideReason;
 }
 
 function prefillScore(cat, pts) {

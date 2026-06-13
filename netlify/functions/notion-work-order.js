@@ -295,16 +295,24 @@ export const handler = async (event) => {
       performanceNotes: prop(task, 'Subcontractor performance notes'),
       scorePositives:    prop(task, 'Score: Positives'),
       scoreImprovements: prop(task, 'Score: Improvements'),
+      scoreOverrideReason: prop(task, 'Score Override Reason'),
     };
 
     // ── 7b. Existing scorecard scores (filled in by PM after completion) ──
-    // Four categories, each 0–25, summing to a Sub Score 0–100.
+    // Four categories, each 0–25, summing to a Sub Score 0–100. The raw
+    // auto-scoring inputs are returned alongside the computed scores so the
+    // scorecard UI can pre-populate them on revisit.
     const scorecard = {
       scheduleAdherence: prop(task, 'Schedule Adherence'),
       siteCleanliness:   prop(task, 'Site Cleanliness'),
       budgetAdherence:   prop(task, 'Budget Adherence'),
       qualityOfWork:     prop(task, 'Quality of Work'),
       subScore:          prop(task, 'Sub Score'),
+      // Raw inputs that drive the auto-computed scores.
+      actualCompletionDate: prop(task, 'Actual Completion Date'),
+      finalInvoiceAmount:   prop(task, 'Final Invoice Amount'),
+      cleanlinessRating:    prop(task, 'Cleanliness Rating'),
+      punchListItems:       prop(task, 'Punch List Items'),
     };
 
     // ── 8. Warnings worth surfacing to the admin UI ───────────────────────
