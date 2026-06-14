@@ -47,7 +47,7 @@ const TEXT_FIELDS = {
   scoreOverrideReason: 'Score Override Reason',
 };
 
-const VALID_CLEAN_RATINGS = ['Clean', 'Mostly Clean', 'Not Cleaned'];
+const VALID_CLEAN_RATINGS = ['Clean', 'Mostly Clean', 'Needs Cleanup', 'Not Cleaned'];
 
 function richText(text) {
   const t = (text || '').toString().trim();
