@@ -238,14 +238,19 @@ body{font-family:'Work Sans',Arial,sans-serif;color:var(--dark);font-size:15px;l
             <div class="score-desc"><strong>Clean</strong> — site kept clean daily, no reminders needed</div>
             <div class="score-pts">25</div>
           </div>
-          <div class="score-option" onclick="selectScore('clean', 12, this)" data-pts="12" data-clean-rating="Mostly Clean">
+          <div class="score-option" onclick="selectScore('clean', 18, this)" data-pts="18" data-clean-rating="Mostly Clean">
             <div class="score-radio"><div class="score-radio-dot"></div></div>
             <div class="score-desc"><strong>Mostly clean</strong> — not daily, or had to be asked to pick up</div>
-            <div class="score-pts">12</div>
+            <div class="score-pts">18</div>
+          </div>
+          <div class="score-option" onclick="selectScore('clean', 10, this)" data-pts="10" data-clean-rating="Needs Cleanup">
+            <div class="score-radio"><div class="score-radio-dot"></div></div>
+            <div class="score-desc"><strong>Needs cleanup</strong> — left minimal trash behind for Six Arrows to clean</div>
+            <div class="score-pts">10</div>
           </div>
           <div class="score-option" onclick="selectScore('clean', 0, this)" data-pts="0" data-clean-rating="Not Cleaned">
             <div class="score-radio"><div class="score-radio-dot"></div></div>
-            <div class="score-desc"><strong>Not cleaned</strong> — required Six Arrows to clean up after</div>
+            <div class="score-desc"><strong>Not cleaned</strong> — required Six Arrows full cleanup</div>
             <div class="score-pts">0</div>
           </div>
         </div>
@@ -875,18 +880,21 @@ function renderTaskData(data) {
     prefillScore('clean', scorecard.siteCleanliness);
   }
 
-  // If the stored score for Schedule / Budget / Quality doesn't match what
-  // the auto formula would produce from the raw inputs, the PM must have
-  // overridden it — open the manual card and select the stored value.
-  const ovChecks = [
-    { cat:'schedule', stored:scorecard?.scheduleAdherence, computed:scores.schedule },
-    { cat:'budget',   stored:scorecard?.budgetAdherence,   computed:scores.budget },
-    { cat:'quality',  stored:scorecard?.qualityOfWork,     computed:scores.quality },
-  ];
-  for (const c of ovChecks) {
-    if (c.stored != null && c.stored !== c.computed) {
-      toggleOverride(c.cat, true);
-      prefillScore(c.cat, c.stored);
+  // If the PM previously used manual override on this task, flip the
+  // affected cards to override mode and pre-select the stored score.
+  // Triggered only when an override reason is on record — otherwise we
+  // default to the auto cards even if stored scores already exist.
+  if ((notes?.scoreOverrideReason || '').trim()) {
+    const ovChecks = [
+      { cat:'schedule', stored:scorecard?.scheduleAdherence, computed:scores.schedule },
+      { cat:'budget',   stored:scorecard?.budgetAdherence,   computed:scores.budget },
+      { cat:'quality',  stored:scorecard?.qualityOfWork,     computed:scores.quality },
+    ];
+    for (const c of ovChecks) {
+      if (c.stored != null && c.stored !== c.computed) {
+        toggleOverride(c.cat, true);
+        prefillScore(c.cat, c.stored);
+      }
     }
   }
 
