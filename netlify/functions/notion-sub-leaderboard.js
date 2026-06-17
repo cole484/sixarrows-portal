@@ -75,23 +75,19 @@ function prop(page, name) {
   }
 }
 
-// Read the Trade(s) the sub does. Try a multi-select "Trades" first,
-// fall back to a single-select "Trade". Coerce to strings + drop empties
-// so a column accidentally created as the wrong type can't break callers.
+// Read the Trade(s) the sub does. Try "Trades" first, then "Trade".
+// Both columns may be either select (string) or multi-select (array), so we
+// normalize each to an array of clean strings before returning.
 function readTrades(page) {
   const cleanArr = (arr) => arr
     .map(v => typeof v === 'string' ? v : (v && typeof v === 'object' ? (v.name || v.title || '') : String(v ?? '')))
     .map(s => s.trim())
     .filter(Boolean);
+  const toArr = (v) => v == null ? [] : (Array.isArray(v) ? v : [v]);
 
-  const multi = prop(page, 'Trades');
-  if (Array.isArray(multi) && multi.length) {
-    const cleaned = cleanArr(multi);
-    if (cleaned.length) return cleaned;
-  }
-  const single = prop(page, 'Trade');
-  if (single) return cleanArr([single]);
-  return [];
+  const fromTrades = cleanArr(toArr(prop(page, 'Trades')));
+  if (fromTrades.length) return fromTrades;
+  return cleanArr(toArr(prop(page, 'Trade')));
 }
 
 function tierFor(score) {

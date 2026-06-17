@@ -89,23 +89,19 @@ function tierFor(score) {
   return 'Unacceptable';
 }
 
-// Read the Trade(s) the sub does. Try a multi-select named "Trades" first,
-// fall back to a single-select named "Trade". Coerce to strings + drop
-// empties so an unexpected column type can't break the caller.
+// Read the Trade(s) the sub does. Try "Trades" first, then "Trade".
+// Both columns may be either select (string) or multi-select (array), so we
+// normalize each to an array of clean strings before returning.
 function readTrades(page) {
   const cleanArr = (arr) => arr
     .map(v => typeof v === 'string' ? v : (v && typeof v === 'object' ? (v.name || v.title || '') : String(v ?? '')))
     .map(s => s.trim())
     .filter(Boolean);
+  const toArr = (v) => v == null ? [] : (Array.isArray(v) ? v : [v]);
 
-  const multi = prop(page, 'Trades');
-  if (Array.isArray(multi) && multi.length) {
-    const cleaned = cleanArr(multi);
-    if (cleaned.length) return cleaned;
-  }
-  const single = prop(page, 'Trade');
-  if (single) return cleanArr([single]);
-  return [];
+  const fromTrades = cleanArr(toArr(prop(page, 'Trades')));
+  if (fromTrades.length) return fromTrades;
+  return cleanArr(toArr(prop(page, 'Trade')));
 }
 
 export const handler = async (event) => {
