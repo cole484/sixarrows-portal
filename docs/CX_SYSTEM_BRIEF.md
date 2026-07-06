@@ -1,6 +1,6 @@
-# CLAUDE.md — Six Arrows Portal & Client Experience System
+# Six Arrows — Client Experience System Brief
 
-> Repo: `cole484/sixarrows-portal`. Place this file at the repo root. Claude Code reads it automatically at the start of every session. Keep it high-signal; the detail lives in `/docs`.
+> Repo: `cole484/sixarrows-portal`. This file lives in `/docs` and is imported into the repo-root `CLAUDE.md` via `@docs/CX_SYSTEM_BRIEF.md`, so Code loads it every session alongside the existing portal instructions. High-signal by design; the detail lives in the other files in `/docs`.
 
 ## Project overview
 - This repo is the **Six Arrows client portal** (Netlify + Supabase) — the client's single pane of glass for a custom home build.
