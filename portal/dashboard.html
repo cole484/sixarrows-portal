@@ -351,6 +351,30 @@ const conPct         = p.constructionPct || 0;
 const urgentDecision = p.decisions.find(d => d.status === 'urgent');
 const nextMilestone  = p.timeline.find(t => !t.done);
 
+// ── Fox · AI Interior Designer card ──────────────────
+// Single card markup reused by both SAB and Construction layouts. Sends the
+// client into the new selections-v2 (Fox) flow. Visually distinct from the
+// rest of the dashboard so the feature is immediately discoverable.
+const foxDesignerCard = `
+  <a href="selections-v2.html" style="display:block;background:linear-gradient(135deg,var(--charcoal) 0%,#2a3128 100%);border-radius:var(--r-2xl);padding:1.125rem 1.375rem;margin-bottom:1rem;text-decoration:none;position:relative;overflow:hidden;border:0.5px solid rgba(199,184,156,.18)">
+    <div style="position:absolute;inset:0;background-image:radial-gradient(circle at 85% 15%,rgba(199,184,156,.10),transparent 55%);pointer-events:none"></div>
+    <div style="position:relative;z-index:1;display:flex;align-items:center;gap:14px">
+      <div style="flex-shrink:0;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#5d6e51 0%,#3e4a37 100%);display:flex;align-items:center;justify-content:center;border:0.5px solid rgba(199,184,156,.25);box-shadow:0 4px 14px rgba(0,0,0,.25)">
+        <span style="font-size:20px;font-weight:700;color:var(--cream);font-family:Georgia,serif;letter-spacing:-.02em">F</span>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+          <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#c7b89c">David Adler Group</span>
+          <span style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--charcoal);background:#c7b89c;padding:2px 6px;border-radius:3px">New</span>
+        </div>
+        <div style="font-size:16px;font-weight:700;color:var(--cream);line-height:1.2;margin-bottom:4px">Meet Fox · AI Interior Designer</div>
+        <div style="font-size:12px;color:rgba(235,233,222,.55);line-height:1.45">Take an 8-minute style quiz, then walk room by room with Fox to lock in every selection — countertops, tile, lighting, the works.</div>
+      </div>
+      <svg style="flex-shrink:0;width:14px;height:14px;opacity:.5" viewBox="0 0 14 14" fill="none" stroke="var(--cream)" stroke-width="1.6" stroke-linecap="round"><path d="M3 11L11 3M5 3h6v6"/></svg>
+    </div>
+  </a>
+`;
+
 // ────────────────────────────────────────────────────
 // ────────────────────────────────────────────────────
 // ────────────────────────────────────────────────────
@@ -526,6 +550,8 @@ function sabLayout() {
       </a>` : ''}
     </div>
 
+    ${foxDesignerCard}
+
     <!-- 4. Budget completion (no dollar amounts) -->
     <a href="budget.html" style="display:block;background:var(--white);border:0.5px solid var(--border);border-radius:var(--r-xl);padding:1rem 1.375rem;margin-bottom:1rem;text-decoration:none;cursor:pointer">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -675,6 +701,8 @@ function constructionLayout() {
         <svg class="mc-arrow" viewBox="0 0 14 14" fill="none" stroke="var(--charcoal)" stroke-width="1.5"><path d="M3 11L11 3M5 3h6v6"/></svg>
       </a>
     </div>
+
+    ${foxDesignerCard}
 
     <!-- 6. Open Decisions, Photos, Selections -->
     <div class="grid g3">

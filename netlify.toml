@@ -25,6 +25,11 @@
     Access-Control-Allow-Methods = "GET, POST, OPTIONS"
 
 [[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "SAMEORIGIN"

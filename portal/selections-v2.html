@@ -1,0 +1,4628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fox — David Adler Group</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="style.css">
+<script src="data.js"></script>
+<style>
+/* ─────────────────────────────────────────────────────────
+   Selections v2 — Fox
+   Standalone full-screen interface (no portal sidebar).
+   Uses portal CSS tokens for color consistency.
+───────────────────────────────────────────────────────── */
+body { background: var(--cream); padding: 0; }
+
+.fox-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Top bar ─────────────────────────────────── */
+.fox-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  background: var(--charcoal);
+  color: var(--cream);
+  border-bottom: 0.5px solid rgba(255,255,255,.06);
+  flex-shrink: 0;
+}
+.fox-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fox-brand-mark {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px; color: var(--cream);
+  letter-spacing: .02em;
+}
+.fox-brand-text { line-height: 1.2; }
+.fox-brand-name { font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+.fox-brand-sub  { font-size: 10px; color: rgba(235,233,222,.55); text-transform: uppercase; letter-spacing: .12em; }
+
+.fox-back {
+  font-size: 12px;
+  color: rgba(235,233,222,.6);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  transition: background .15s, color .15s;
+}
+.fox-back:hover { color: var(--cream); background: rgba(255,255,255,.06); }
+
+/* ── Main canvas ─────────────────────────────── */
+.fox-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 32px 22px 80px;
+}
+.fox-stage {
+  width: 100%;
+  max-width: 880px;
+}
+
+@media (max-width: 700px) {
+  .fox-top { padding: 12px 16px; }
+  .fox-main { padding: 22px 14px 60px; }
+}
+
+/* ── Phase: loading ──────────────────────────── */
+.fox-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--charcoal-3);
+  gap: 14px;
+}
+.fox-spinner {
+  width: 28px; height: 28px;
+  border: 2px solid var(--cream-2);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Phase: quiz ─────────────────────────────── */
+.quiz-card {
+  background: var(--white);
+  border-radius: var(--r-xl);
+  padding: 28px 32px 24px;
+  box-shadow: var(--sh-md);
+  border: 0.5px solid var(--border);
+}
+.quiz-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--green);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.quiz-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--cream-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.quiz-progress-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 2px;
+  transition: width .35s ease;
+}
+.quiz-prompt {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--charcoal);
+  line-height: 1.3;
+  margin: 4px 0 4px;
+  letter-spacing: -0.01em;
+}
+.quiz-note {
+  font-size: 13px;
+  color: var(--charcoal-3);
+  margin-bottom: 22px;
+}
+.quiz-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 600px) {
+  .quiz-options { grid-template-columns: 1fr; }
+  .quiz-card { padding: 22px 20px; }
+  .quiz-prompt { font-size: 18px; }
+}
+.quiz-option {
+  display: flex;
+  flex-direction: column;
+  background: var(--cream-pale);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  overflow: hidden;
+  transition: all .16s;
+  text-align: left;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+.quiz-option:hover {
+  border-color: var(--green);
+  transform: translateY(-1px);
+  box-shadow: var(--sh-md);
+}
+.quiz-option.selected {
+  border-color: var(--green);
+  background: var(--green-pale);
+  box-shadow: 0 0 0 3px rgba(117,127,105,.15);
+}
+.quiz-option-img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  background: var(--cream-2);
+  display: block;
+}
+.quiz-option-img-fallback {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: linear-gradient(135deg, var(--cream-2) 0%, var(--cream-3) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--charcoal-4);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.quiz-option-body {
+  padding: 12px 14px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.quiz-option-letter {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--cream-2);
+  color: var(--charcoal-2);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.quiz-option.selected .quiz-option-letter {
+  background: var(--green);
+  color: var(--cream);
+}
+.quiz-option-label {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--charcoal-2);
+  font-weight: 500;
+}
+.quiz-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.quiz-back {
+  background: none;
+  border: none;
+  font: inherit;
+  color: var(--charcoal-3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 8px 4px;
+}
+.quiz-back:hover { color: var(--charcoal); }
+.quiz-back:disabled { opacity: .35; cursor: default; }
+.quiz-next {
+  background: var(--charcoal);
+  color: var(--cream);
+  border: none;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.quiz-next:hover { background: var(--green-deep); }
+.quiz-next:disabled { background: var(--cream-3); color: var(--charcoal-4); cursor: default; }
+
+/* ── Phase: analyzing ────────────────────────── */
+.fox-analyzing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  text-align: center;
+}
+.fox-analyzing h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--charcoal);
+  margin-top: 18px;
+  letter-spacing: -0.01em;
+}
+.fox-analyzing p {
+  font-size: 13px;
+  color: var(--charcoal-3);
+  margin-top: 6px;
+}
+
+/* ── Phase: reveal ───────────────────────────── */
+.reveal-card {
+  background: var(--white);
+  border-radius: var(--r-xl);
+  padding: 36px 36px 30px;
+  box-shadow: var(--sh-lg);
+  border: 0.5px solid var(--border);
+}
+.reveal-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.reveal-style {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--charcoal);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.reveal-tagline {
+  font-size: 15px;
+  color: var(--charcoal-3);
+  font-style: italic;
+  margin-bottom: 22px;
+}
+.reveal-palette {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 26px;
+}
+.reveal-swatch {
+  flex: 1;
+  height: 56px;
+  border-radius: var(--r-md);
+  border: 0.5px solid var(--border);
+}
+.reveal-greeting {
+  background: var(--green-pale);
+  border-left: 3px solid var(--green);
+  padding: 18px 20px;
+  border-radius: var(--r-md);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--charcoal-2);
+  margin-bottom: 24px;
+  white-space: pre-wrap;
+}
+.reveal-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 28px;
+}
+.reveal-keyword {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--cream);
+  color: var(--charcoal-2);
+  padding: 4px 11px;
+  border-radius: 999px;
+  letter-spacing: .02em;
+}
+.reveal-cta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.btn-primary {
+  background: var(--green);
+  color: var(--white);
+  border: none;
+  border-radius: 999px;
+  padding: 13px 28px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-primary:hover { background: var(--green-dk); }
+.btn-secondary {
+  background: transparent;
+  color: var(--charcoal-3);
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  padding: 12px 22px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-secondary:hover { background: var(--cream-pale); color: var(--charcoal); }
+
+/* V2 reveal extras */
+.reveal-animate {
+  animation: revealFadeIn .6s ease-out;
+}
+@keyframes revealFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.reveal-concept {
+  font-size: 16px; line-height: 1.65; color: var(--charcoal);
+  margin-bottom: 24px; font-style: italic;
+  border-left: 3px solid var(--gold); padding-left: 16px;
+}
+.reveal-section-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--charcoal-3); margin-bottom: 10px;
+}
+.reveal-guardrails { margin-bottom: 22px; }
+.reveal-guardrail-item {
+  font-size: 13px; color: var(--charcoal-2); line-height: 1.5;
+  padding: 8px 0; border-bottom: 1px solid var(--cream-2);
+  padding-left: 16px; position: relative;
+}
+.reveal-guardrail-item::before {
+  content: '—'; position: absolute; left: 0; color: var(--green);
+}
+.reveal-guardrail-item:last-child { border-bottom: none; }
+.reveal-notes { margin-bottom: 22px; }
+.reveal-note-item {
+  font-size: 13px; color: var(--charcoal-3); line-height: 1.5;
+  padding: 6px 0; font-style: italic;
+}
+
+/* Material directions preview */
+.reveal-materials { margin-bottom: 24px; }
+.reveal-material-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.reveal-material-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; background: var(--cream-pale, #faf9f6);
+  border-radius: 8px; border: 1px solid var(--cream-2);
+}
+.reveal-material-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--charcoal-3);
+}
+.reveal-material-val {
+  font-size: 13px; color: var(--charcoal); line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .reveal-material-grid { grid-template-columns: 1fr; }
+}
+
+/* Calibration dashboard (internal debug) */
+.cal-dashboard {
+  margin-top: 32px; border-top: 2px dashed var(--cream-2); padding-top: 16px;
+}
+.cal-toggle {
+  font-size: 12px; font-weight: 700; color: var(--charcoal-3);
+  text-transform: uppercase; letter-spacing: .1em; cursor: pointer;
+  list-style: none; user-select: none;
+}
+.cal-toggle::-webkit-details-marker { display: none; }
+.cal-toggle::before { content: '+ '; }
+details[open] > .cal-toggle::before { content: '- '; }
+.cal-body { margin-top: 16px; }
+.cal-section { margin-bottom: 20px; }
+.cal-section-title {
+  font-size: 12px; font-weight: 700; color: var(--charcoal);
+  margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em;
+}
+.cal-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cal-table th {
+  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--cream-2);
+  font-weight: 600; color: var(--charcoal-3); font-size: 10px;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.cal-table td { padding: 4px 8px; border-bottom: 1px solid var(--cream-2); }
+.cal-dim-name { font-weight: 500; white-space: nowrap; width: 140px; }
+.cal-dim-bar { width: 40%; }
+.cal-bar-track {
+  height: 8px; background: var(--cream-2); border-radius: 4px; overflow: hidden;
+}
+.cal-bar-fill { height: 100%; background: var(--green); border-radius: 4px; }
+.cal-dim-score { font-weight: 600; text-align: right; width: 40px; }
+.cal-dim-conf { text-align: right; width: 60px; }
+.cal-dim-conf.high { color: var(--green-deep); }
+.cal-dim-conf.med { color: var(--gold); }
+.cal-dim-conf.low { color: var(--charcoal-3); }
+.cal-dim-conf.conflict { color: var(--danger); font-weight: 700; }
+.cal-conflict {
+  font-size: 12px; color: var(--danger); padding: 4px 0;
+  border-bottom: 1px solid var(--cream-2);
+}
+.cal-none { font-size: 12px; color: var(--charcoal-3); font-style: italic; }
+.cal-json {
+  font-size: 10px; background: var(--cream); padding: 12px;
+  border-radius: 8px; overflow-x: auto; max-height: 300px;
+  overflow-y: auto; white-space: pre; line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .reveal-card { padding: 26px 22px; }
+  .reveal-style { font-size: 28px; }
+  .cal-dim-name { width: 100px; font-size: 11px; }
+}
+
+/* ── Phase: budget calibration ────────────────── */
+/* Sits between reveal and home. User picks one tier per room. */
+.budget-shell { display: block; }
+.budget-hd {
+  margin-bottom: 20px;
+}
+.budget-eyebrow {
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--charcoal-4);
+  margin-bottom: 6px;
+}
+.budget-title {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 30px;
+  line-height: 1.15;
+  color: var(--charcoal);
+  margin-bottom: 10px;
+}
+.budget-sub {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--charcoal-3);
+  max-width: 640px;
+}
+.budget-room {
+  background: var(--white);
+  border: 1px solid var(--border-2);
+  border-radius: 20px;
+  padding: 18px 18px 20px;
+  margin-bottom: 16px;
+}
+.budget-room-hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+.budget-room-name {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 22px;
+  color: var(--charcoal);
+}
+.budget-room-hint {
+  font-size: 12px;
+  color: var(--charcoal-4);
+}
+.budget-tier-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.budget-tier {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  background: var(--cream-pale);
+  border: 1.5px solid var(--border-2);
+  border-radius: 14px;
+  padding: 0;
+  cursor: pointer;
+  transition: all .15s;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+}
+.budget-tier:hover {
+  border-color: var(--green);
+  transform: translateY(-1px);
+}
+.budget-tier.selected {
+  border-color: var(--green);
+  background: var(--white);
+  box-shadow: 0 0 0 3px rgba(92,124,94,.15);
+}
+.budget-tier-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--cream-3);
+  background-size: cover;
+  background-position: center;
+  display: block;
+}
+.budget-tier-img-fallback {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(135deg, var(--cream-2) 0%, var(--cream-3) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--charcoal-4);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.budget-tier-body {
+  padding: 12px 14px 14px;
+}
+.budget-tier-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--charcoal);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.budget-tier-check {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  background: var(--green);
+  color: var(--white);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+.budget-tier-desc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--charcoal-3);
+}
+.budget-footer {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(to top, var(--cream) 70%, rgba(247,243,234,0));
+  padding: 18px 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 8px;
+}
+.budget-footer-status {
+  font-size: 13px;
+  color: var(--charcoal-3);
+}
+.budget-footer-status strong { color: var(--charcoal); font-weight: 600; }
+
+@media (max-width: 600px) {
+  .budget-title { font-size: 24px; }
+  .budget-tier-grid { grid-template-columns: 1fr; }
+  .budget-tier { flex-direction: row; }
+  .budget-tier-img, .budget-tier-img-fallback { width: 120px; aspect-ratio: 1 / 1; flex-shrink: 0; }
+  .budget-tier-body { flex: 1; padding: 12px 14px; }
+}
+
+/* ── Phase: taste board (swipe) ─────────────── */
+.tasteboard-shell {
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 60vh;
+}
+.tasteboard-hd { text-align: center; margin-bottom: 20px; }
+.tasteboard-eyebrow {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--charcoal-3); margin-bottom: 6px;
+}
+.tasteboard-title {
+  font-size: 22px; font-weight: 700; color: var(--charcoal);
+  margin-bottom: 6px;
+}
+.tasteboard-sub {
+  font-size: 14px; color: var(--charcoal-3); max-width: 420px;
+  margin: 0 auto; line-height: 1.5;
+}
+
+.tasteboard-card-wrap {
+  position: relative; width: 100%; max-width: 400px;
+  margin: 0 auto; perspective: 800px;
+}
+.tasteboard-card {
+  border-radius: 14px; overflow: hidden; background: #fff;
+  box-shadow: 0 4px 20px rgba(0,0,0,.1);
+  transition: transform 0.35s ease, opacity 0.35s ease;
+  will-change: transform;
+}
+.tasteboard-card.swiping-left {
+  transform: translateX(-120%) rotate(-8deg); opacity: 0;
+}
+.tasteboard-card.swiping-right {
+  transform: translateX(120%) rotate(8deg); opacity: 0;
+}
+.tasteboard-card-img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
+  display: block; background: var(--cream-2);
+}
+.tasteboard-card-label {
+  padding: 12px 16px; font-size: 13px; color: var(--charcoal-3);
+  line-height: 1.4; border-top: 1px solid var(--cream-2);
+}
+
+.tasteboard-actions {
+  display: flex; gap: 16px; margin-top: 20px; justify-content: center;
+}
+.tasteboard-btn {
+  width: 64px; height: 64px; border-radius: 50%;
+  border: 2px solid var(--cream-2); background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; cursor: pointer;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.tasteboard-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,.1);
+}
+.tasteboard-btn-skip { color: var(--charcoal-3); }
+.tasteboard-btn-skip:hover { border-color: #e74c3c; color: #e74c3c; }
+.tasteboard-btn-love { color: var(--green); }
+.tasteboard-btn-love:hover { border-color: var(--green); }
+
+.tasteboard-progress {
+  margin-top: 20px; text-align: center;
+  font-size: 12px; color: var(--charcoal-3);
+}
+.tasteboard-progress-bar {
+  width: 200px; height: 3px; background: var(--cream-2);
+  border-radius: 2px; margin: 8px auto 0; overflow: hidden;
+}
+.tasteboard-progress-fill {
+  height: 100%; background: var(--green);
+  transition: width .3s ease;
+}
+
+.tasteboard-skip-all {
+  margin-top: 16px; font-size: 12px; color: var(--charcoal-3);
+  text-decoration: underline; cursor: pointer; border: none;
+  background: none; padding: 4px;
+}
+
+@media (max-width: 600px) {
+  .tasteboard-card-wrap { max-width: 100%; }
+  .tasteboard-btn { width: 56px; height: 56px; font-size: 20px; }
+}
+
+/* ── Phase: lifestyle ───────────────────────── */
+.lifestyle-shell { max-width: 600px; margin: 0 auto; }
+.lifestyle-hd { text-align: center; margin-bottom: 28px; }
+.lifestyle-eyebrow {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--charcoal-3); margin-bottom: 6px;
+}
+.lifestyle-title {
+  font-size: 22px; font-weight: 700; color: var(--charcoal);
+  margin-bottom: 6px;
+}
+.lifestyle-sub {
+  font-size: 14px; color: var(--charcoal-3); line-height: 1.5;
+}
+
+.lifestyle-section { margin-bottom: 28px; }
+.lifestyle-q {
+  font-size: 15px; font-weight: 600; color: var(--charcoal);
+  margin-bottom: 12px;
+}
+.lifestyle-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.lifestyle-opt {
+  flex: 1; min-width: 140px; padding: 14px 16px;
+  border: 2px solid var(--cream-2); border-radius: 10px;
+  background: #fff; cursor: pointer; text-align: center;
+  transition: border-color .15s, background .15s;
+  font-size: 14px; color: var(--charcoal);
+}
+.lifestyle-opt:hover { border-color: var(--green); }
+.lifestyle-opt.selected {
+  border-color: var(--green); background: rgba(66,108,74,.06);
+  font-weight: 600;
+}
+
+.lifestyle-rank-list { display: flex; flex-direction: column; gap: 8px; }
+.lifestyle-rank-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border: 2px solid var(--cream-2);
+  border-radius: 10px; background: #fff; cursor: grab;
+  transition: border-color .15s, box-shadow .15s;
+  user-select: none;
+}
+.lifestyle-rank-item:active { cursor: grabbing; }
+.lifestyle-rank-item.dragging {
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  border-color: var(--green);
+}
+.lifestyle-rank-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+}
+.lifestyle-rank-num.top { background: rgba(201,165,102,.15); color: #8a6d2b; }
+.lifestyle-rank-num.mid { background: rgba(66,108,74,.1); color: var(--green-deep); }
+.lifestyle-rank-num.low { background: var(--cream-2); color: var(--charcoal-3); }
+.lifestyle-rank-name { font-size: 14px; color: var(--charcoal); flex: 1; }
+.lifestyle-rank-grip {
+  color: var(--charcoal-3); font-size: 16px; flex-shrink: 0; opacity: .4;
+}
+.lifestyle-rank-tier {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 8px; font-weight: 600;
+}
+.lifestyle-rank-tier.showpiece { background: rgba(201,165,102,.15); color: #8a6d2b; }
+.lifestyle-rank-tier.elevated { background: rgba(66,108,74,.1); color: var(--green-deep); }
+.lifestyle-rank-tier.essential { background: var(--cream-2); color: var(--charcoal-3); }
+
+.lifestyle-note {
+  font-size: 12px; color: var(--charcoal-3); text-align: center;
+  margin-top: 8px; line-height: 1.4;
+}
+
+.lifestyle-footer {
+  display: flex; justify-content: center; padding-top: 20px;
+  border-top: 1px solid var(--cream-2); margin-top: 12px;
+}
+
+/* ── Phase: identity ───────────────────────────── */
+.identity-shell { max-width: 600px; margin: 0 auto; }
+.identity-hd { text-align: center; margin-bottom: 28px; }
+.identity-section { margin-bottom: 32px; }
+.identity-section h3 {
+  font-size: 15px; font-weight: 600; color: var(--charcoal);
+  margin-bottom: 14px;
+}
+.identity-section p {
+  font-size: 13px; color: var(--charcoal-3); margin-bottom: 14px; line-height: 1.4;
+}
+.identity-word-grid {
+  display: flex; flex-wrap: wrap; gap: 10px;
+}
+.identity-chip {
+  padding: 10px 18px; border: 2px solid var(--cream-2); border-radius: 20px;
+  background: #fff; cursor: pointer; font-size: 14px; color: var(--charcoal);
+  transition: border-color .15s, background .15s;
+  user-select: none;
+}
+.identity-chip:hover { border-color: var(--green); }
+.identity-chip.selected {
+  border-color: var(--green); background: rgba(66,108,74,.08);
+  font-weight: 600;
+}
+.identity-chip.neg.selected {
+  border-color: var(--danger); background: rgba(200,60,60,.06);
+}
+
+.identity-luxury-grid {
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+.identity-luxury-card {
+  flex: 1; min-width: 150px; padding: 18px 16px;
+  border: 2px solid var(--cream-2); border-radius: 12px;
+  background: #fff; cursor: pointer; text-align: center;
+  transition: border-color .15s, background .15s;
+}
+.identity-luxury-card:hover { border-color: var(--green); }
+.identity-luxury-card.selected {
+  border-color: var(--green); background: rgba(66,108,74,.06);
+}
+.identity-luxury-label {
+  font-size: 15px; font-weight: 600; color: var(--charcoal); margin-bottom: 4px;
+}
+.identity-luxury-desc {
+  font-size: 12px; color: var(--charcoal-3); line-height: 1.4;
+}
+
+.identity-footer {
+  display: flex; justify-content: center; padding-top: 20px;
+  border-top: 1px solid var(--cream-2); margin-top: 12px;
+}
+
+/* ── Phase: comparisons ────────────────────────── */
+.comparison-shell { max-width: 600px; margin: 0 auto; }
+.comparison-hd { text-align: center; margin-bottom: 20px; }
+.comparison-progress {
+  display: flex; gap: 4px; margin-bottom: 24px; padding: 0 20px;
+}
+.comparison-progress-dot {
+  flex: 1; height: 4px; border-radius: 2px;
+  background: var(--cream-2); transition: background .2s;
+}
+.comparison-progress-dot.done { background: var(--green); }
+.comparison-progress-dot.current { background: var(--gold); }
+
+.comparison-prompt {
+  font-size: 17px; font-weight: 600; color: var(--charcoal);
+  text-align: center; margin-bottom: 20px; line-height: 1.3;
+}
+.comparison-sub {
+  font-size: 13px; color: var(--charcoal-3); text-align: center;
+  margin-bottom: 20px; line-height: 1.4;
+}
+
+.comparison-pair {
+  display: flex; gap: 16px; justify-content: center; margin-bottom: 20px;
+}
+.comparison-option {
+  flex: 1; max-width: 260px; cursor: pointer;
+  border: 3px solid transparent; border-radius: 14px;
+  overflow: hidden; transition: border-color .2s, transform .15s;
+  background: #fff;
+}
+.comparison-option:hover { border-color: var(--green); transform: scale(1.02); }
+.comparison-option.picked { border-color: var(--green); }
+
+.comparison-img-wrap {
+  width: 100%; aspect-ratio: 4/3; overflow: hidden;
+  background: var(--cream-2); position: relative;
+}
+.comparison-img {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block;
+}
+.comparison-img-fallback {
+  position: absolute; inset: 0; display: none;
+  align-items: center; justify-content: center;
+  font-size: 13px; color: var(--charcoal-3); padding: 12px;
+  text-align: center; line-height: 1.4;
+}
+.comparison-img-fallback.show { display: flex; }
+.comparison-label {
+  padding: 12px; text-align: center;
+  font-size: 14px; font-weight: 600; color: var(--charcoal);
+}
+
+/* never-want grid (2x2) */
+.neverwant-prompt {
+  font-size: 17px; font-weight: 600; color: var(--charcoal);
+  text-align: center; margin-bottom: 8px;
+}
+.neverwant-sub {
+  font-size: 13px; color: var(--charcoal-3); text-align: center;
+  margin-bottom: 20px;
+}
+.neverwant-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  max-width: 540px; margin: 0 auto 20px;
+}
+.neverwant-option {
+  cursor: pointer; border: 3px solid transparent; border-radius: 14px;
+  overflow: hidden; transition: border-color .2s;
+  background: #fff; position: relative;
+}
+.neverwant-option:hover { border-color: var(--danger); }
+.neverwant-option.rejected { border-color: var(--danger); opacity: .7; }
+.neverwant-x {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--danger); color: #fff;
+  display: none; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700;
+}
+.neverwant-option.rejected .neverwant-x { display: flex; }
+.neverwant-img {
+  width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block;
+}
+.neverwant-label {
+  padding: 10px; text-align: center;
+  font-size: 13px; color: var(--charcoal); font-weight: 500;
+}
+
+/* affinity check */
+.affinity-shell { text-align: center; padding: 20px 0; }
+.affinity-prompt {
+  font-size: 16px; font-weight: 600; color: var(--charcoal);
+  margin-bottom: 16px;
+}
+.affinity-options {
+  display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+}
+.affinity-btn {
+  padding: 12px 24px; border: 2px solid var(--cream-2); border-radius: 10px;
+  background: #fff; cursor: pointer; font-size: 14px; color: var(--charcoal);
+  transition: border-color .15s, background .15s;
+}
+.affinity-btn:hover { border-color: var(--green); }
+
+/* comparison back button */
+.comparison-back {
+  display: block; margin: 0 auto; padding: 8px 16px;
+  background: none; border: none; cursor: pointer;
+  font-size: 13px; color: var(--charcoal-3);
+  text-decoration: underline;
+}
+.comparison-back:hover { color: var(--charcoal); }
+
+@media (max-width: 600px) {
+  .comparison-pair { gap: 10px; }
+  .comparison-option { max-width: 48%; }
+  .identity-luxury-card { min-width: 100%; }
+  .neverwant-grid { gap: 10px; }
+}
+
+/* ── Phase: guardrails ─────────────────────────── */
+.guardrails-shell { max-width: 600px; margin: 0 auto; }
+.guardrails-hd { text-align: center; margin-bottom: 28px; }
+.guardrails-section { margin-bottom: 28px; }
+.guardrails-section h3 {
+  font-size: 15px; font-weight: 600; color: var(--charcoal);
+  margin-bottom: 12px;
+}
+.guardrails-section p {
+  font-size: 13px; color: var(--charcoal-3); margin-bottom: 14px; line-height: 1.4;
+}
+.guardrail-list {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.guardrail-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border: 2px solid var(--cream-2); border-radius: 10px;
+  background: #fff; cursor: pointer;
+  transition: border-color .15s, background .15s;
+  font-size: 14px; color: var(--charcoal); line-height: 1.4;
+}
+.guardrail-item:hover { border-color: var(--green); }
+.guardrail-item.checked {
+  border-color: var(--green); background: rgba(66,108,74,.06);
+}
+.guardrail-item .check-icon {
+  width: 22px; height: 22px; border-radius: 6px;
+  border: 2px solid var(--cream-2); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: transparent; transition: all .15s;
+}
+.guardrail-item.checked .check-icon {
+  border-color: var(--green); background: var(--green); color: #fff;
+}
+.guardrail-item.redflag.checked {
+  border-color: var(--danger); background: rgba(200,60,60,.04);
+}
+.guardrail-item.redflag.checked .check-icon {
+  border-color: var(--danger); background: var(--danger);
+}
+
+.guardrails-footer {
+  display: flex; justify-content: center; padding-top: 20px;
+  border-top: 1px solid var(--cream-2); margin-top: 12px;
+}
+
+/* ── Phase: boards (design board selection) ───── */
+/* Client sees 3 design board options per room (one per tier) and picks the
+   one closest to their vision. The board matching their budget tier is
+   pre-highlighted with a "Recommended" badge. */
+.boards-shell { display: block; }
+.boards-hd { margin-bottom: 20px; }
+.boards-eyebrow {
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--charcoal-4);
+  margin-bottom: 6px;
+}
+.boards-title {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 30px;
+  line-height: 1.15;
+  color: var(--charcoal);
+  margin-bottom: 10px;
+}
+.boards-sub {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--charcoal-3);
+  max-width: 640px;
+}
+.boards-room {
+  background: var(--white);
+  border: 1px solid var(--border-2);
+  border-radius: 20px;
+  padding: 18px 18px 20px;
+  margin-bottom: 16px;
+}
+.boards-room-hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+.boards-room-name {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 22px;
+  color: var(--charcoal);
+}
+.boards-room-hint {
+  font-size: 12px;
+  color: var(--charcoal-4);
+}
+.boards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.board-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--cream-pale);
+  border: 1.5px solid var(--border-2);
+  border-radius: 14px;
+  padding: 0;
+  cursor: pointer;
+  transition: all .15s;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  position: relative;
+}
+.board-card:hover {
+  border-color: var(--green);
+  transform: translateY(-1px);
+}
+.board-card.selected {
+  border-color: var(--green);
+  background: var(--white);
+  box-shadow: 0 0 0 3px rgba(92,124,94,.15);
+}
+.board-card-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--green);
+  color: var(--white);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  z-index: 1;
+}
+.board-card-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  background: var(--cream-3);
+}
+.board-card-img-fallback {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(135deg, var(--cream-2) 0%, var(--cream-3) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--charcoal-4);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.board-card-body {
+  padding: 12px 14px 14px;
+}
+.board-card-tier {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--charcoal);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.board-card-check {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  background: var(--green);
+  color: var(--white);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+.board-card-desc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--charcoal-3);
+}
+.boards-footer {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(to top, var(--cream) 70%, rgba(247,243,234,0));
+  padding: 18px 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 8px;
+}
+.boards-footer-status {
+  font-size: 13px;
+  color: var(--charcoal-3);
+}
+.boards-footer-status strong { color: var(--charcoal); font-weight: 600; }
+
+@media (max-width: 600px) {
+  .boards-title { font-size: 24px; }
+  .boards-grid { grid-template-columns: 1fr; }
+  .board-card { flex-direction: row; }
+  .board-card-img, .board-card-img-fallback { width: 140px; aspect-ratio: 1 / 1; flex-shrink: 0; }
+  .board-card-body { flex: 1; padding: 12px 14px; }
+}
+
+/* ── Phase: package (auto-generated design review) ── */
+.package-shell { display: block; }
+.package-hd { text-align: center; margin-bottom: 32px; }
+.package-eyebrow {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--charcoal-3); margin-bottom: 8px;
+}
+.package-title {
+  font-size: 24px; font-weight: 700; color: var(--charcoal);
+  margin-bottom: 8px; line-height: 1.25;
+}
+.package-sub {
+  font-size: 14px; color: var(--charcoal-3); max-width: 560px;
+  margin: 0 auto; line-height: 1.55;
+}
+
+.package-room { margin-bottom: 36px; }
+.package-room-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--cream-2);
+}
+.package-room-name { font-size: 18px; font-weight: 700; color: var(--charcoal); }
+.package-room-tier {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--green-deep); background: var(--green-pale, rgba(66,108,74,.08));
+  padding: 4px 10px; border-radius: 12px; font-weight: 600;
+}
+
+.package-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.product-card {
+  background: #fff; border-radius: 12px; overflow: hidden;
+  border: 2px solid transparent;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  cursor: pointer; transition: border-color .15s, box-shadow .15s;
+  display: flex; flex-direction: column;
+}
+.product-card:hover {
+  border-color: var(--green);
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+}
+.product-card-img {
+  width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+  background: var(--cream-2);
+}
+.product-card-img-fallback {
+  width: 100%; aspect-ratio: 1 / 1;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--cream-2), var(--cream));
+  color: var(--charcoal-3); font-size: 13px; font-weight: 600;
+}
+.product-card-body { padding: 12px 14px; flex: 1; }
+.product-card-cat {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--charcoal-3); margin-bottom: 4px;
+}
+.product-card-name {
+  font-size: 14px; font-weight: 600; color: var(--charcoal);
+  line-height: 1.3; margin-bottom: 6px;
+}
+.product-card-tier-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 8px; margin-bottom: 6px;
+}
+.tier-essential  { background: #e8f0e8; color: #3a6b3a; }
+.tier-elevated   { background: #e8ecf4; color: #3a4f7a; }
+.tier-showpiece  { background: #f4ece4; color: #7a5a3a; }
+.product-card-note {
+  font-size: 12px; color: var(--charcoal-3); line-height: 1.45;
+}
+
+/* Swap panel (expanded under card) */
+.swap-panel {
+  border-top: 1px solid var(--cream-2);
+  padding: 12px 14px;
+  background: var(--cream);
+}
+.swap-panel-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--charcoal-3); margin-bottom: 10px; font-weight: 600;
+}
+.swap-options { display: flex; flex-direction: column; gap: 8px; }
+.swap-option {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--cream-2);
+  background: #fff; cursor: pointer; transition: border-color .15s;
+}
+.swap-option:hover { border-color: var(--green); }
+.swap-option-img {
+  width: 48px; height: 48px; border-radius: 6px; object-fit: cover;
+  background: var(--cream-2); flex-shrink: 0;
+}
+.swap-option-body { flex: 1; min-width: 0; }
+.swap-option-name { font-size: 13px; font-weight: 600; color: var(--charcoal); }
+.swap-option-tier {
+  font-size: 10px; color: var(--charcoal-3); text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.package-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 24px; margin-top: 12px;
+  border-top: 1px solid var(--cream-2);
+  gap: 12px;
+}
+
+.package-refine-hint {
+  text-align: center; margin-top: 16px; padding: 14px;
+  font-size: 13px; color: var(--charcoal-3); line-height: 1.5;
+}
+.package-refine-hint a {
+  color: var(--green-deep); text-decoration: underline; cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .package-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .product-card-name { font-size: 13px; }
+  .product-card-note { font-size: 11px; }
+  .swap-option { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 400px) {
+  .package-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Phase: home (room/category grid) ────────── */
+.home-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.home-header-text { flex: 1; min-width: 220px; }
+.home-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.home-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--charcoal);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.home-style-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--charcoal);
+  color: var(--cream);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.home-style-badge .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.home-progress {
+  background: var(--white);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px 22px;
+  margin-bottom: 22px;
+  box-shadow: var(--sh-sm);
+}
+.home-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.home-progress-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--charcoal-2);
+}
+.home-progress-pct {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green);
+}
+.home-progress-bar {
+  height: 6px;
+  background: var(--cream-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.home-progress-fill {
+  height: 100%;
+  background: var(--green);
+  transition: width .35s;
+}
+
+.room-section { margin-bottom: 26px; }
+.room-section-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--border);
+}
+.room-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--charcoal);
+  letter-spacing: -0.005em;
+}
+.room-progress {
+  font-size: 11px;
+  color: var(--charcoal-3);
+  font-weight: 500;
+}
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+.cat-tile {
+  background: var(--white);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.cat-tile:hover {
+  border-color: var(--green);
+  box-shadow: var(--sh-md);
+  transform: translateY(-1px);
+}
+.cat-tile.done {
+  background: var(--green-pale);
+  border-color: rgba(117,127,105,.35);
+}
+.cat-tile-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--charcoal);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cat-tile-status {
+  font-size: 11px;
+  color: var(--charcoal-4);
+}
+.cat-tile.done .cat-tile-status {
+  color: var(--green-dk);
+  font-weight: 600;
+}
+.cat-tile-pick {
+  font-size: 11px;
+  color: var(--green-deep);
+  font-weight: 500;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cat-tile-check {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── Phase: chat ─────────────────────────────── */
+.chat-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px - 64px);
+  min-height: 520px;
+  background: var(--white);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-md);
+  border: 0.5px solid var(--border);
+  overflow: hidden;
+}
+.chat-hd {
+  padding: 16px 22px;
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  background: var(--cream-pale);
+}
+.chat-hd-l { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.chat-hd-text { min-width: 0; }
+.chat-hd-room {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.chat-hd-cat {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--charcoal);
+  letter-spacing: -0.01em;
+}
+.chat-hd-back {
+  background: none;
+  border: 1px solid var(--border-2);
+  color: var(--charcoal-3);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.chat-hd-back:hover { background: var(--cream-pale); color: var(--charcoal); }
+
+.chat-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 24px 12px;
+  background: var(--cream-pale);
+}
+.chat-msg { margin-bottom: 16px; }
+.chat-msg.user .chat-bubble {
+  background: var(--charcoal);
+  color: var(--cream);
+  margin-left: auto;
+}
+.chat-msg.fox .chat-bubble {
+  background: var(--white);
+  color: var(--charcoal);
+  border: 0.5px solid var(--border);
+}
+.chat-bubble {
+  max-width: 85%;
+  padding: 14px 18px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.chat-msg.user { display: flex; justify-content: flex-end; }
+.chat-msg.fox  { display: flex; justify-content: flex-start; }
+
+.chat-msg.fox .chat-bubble strong { font-weight: 700; }
+.chat-msg.fox .chat-bubble em { font-style: italic; color: var(--charcoal-2); }
+
+.chat-thinking {
+  display: inline-flex;
+  gap: 4px;
+  padding: 14px 18px;
+}
+.chat-thinking .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--charcoal-4);
+  animation: bounce 1.2s infinite;
+}
+.chat-thinking .dot:nth-child(2) { animation-delay: .2s; }
+.chat-thinking .dot:nth-child(3) { animation-delay: .4s; }
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.pick-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+@media (max-width: 700px) {
+  .pick-cards { grid-template-columns: 1fr; }
+}
+.pick-card {
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.pick-card:hover {
+  border-color: var(--green);
+  transform: translateY(-1px);
+  box-shadow: var(--sh-md);
+}
+.pick-card.foxpick {
+  border-color: var(--green);
+  background: var(--green-pale);
+}
+.pick-card-tier {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: .04em;
+}
+.pick-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--charcoal);
+  line-height: 1.3;
+}
+.pick-card-price {
+  font-size: 11px;
+  color: var(--charcoal-3);
+  font-style: italic;
+}
+.pick-card-why {
+  font-size: 12px;
+  color: var(--charcoal-2);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+.pick-card-foxpick-tag {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  background: var(--green);
+  color: var(--white);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.chat-foot {
+  border-top: 0.5px solid var(--border);
+  padding: 14px 18px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  background: var(--white);
+  flex-shrink: 0;
+}
+.chat-input {
+  flex: 1;
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 14px;
+  resize: none;
+  max-height: 120px;
+  min-height: 42px;
+  line-height: 1.4;
+  color: var(--charcoal);
+  background: var(--cream-pale);
+}
+.chat-input:focus {
+  outline: none;
+  border-color: var(--green);
+  background: var(--white);
+}
+.chat-send {
+  background: var(--green);
+  color: var(--white);
+  border: none;
+  border-radius: 999px;
+  padding: 11px 20px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.chat-send:hover { background: var(--green-dk); }
+.chat-send:disabled { background: var(--cream-3); color: var(--charcoal-4); cursor: default; }
+
+.chat-locked-banner {
+  background: var(--green-pale);
+  border-top: 0.5px solid rgba(117,127,105,.3);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.chat-locked-text {
+  font-size: 13px;
+  color: var(--green-deep);
+  font-weight: 600;
+}
+.chat-locked-text small {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--charcoal-3);
+  margin-top: 2px;
+}
+
+/* ── Toast ───────────────────────────────────── */
+.fox-toast-wrap {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  pointer-events: none;
+}
+.fox-toast {
+  background: var(--charcoal);
+  color: var(--cream);
+  padding: 11px 20px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--sh-lg);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .25s, transform .25s;
+}
+.fox-toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── Error ───────────────────────────────────── */
+.fox-error {
+  background: var(--danger-lt);
+  border: 1px solid rgba(184,50,50,.25);
+  border-radius: var(--r-md);
+  padding: 14px 18px;
+  color: var(--danger);
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+</style>
+</head>
+<body>
+<div class="fox-shell" id="fox-shell">
+  <div class="fox-top">
+    <div class="fox-brand">
+      <div class="fox-brand-mark">F</div>
+      <div class="fox-brand-text">
+        <div class="fox-brand-name">Fox</div>
+        <div class="fox-brand-sub">David Adler Group</div>
+      </div>
+    </div>
+    <a class="fox-back" href="dashboard.html">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2L3 5.5 7 9"/></svg>
+      Back to portal
+    </a>
+  </div>
+  <div class="fox-main">
+    <div class="fox-stage" id="stage"></div>
+  </div>
+</div>
+<div class="fox-toast-wrap" id="fox-toast-wrap"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+//  SELECTIONS V2 — FOX
+//  AI design consultant for David Adler Group / Six Arrows
+//
+//  Phases: loading → quiz → tasteboard → lifestyle → analyzing → reveal → home → chat
+//
+//  Persistence: writes to /selections-storage using v1 key format
+//  (sab8_{clientKey}_{suffix}) so the existing design book reads it.
+//  v2-specific state lives under _v2_* keys inside the `ans` object;
+//  picks are mirrored into v1-compatible product fields where possible.
+// ─────────────────────────────────────────────────────────
+
+const p = AUTH.requireAuth();
+if (!p) { /* AUTH redirected */ }
+
+const CLIENT_KEY  = p.selectionsClientKey || p.id;
+const CLIENT_NAME = p.clientName;
+
+// ── Default rooms (only seeded if `rms` is empty so we never overwrite v1) ──
+const V2_DEFAULT_ROOMS = [
+  { id: 'kitchen',        name: 'Kitchen',        plumbing: 'kitchen' },
+  { id: 'master_bath',    name: 'Master Bath',    plumbing: 'bath' },
+  { id: 'guest_bath',     name: 'Guest Bath',     plumbing: 'bath' },
+  { id: 'powder_room',    name: 'Powder Room',    plumbing: 'bath' },
+  { id: 'living_room',    name: 'Living Room',    plumbing: 'none' },
+  { id: 'master_bedroom', name: 'Master Bedroom', plumbing: 'none' },
+  { id: 'mudroom',        name: 'Mudroom',        plumbing: 'none' },
+  { id: 'laundry',        name: 'Laundry',        plumbing: 'utility' },
+];
+
+// ── Which categories Fox walks through per room ──
+// Derived from a room's `plumbing` flag and name (so it works with whatever
+// rooms the v1 setup screen saved — kitchen / bathroom_1 / dining / etc.)
+const CATS_KITCHEN = ['countertops', 'tile', 'flooring', 'appliances', 'plumbing', 'lighting', 'hardware', 'paint'];
+const CATS_BATH    = ['countertops', 'tile', 'flooring', 'plumbing', 'lighting', 'hardware', 'paint'];
+const CATS_UTILITY = ['flooring', 'tile', 'lighting', 'paint', 'plumbing', 'hardware'];
+const CATS_LIVING  = ['flooring', 'lighting', 'paint', 'fireplace', 'specialty_trim'];
+const CATS_BEDROOM = ['flooring', 'lighting', 'paint'];
+
+function categoriesFor(room) {
+  if (!room) return [];
+  const plumb = (room.plumbing || '').toLowerCase();
+  const name  = (room.name || '').toLowerCase();
+  if (plumb === 'kitchen' || /kitchen/.test(name)) return CATS_KITCHEN;
+  if (plumb === 'bath'    || /bath|shower|powder/.test(name)) return CATS_BATH;
+  if (plumb === 'utility' || /mud|laundry|utility|pantry/.test(name)) return CATS_UTILITY;
+  if (/living|family|great|den|fireplace/.test(name)) return CATS_LIVING;
+  if (/bed|nursery|guest/.test(name)) return CATS_BEDROOM;
+  // Dining, office, hallway, foyer, etc.
+  return ['flooring', 'lighting', 'paint'];
+}
+
+const CAT_LABELS = {
+  fireplace:         'Fireplace',
+  appliances:        'Appliances',
+  exterior_finishes: 'Exterior Finishes',
+  specialty_trim:    'Specialty Trim',
+  flooring:          'Flooring',
+  tile:              'Tile',
+  plumbing:          'Plumbing Fixtures',
+  lighting:          'Lighting',
+  countertops:       'Countertops',
+  hardware:          'Hardware',
+  paint:             'Paint & Stain',
+  doors:             'Interior Doors & Trim',
+};
+
+// ─────────────────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────────────────
+
+const ST = {
+  phase: 'loading',
+  // ── Taste Engine V1 — new intake phases ──
+  // Identity phase
+  identityProfile: null,     // { positiveWords[], negativeWords[], luxuryExpression }
+  // Comparisons phase
+  comparisonPairs: [],       // from catalog
+  neverWantSets: [],         // from catalog
+  compIdx: 0,                // current comparison index (0-13: 0-11 = A/B pairs, 12-13 = never-want sets)
+  comparisonResults: {},     // { comp_warmth: { pick: 'A'|'B', affinity: 'love'|'ok'|'neither'|null }, nw_bath: 'nw_bath_2', ... }
+  affinityPending: null,     // id of comparison awaiting affinity response
+  // Guardrails phase
+  guardrails: null,          // { abstractGuardrails[], specificRedFlags[] }
+  // Style fingerprint (replaces tasteProfile)
+  styleFingerprint: null,    // { dimensions{}, confidence{}, coherence{}, tasteMaturity, derived{}, styleFit{} }
+  designConcept: '',         // house-level thesis from Claude
+  designGuardrails: [],      // prose guardrails from Claude
+  inconsistencies: [],       // from Claude
+  livabilityNotes: [],       // from Claude
+  // ── Legacy fields (kept for backward compat) ──
+  // Quiz (legacy — still works for existing clients)
+  quiz: [],          // array of question objects from style-catalog
+  qIdx: 0,
+  quizAnswers: {},   // { q1_vibe: 'A', ... }
+  // Taste board (legacy swipe)
+  swipeImages: [],
+  swipeIndex: 0,
+  swipeResults: {},    // { imageId: 'love' | 'skip' }
+  tasteProfile: null,  // computed from swipe results
+  // Lifestyle (expanded)
+  lifestyle: null,     // { kitchenUse, kitchenMessLevel, householdType, bathPriority, maintenanceTolerance, hostingFrequency, decisionStyle, investmentRanking }
+  // Style identification
+  style: '',
+  styleSummary: '',
+  styleGreeting: '',
+  styleProfile: null,  // palette/tagline/keywords from /style-catalog
+  // Budget calibration — one tier per room, set after style reveal.
+  // Shape: { 'kitchen': 'essential' | 'elevated' | 'showpiece', ... }
+  // Drives which products Fox recommends in chat AND which design boards
+  // we show for each room.
+  budgetTiers: {},
+  // Design board picks — one board per room, chosen from 3 tier options.
+  // Shape: { 'kitchen': 'elevated', 'master_bath': 'showpiece', ... }
+  // This records which design board the client picked for each room.
+  boardPicks: {},
+  // Auto-generated design package — all selections pre-filled.
+  // Shape: { 'kitchen': { 'countertops': { selected: {...}, alternatives: [...] }, ... }, ... }
+  designPackage: null,
+  expandedSwap: null,  // which product card has its swap panel open
+  // Catalog
+  catalog: null,
+  // Chat
+  currentRoom: '',
+  currentCategory: '',
+  chatHistory: {},   // { 'room::cat': [{role, content, picks?}] }
+  picks: {},         // { 'room::cat': { tier, name, priceRange, why } }
+  awaitingFox: false,
+  // Persistence
+  ans: {},
+  sav: {},
+  rms: [],
+  // Save coordination
+  pendingSave: null,
+};
+
+// ─────────────────────────────────────────────────────────
+//  Utilities
+// ─────────────────────────────────────────────────────────
+
+function $(sel, root) { return (root || document).querySelector(sel); }
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Minimal markdown renderer for Fox bubbles: bold, italic, line breaks.
+function mdRender(s) {
+  if (!s) return '';
+  let out = esc(s);
+  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+  out = out.replace(/\n/g, '<br>');
+  return out;
+}
+
+function showToast(msg) {
+  const wrap = $('#fox-toast-wrap');
+  if (!wrap) return;
+  const t = document.createElement('div');
+  t.className = 'fox-toast';
+  t.textContent = msg;
+  wrap.appendChild(t);
+  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 280); }, 2400);
+}
+
+function render() {
+  const stage = $('#stage');
+  if (!stage) return;
+  if (ST.phase === 'loading')    stage.innerHTML = renderLoading('Loading Fox…');
+  if (ST.phase === 'identity')   stage.innerHTML = renderIdentity();
+  if (ST.phase === 'comparisons') stage.innerHTML = renderComparisons();
+  if (ST.phase === 'lifestyle')  stage.innerHTML = renderLifestyle();
+  if (ST.phase === 'guardrails') stage.innerHTML = renderGuardrails();
+  if (ST.phase === 'quiz')      stage.innerHTML = renderQuiz();
+  if (ST.phase === 'analyzing') stage.innerHTML = renderAnalyzing();
+  if (ST.phase === 'reveal')    stage.innerHTML = renderReveal();
+  if (ST.phase === 'tasteboard') stage.innerHTML = renderTasteBoard();
+  if (ST.phase === 'budget')     stage.innerHTML = renderBudget();
+  if (ST.phase === 'boards')     stage.innerHTML = renderBoards();
+  if (ST.phase === 'generating') stage.innerHTML = renderLoading('Fox is building your design package…');
+  if (ST.phase === 'package')    stage.innerHTML = renderPackageReview();
+  if (ST.phase === 'home')       stage.innerHTML = renderHome();
+  if (ST.phase === 'chat')       stage.innerHTML = renderChat();
+  if (ST.phase === 'error')     stage.innerHTML = renderError(ST.errorMessage);
+  // Post-render hooks
+  if (ST.phase === 'chat') scrollChatToBottom();
+}
+
+// ─────────────────────────────────────────────────────────
+//  Persistence
+// ─────────────────────────────────────────────────────────
+
+async function loadAll() {
+  try {
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${encodeURIComponent(CLIENT_KEY)}`);
+    if (res.ok) {
+      const data = await res.json();
+      const all = data.data || {};
+      ST.ans = all.ans || {};
+      ST.sav = all.sav || {};
+      ST.rms = Array.isArray(all.rms) && all.rms.length ? all.rms : V2_DEFAULT_ROOMS.slice();
+    } else {
+      ST.ans = {}; ST.sav = {}; ST.rms = V2_DEFAULT_ROOMS.slice();
+    }
+  } catch (e) {
+    ST.ans = {}; ST.sav = {}; ST.rms = V2_DEFAULT_ROOMS.slice();
+  }
+  // Hydrate v2 state from ans
+  try { ST.quizAnswers = JSON.parse(ST.ans._v2_quiz_answers || '{}'); } catch(e) { ST.quizAnswers = {}; }
+  ST.style         = ST.ans._v2_style          || '';
+  ST.styleSummary  = ST.ans._v2_style_summary  || '';
+  ST.styleGreeting = ST.ans._v2_style_greeting || '';
+  try { ST.chatHistory = JSON.parse(ST.ans._v2_chat_history || '{}'); } catch(e) { ST.chatHistory = {}; }
+  try { ST.picks       = JSON.parse(ST.ans._v2_picks        || '{}'); } catch(e) { ST.picks = {}; }
+  try { ST.budgetTiers = JSON.parse(ST.ans._v2_budget_tiers || '{}'); } catch(e) { ST.budgetTiers = {}; }
+  try { ST.boardPicks  = JSON.parse(ST.ans._v2_board_picks  || '{}'); } catch(e) { ST.boardPicks = {}; }
+  try { ST.designPackage = JSON.parse(ST.ans._v2_design_package || 'null'); } catch(e) { ST.designPackage = null; }
+  try { ST.swipeResults = JSON.parse(ST.ans._v2_swipe_results || '{}'); } catch(e) { ST.swipeResults = {}; }
+  try { ST.tasteProfile = JSON.parse(ST.ans._v2_taste_profile || 'null'); } catch(e) { ST.tasteProfile = null; }
+  try { ST.lifestyle = JSON.parse(ST.ans._v2_lifestyle || 'null'); } catch(e) { ST.lifestyle = null; }
+  // Taste engine V1 fields
+  try { ST.identityProfile    = JSON.parse(ST.ans._v2_identity_profile    || 'null'); } catch(e) { ST.identityProfile = null; }
+  try { ST.comparisonResults  = JSON.parse(ST.ans._v2_comparison_results  || '{}'); }   catch(e) { ST.comparisonResults = {}; }
+  try { ST.guardrails         = JSON.parse(ST.ans._v2_guardrails          || 'null'); } catch(e) { ST.guardrails = null; }
+  try { ST.styleFingerprint   = JSON.parse(ST.ans._v2_style_fingerprint   || 'null'); } catch(e) { ST.styleFingerprint = null; }
+  ST.designConcept      = ST.ans._v2_design_concept      || '';
+  try { ST.designGuardrails   = JSON.parse(ST.ans._v2_design_guardrails   || '[]'); }   catch(e) { ST.designGuardrails = []; }
+  try { ST.inconsistencies    = JSON.parse(ST.ans._v2_inconsistencies     || '[]'); }   catch(e) { ST.inconsistencies = []; }
+  try { ST.livabilityNotes    = JSON.parse(ST.ans._v2_livability_notes    || '[]'); }   catch(e) { ST.livabilityNotes = []; }
+}
+
+// Debounced batch save — coalesces rapid mutations into one network write.
+function scheduleSave() {
+  if (ST.pendingSave) clearTimeout(ST.pendingSave);
+  ST.pendingSave = setTimeout(saveAllNow, 250);
+}
+async function saveAllNow() {
+  ST.pendingSave = null;
+  // Refresh the v2 mirror keys before persisting
+  ST.ans._v2_quiz_answers   = JSON.stringify(ST.quizAnswers);
+  ST.ans._v2_style          = ST.style          || '';
+  ST.ans._v2_style_summary  = ST.styleSummary   || '';
+  ST.ans._v2_style_greeting = ST.styleGreeting  || '';
+  ST.ans._v2_chat_history   = JSON.stringify(ST.chatHistory);
+  ST.ans._v2_picks          = JSON.stringify(ST.picks);
+  ST.ans._v2_budget_tiers   = JSON.stringify(ST.budgetTiers);
+  ST.ans._v2_board_picks    = JSON.stringify(ST.boardPicks);
+  ST.ans._v2_design_package = JSON.stringify(ST.designPackage);
+  ST.ans._v2_swipe_results  = JSON.stringify(ST.swipeResults);
+  ST.ans._v2_taste_profile  = JSON.stringify(ST.tasteProfile);
+  ST.ans._v2_lifestyle      = JSON.stringify(ST.lifestyle);
+  // Taste engine V1 fields
+  ST.ans._v2_identity_profile    = JSON.stringify(ST.identityProfile);
+  ST.ans._v2_comparison_results  = JSON.stringify(ST.comparisonResults);
+  ST.ans._v2_guardrails          = JSON.stringify(ST.guardrails);
+  ST.ans._v2_style_fingerprint   = JSON.stringify(ST.styleFingerprint);
+  ST.ans._v2_design_concept      = ST.designConcept || '';
+  ST.ans._v2_design_guardrails   = JSON.stringify(ST.designGuardrails);
+  ST.ans._v2_inconsistencies     = JSON.stringify(ST.inconsistencies);
+  ST.ans._v2_livability_notes    = JSON.stringify(ST.livabilityNotes);
+
+  // Batch endpoint expects { batch: { ans, sav, rms, ... } } — same shape v1 uses.
+  const body = {
+    batch: {
+      ans: ST.ans,
+      sav: ST.sav,
+      rms: ST.rms,
+    },
+  };
+  try {
+    const res = await fetch(`/.netlify/functions/selections-storage?clientKey=${encodeURIComponent(CLIENT_KEY)}&batch=1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) console.warn('selections-v2 save failed:', res.status, await res.text());
+  } catch (e) {
+    console.warn('selections-v2 save error:', e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Renderers — phases
+// ─────────────────────────────────────────────────────────
+
+function renderLoading(label) {
+  return `
+    <div class="fox-loading">
+      <div class="fox-spinner"></div>
+      <div>${esc(label || 'Loading…')}</div>
+    </div>`;
+}
+
+function renderError(msg) {
+  return `
+    <div class="fox-error">${esc(msg || 'Something went wrong.')}</div>
+    <button class="btn-primary" onclick="location.reload()">Reload</button>`;
+}
+
+// ── Identity ─────────────────────────────────
+// Phase 1: "Who are you and how should your home feel?"
+function renderIdentity() {
+  const ip = ST.identityProfile || { positiveWords: [], negativeWords: [], luxuryExpression: null };
+  const catalog = ST.catalog || {};
+  const words = catalog.identityWords || { positive: [], negative: [] };
+
+  const posSelected = new Set(ip.positiveWords);
+  const negSelected = new Set(ip.negativeWords);
+
+  const posCount = posSelected.size;
+  const negCount = negSelected.size;
+  const allDone = posCount >= 5 && negCount >= 3 && ip.luxuryExpression;
+
+  return `
+    <div class="identity-shell">
+      <div class="identity-hd">
+        <div class="lifestyle-eyebrow">Step 1 \u00b7 Your identity</div>
+        <div class="lifestyle-title">Before we show you a single tile or faucet\u2026</div>
+        <div class="lifestyle-sub">Tell us how your home should feel. Not what it looks like \u2014 what it <em>is</em>.</div>
+      </div>
+
+      <div class="identity-section">
+        <div class="lifestyle-q">Pick 5 words your home should embody</div>
+        <div class="lifestyle-sub" style="margin-bottom:10px;font-size:13px;">
+          ${posCount}/5 selected
+        </div>
+        <div class="identity-word-grid">
+          ${words.positive.map(w => {
+            const sel = posSelected.has(w.word);
+            const disabled = !sel && posCount >= 5;
+            return `<button class="identity-chip ${sel ? 'selected' : ''} ${disabled ? 'disabled' : ''}"
+                            onclick="toggleIdentityWord('positive','${esc(w.word)}')">${esc(w.word)}</button>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="identity-section">
+        <div class="lifestyle-q">Pick 3\u20135 words your home should NEVER feel like</div>
+        <div class="lifestyle-sub" style="margin-bottom:10px;font-size:13px;">
+          ${negCount}/3\u20135 selected
+        </div>
+        <div class="identity-word-grid">
+          ${words.negative.map(w => {
+            const sel = negSelected.has(w.word);
+            const disabled = !sel && negCount >= 5;
+            return `<button class="identity-chip negative ${sel ? 'selected' : ''} ${disabled ? 'disabled' : ''}"
+                            onclick="toggleIdentityWord('negative','${esc(w.word)}')">${esc(w.word)}</button>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="identity-section">
+        <div class="lifestyle-q">What does \u201cthe good stuff\u201d mean to you?</div>
+        <div class="identity-luxury-cards">
+          ${[
+            { id: 'quiet', label: 'Quiet quality', desc: 'You feel it before you see it' },
+            { id: 'natural', label: 'Natural materials', desc: 'Things that age beautifully' },
+            { id: 'bold', label: 'Statement moments', desc: 'The thing guests can\u2019t stop talking about' },
+          ].map(opt => `
+            <button class="identity-luxury-card ${ip.luxuryExpression === opt.id ? 'selected' : ''}"
+                    onclick="setLuxuryExpression('${opt.id}')">
+              <div class="identity-luxury-label">${opt.label}</div>
+              <div class="identity-luxury-desc">${opt.desc}</div>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="lifestyle-footer">
+        <button class="btn-primary" onclick="completeIdentity()" ${allDone ? '' : 'disabled'}>
+          Show me images \u2192
+        </button>
+      </div>
+    </div>`;
+}
+
+function toggleIdentityWord(type, word) {
+  if (!ST.identityProfile) ST.identityProfile = { positiveWords: [], negativeWords: [], luxuryExpression: null };
+  const arr = type === 'positive' ? ST.identityProfile.positiveWords : ST.identityProfile.negativeWords;
+  const max = type === 'positive' ? 5 : 5;
+  const idx = arr.indexOf(word);
+  if (idx >= 0) arr.splice(idx, 1);
+  else if (arr.length < max) arr.push(word);
+  scheduleSave();
+  render();
+}
+
+function setLuxuryExpression(val) {
+  if (!ST.identityProfile) ST.identityProfile = { positiveWords: [], negativeWords: [], luxuryExpression: null };
+  ST.identityProfile.luxuryExpression = val;
+  scheduleSave();
+  render();
+}
+
+function completeIdentity() {
+  const ip = ST.identityProfile;
+  if (!ip || ip.positiveWords.length < 5 || ip.negativeWords.length < 3 || !ip.luxuryExpression) {
+    showToast('Finish all three sections first');
+    return;
+  }
+  // Load comparison data from catalog
+  ST.comparisonPairs = Array.isArray(ST.catalog?.comparisonPairs) ? ST.catalog.comparisonPairs : [];
+  ST.neverWantSets = Array.isArray(ST.catalog?.neverWantSets) ? ST.catalog.neverWantSets : [];
+  ST.compIdx = 0;
+  ST.affinityPending = null;
+  ST.phase = 'comparisons';
+  scheduleSave();
+  render();
+}
+
+// ── Comparisons ──────────────────────────────
+// Phase 2: A/B image pairs + never-want sets
+function renderComparisons() {
+  const pairs = ST.comparisonPairs || [];
+  const nwSets = ST.neverWantSets || [];
+  const totalSteps = pairs.length + nwSets.length;
+  const idx = ST.compIdx;
+
+  if (idx >= totalSteps) {
+    // All done — move to lifestyle
+    ST.phase = 'lifestyle';
+    scheduleSave();
+    render();
+    return '';
+  }
+
+  const pctNum = Math.round((idx / totalSteps) * 100);
+
+  // Check if we're showing an affinity follow-up
+  if (ST.affinityPending) {
+    const pair = pairs.find(p => p.id === ST.affinityPending);
+    if (pair) return renderAffinityCheck(pair, idx, totalSteps, pctNum);
+  }
+
+  // A/B comparison pairs (indices 0 through pairs.length-1)
+  if (idx < pairs.length) {
+    const pair = pairs[idx];
+    const existing = ST.comparisonResults[pair.id];
+    return `
+      <div class="comparison-card">
+        <div class="quiz-progress">
+          <span>${idx + 1} of ${totalSteps}</span>
+          <div class="quiz-progress-bar"><div class="quiz-progress-fill" style="width:${pctNum}%"></div></div>
+        </div>
+        <div class="comparison-prompt">${esc(pair.prompt)}</div>
+        <div class="comparison-pair">
+          <button class="comparison-option ${existing?.pick === 'A' ? 'selected' : ''}"
+                  onclick="onComparisonPick('${esc(pair.id)}','A')">
+            <div class="comparison-img-wrap">
+              <img src="${esc(pair.imageA)}" alt="${esc(pair.labelA)}" class="comparison-img"
+                   onerror="this.style.display='none';this.nextElementSibling.classList.add('show')">
+              <div class="comparison-img-fallback">A</div>
+            </div>
+            <div class="comparison-label">${esc(pair.labelA)}</div>
+          </button>
+          <button class="comparison-option ${existing?.pick === 'B' ? 'selected' : ''}"
+                  onclick="onComparisonPick('${esc(pair.id)}','B')">
+            <div class="comparison-img-wrap">
+              <img src="${esc(pair.imageB)}" alt="${esc(pair.labelB)}" class="comparison-img"
+                   onerror="this.style.display='none';this.nextElementSibling.classList.add('show')">
+              <div class="comparison-img-fallback">B</div>
+            </div>
+            <div class="comparison-label">${esc(pair.labelB)}</div>
+          </button>
+        </div>
+        <div class="quiz-actions">
+          <button class="quiz-back" ${idx === 0 ? 'disabled' : ''} onclick="onCompBack()">← Back</button>
+        </div>
+      </div>`;
+  }
+
+  // Never-want sets (indices pairs.length through totalSteps-1)
+  const nwIdx = idx - pairs.length;
+  const nwSet = nwSets[nwIdx];
+  if (!nwSet) return renderError('Comparison data missing.');
+
+  const rejected = ST.comparisonResults[nwSet.id];
+  return `
+    <div class="comparison-card">
+      <div class="quiz-progress">
+        <span>${idx + 1} of ${totalSteps}</span>
+        <div class="quiz-progress-bar"><div class="quiz-progress-fill" style="width:${pctNum}%"></div></div>
+      </div>
+      <div class="comparison-prompt">${esc(nwSet.prompt)}</div>
+      <div class="comparison-sub">Tap the one you\u2019d never want.</div>
+      <div class="neverwant-grid">
+        ${nwSet.options.map(opt => `
+          <button class="neverwant-option ${rejected === opt.id ? 'rejected' : ''}"
+                  onclick="onNeverWantPick('${esc(nwSet.id)}','${esc(opt.id)}')">
+            <div class="comparison-img-wrap">
+              <img src="${esc(opt.imageUrl)}" alt="${esc(opt.label)}" class="comparison-img"
+                   onerror="this.style.display='none';this.nextElementSibling.classList.add('show')">
+              <div class="comparison-img-fallback">${esc(opt.label.slice(0, 1))}</div>
+            </div>
+            <div class="comparison-label">${esc(opt.label)}</div>
+            ${rejected === opt.id ? '<div class="neverwant-x">\u2715</div>' : ''}
+          </button>
+        `).join('')}
+      </div>
+      <div class="quiz-actions">
+        <button class="quiz-back" onclick="onCompBack()">← Back</button>
+      </div>
+    </div>`;
+}
+
+function renderAffinityCheck(pair, idx, totalSteps, pctNum) {
+  return `
+    <div class="comparison-card">
+      <div class="quiz-progress">
+        <span>${idx + 1} of ${totalSteps}</span>
+        <div class="quiz-progress-bar"><div class="quiz-progress-fill" style="width:${pctNum}%"></div></div>
+      </div>
+      <div class="comparison-prompt">How do you feel about your pick?</div>
+      <div class="comparison-sub">Do you actually love it, or was it just the better of the two?</div>
+      <div class="affinity-options">
+        <button class="lifestyle-opt" onclick="onAffinityPick('love')">Love it</button>
+        <button class="lifestyle-opt" onclick="onAffinityPick('ok')">It\u2019s OK</button>
+        <button class="lifestyle-opt" onclick="onAffinityPick('neither')">Neither really</button>
+      </div>
+    </div>`;
+}
+
+function onComparisonPick(pairId, pick) {
+  if (!ST.comparisonResults[pairId]) ST.comparisonResults[pairId] = {};
+  ST.comparisonResults[pairId] = { pick, affinity: null };
+  scheduleSave();
+
+  // Check if this pair needs an affinity follow-up
+  const pair = (ST.comparisonPairs || []).find(p => p.id === pairId);
+  if (pair && pair.hasAffinity) {
+    ST.affinityPending = pairId;
+    render();
+    return;
+  }
+
+  // Auto-advance
+  ST.compIdx++;
+  render();
+}
+
+function onAffinityPick(affinity) {
+  if (ST.affinityPending && ST.comparisonResults[ST.affinityPending]) {
+    ST.comparisonResults[ST.affinityPending].affinity = affinity;
+  }
+  ST.affinityPending = null;
+  ST.compIdx++;
+  scheduleSave();
+  render();
+}
+
+function onNeverWantPick(setId, optionId) {
+  ST.comparisonResults[setId] = optionId;
+  scheduleSave();
+  // Auto-advance after a brief visual beat
+  setTimeout(() => { ST.compIdx++; render(); }, 350);
+}
+
+function onCompBack() {
+  if (ST.affinityPending) {
+    ST.affinityPending = null;
+    render();
+    return;
+  }
+  if (ST.compIdx > 0) {
+    ST.compIdx--;
+    render();
+  } else {
+    // Go back to identity
+    ST.phase = 'identity';
+    render();
+  }
+}
+
+// ── Guardrails ───────────────────────────────
+// Phase 4 (after lifestyle): Hard no's + abstract boundaries
+function renderGuardrails() {
+  const gr = ST.guardrails || { abstractGuardrails: [], specificRedFlags: [] };
+  const catalog = ST.catalog || {};
+  const abstractOpts = catalog.abstractGuardrails || [];
+  const redFlagOpts = catalog.specificRedFlags || [];
+
+  const absSet = new Set(gr.abstractGuardrails);
+  const rfSet = new Set(gr.specificRedFlags);
+
+  return `
+    <div class="guardrails-shell">
+      <div class="lifestyle-hd">
+        <div class="lifestyle-eyebrow">Step 4 \u00b7 Your boundaries</div>
+        <div class="lifestyle-title">Now that you\u2019ve seen some directions\u2026</div>
+        <div class="lifestyle-sub">Check anything that\u2019s a dealbreaker. This helps Fox avoid wasting your time.</div>
+      </div>
+
+      <div class="identity-section">
+        <div class="lifestyle-q">Design boundaries</div>
+        <div class="lifestyle-sub" style="margin-bottom:10px;font-size:13px;">Check any that resonate.</div>
+        <div class="guardrail-list">
+          ${abstractOpts.map(opt => `
+            <label class="guardrail-item ${absSet.has(opt.id) ? 'checked' : ''}">
+              <input type="checkbox" ${absSet.has(opt.id) ? 'checked' : ''}
+                     onchange="toggleGuardrail('abstract','${esc(opt.id)}')">
+              <span>${esc(opt.label)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="identity-section">
+        <div class="lifestyle-q">Any of these a hard no?</div>
+        <div class="guardrail-list">
+          ${redFlagOpts.map(opt => `
+            <label class="guardrail-item ${rfSet.has(opt.id) ? 'checked' : ''}">
+              <input type="checkbox" ${rfSet.has(opt.id) ? 'checked' : ''}
+                     onchange="toggleGuardrail('specific','${esc(opt.id)}')">
+              <span>${esc(opt.label)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="lifestyle-footer">
+        <button class="quiz-back" onclick="backFromGuardrails()">← Back</button>
+        <button class="btn-primary" onclick="completeGuardrails()">
+          Analyze my taste \u2192
+        </button>
+      </div>
+    </div>`;
+}
+
+function toggleGuardrail(type, id) {
+  if (!ST.guardrails) ST.guardrails = { abstractGuardrails: [], specificRedFlags: [] };
+  const arr = type === 'abstract' ? ST.guardrails.abstractGuardrails : ST.guardrails.specificRedFlags;
+  const idx = arr.indexOf(id);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(id);
+  scheduleSave();
+  render();
+}
+
+function backFromGuardrails() {
+  ST.phase = 'lifestyle';
+  render();
+}
+
+async function completeGuardrails() {
+  if (!ST.guardrails) ST.guardrails = { abstractGuardrails: [], specificRedFlags: [] };
+
+  // Derive budget tiers from investment ranking
+  const ranking = ST.lifestyle?.investmentRanking || ST.rms.map(r => r.id);
+  ST.budgetTiers = deriveBudgetTiers(ranking);
+  scheduleSave();
+
+  // Compute the style fingerprint
+  computeStyleFingerprint();
+  scheduleSave();
+
+  // Move to analyzing phase — Claude will interpret the fingerprint
+  ST.phase = 'analyzing';
+  render();
+
+  try {
+    await analyzeProfile();
+  } catch (err) {
+    console.error('Profile analysis failed:', err);
+    ST.phase = 'error';
+    ST.errorMessage = 'Profile analysis failed: ' + err.message;
+    render();
+  }
+}
+
+// ── Quiz (legacy) ────────────────────────────
+function renderQuiz() {
+  const q = ST.quiz[ST.qIdx];
+  if (!q) return renderError('Quiz failed to load.');
+  const total = ST.quiz.length;
+  const pctNum = Math.round((ST.qIdx / total) * 100);
+  const selectedLetter = ST.quizAnswers[q.id];
+  const photos = Array.isArray(q.photos) ? q.photos : [];
+
+  return `
+    <div class="quiz-card">
+      <div class="quiz-progress">
+        <span>Question ${ST.qIdx + 1} of ${total}</span>
+        <div class="quiz-progress-bar"><div class="quiz-progress-fill" style="width:${pctNum}%"></div></div>
+      </div>
+      <div class="quiz-prompt">${esc(q.prompt)}</div>
+      ${q.note ? `<div class="quiz-note">${esc(q.note)}</div>` : ''}
+      <div class="quiz-options">
+        ${q.options.map((opt, i) => {
+          const photo = photos[i] || photos[opt.letter ? opt.letter.charCodeAt(0) - 65 : i];
+          const sel   = selectedLetter === opt.letter;
+          // onerror swaps the broken <img> for a letter-box fallback. Uses &quot;
+          // entities so the inline handler stays single-quoted and doesn't collide
+          // with the outer double-quoted attribute value.
+          const img   = photo && photo.thumbUrl
+            ? `<img class="quiz-option-img" src="${esc(photo.thumbUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='&lt;div class=&quot;quiz-option-img-fallback&quot;&gt;${esc(opt.letter)}&lt;/div&gt;'">`
+            : `<div class="quiz-option-img-fallback">${esc(opt.letter)}</div>`;
+          return `
+            <button type="button" class="quiz-option ${sel ? 'selected' : ''}" data-letter="${esc(opt.letter)}" onclick="onQuizPick('${esc(q.id)}','${esc(opt.letter)}')">
+              ${img}
+              <div class="quiz-option-body">
+                <div class="quiz-option-letter">${esc(opt.letter)}</div>
+                <div class="quiz-option-label">${esc(opt.label)}</div>
+              </div>
+            </button>`;
+        }).join('')}
+      </div>
+      <div class="quiz-actions">
+        <button class="quiz-back" ${ST.qIdx === 0 ? 'disabled' : ''} onclick="onQuizBack()">← Back</button>
+        <button class="quiz-next" ${selectedLetter ? '' : 'disabled'} onclick="onQuizNext()">
+          ${ST.qIdx === total - 1 ? 'See my style →' : 'Next →'}
+        </button>
+      </div>
+    </div>`;
+}
+
+function onQuizPick(qid, letter) {
+  ST.quizAnswers[qid] = letter;
+  scheduleSave();
+  render();
+}
+function onQuizBack() {
+  if (ST.qIdx > 0) { ST.qIdx--; render(); }
+}
+function onQuizNext() {
+  if (ST.qIdx < ST.quiz.length - 1) {
+    ST.qIdx++;
+    render();
+  } else {
+    // Quiz complete — move to taste board swipe phase
+    ST.swipeImages = Array.isArray(ST.catalog && ST.catalog.swipeImages) ? ST.catalog.swipeImages : [];
+    ST.swipeIndex = 0;
+    ST.phase = 'tasteboard';
+    scheduleSave();
+    render();
+  }
+}
+
+// ── Taste Board (swipe) ──────────────────────
+function renderTasteBoard() {
+  const images = ST.swipeImages || [];
+  if (!images.length) return renderLoading('Loading taste board\u2026');
+
+  const idx = ST.swipeIndex;
+  const total = images.length;
+
+  if (idx >= total) {
+    // All swiped — compute profile and move on
+    computeTasteProfile();
+    ST.phase = 'lifestyle';
+    scheduleSave();
+    setTimeout(() => render(), 0);
+    return renderLoading('Computing your taste profile\u2026');
+  }
+
+  const img = images[idx];
+  const pct = Math.round((idx / total) * 100);
+
+  return `
+    <div class="tasteboard-shell">
+      <div class="tasteboard-hd">
+        <div class="tasteboard-eyebrow">Step 2 \u00b7 Your taste</div>
+        <div class="tasteboard-title">Love it or skip it?</div>
+        <div class="tasteboard-sub">Quick gut reactions \u2014 don\u2019t overthink it.</div>
+      </div>
+
+      <div class="tasteboard-card-wrap" id="swipe-wrap">
+        <div class="tasteboard-card" id="swipe-card"
+             ontouchstart="swipeTouchStart(event)"
+             ontouchmove="swipeTouchMove(event)"
+             ontouchend="swipeTouchEnd(event)">
+          <img class="tasteboard-card-img" src="${esc(img.imageUrl)}" alt=""
+               onerror="this.style.background='var(--cream-2)'">
+          <div class="tasteboard-card-label">${esc(img.label)}</div>
+        </div>
+      </div>
+
+      <div class="tasteboard-actions">
+        <button class="tasteboard-btn tasteboard-btn-skip" onclick="swipeSkip()" title="Skip">\u2715</button>
+        <button class="tasteboard-btn tasteboard-btn-love" onclick="swipeLove()" title="Love">\u2665</button>
+      </div>
+
+      <div class="tasteboard-progress">
+        ${idx + 1} of ${total}
+        <div class="tasteboard-progress-bar">
+          <div class="tasteboard-progress-fill" style="width:${pct}%"></div>
+        </div>
+      </div>
+
+      ${idx >= 15 ? `<button class="tasteboard-skip-all" onclick="skipRemainingSwipes()">I\u2019ve seen enough \u2014 continue</button>` : ''}
+    </div>`;
+}
+
+// Swipe touch gesture state
+let _swipeStartX = 0;
+let _swipeDeltaX = 0;
+
+function swipeTouchStart(e) {
+  _swipeStartX = e.touches[0].clientX;
+  _swipeDeltaX = 0;
+}
+
+function swipeTouchMove(e) {
+  _swipeDeltaX = e.touches[0].clientX - _swipeStartX;
+  const card = document.getElementById('swipe-card');
+  if (card) {
+    const rotation = _swipeDeltaX * 0.05;
+    card.style.transform = `translateX(${_swipeDeltaX}px) rotate(${rotation}deg)`;
+    card.style.transition = 'none';
+  }
+}
+
+function swipeTouchEnd(e) {
+  const card = document.getElementById('swipe-card');
+  if (Math.abs(_swipeDeltaX) > 80) {
+    // Swipe committed
+    if (_swipeDeltaX > 0) swipeLove();
+    else swipeSkip();
+  } else if (card) {
+    // Snap back
+    card.style.transition = 'transform 0.3s ease';
+    card.style.transform = '';
+  }
+  _swipeDeltaX = 0;
+}
+
+function animateSwipe(direction) {
+  const card = document.getElementById('swipe-card');
+  if (card) {
+    card.classList.add(direction === 'right' ? 'swiping-right' : 'swiping-left');
+  }
+  setTimeout(() => {
+    ST.swipeIndex++;
+    render();
+  }, 350);
+}
+
+function swipeLove() {
+  const img = ST.swipeImages[ST.swipeIndex];
+  if (img) ST.swipeResults[img.id] = 'love';
+  scheduleSave();
+  animateSwipe('right');
+}
+
+function swipeSkip() {
+  const img = ST.swipeImages[ST.swipeIndex];
+  if (img) ST.swipeResults[img.id] = 'skip';
+  scheduleSave();
+  animateSwipe('left');
+}
+
+function skipRemainingSwipes() {
+  // Mark remaining as skip and move on
+  const images = ST.swipeImages || [];
+  for (let i = ST.swipeIndex; i < images.length; i++) {
+    if (!ST.swipeResults[images[i].id]) {
+      ST.swipeResults[images[i].id] = 'skip';
+    }
+  }
+  computeTasteProfile();
+  ST.phase = 'lifestyle';
+  scheduleSave();
+  render();
+}
+
+function computeTasteProfile() {
+  const images = ST.swipeImages || [];
+  const tagCounts = {};
+  const tagLoves = {};
+
+  for (const img of images) {
+    const result = ST.swipeResults[img.id];
+    if (!result) continue;
+    const isLove = result === 'love';
+    for (const [tag, val] of Object.entries(img.tags || {})) {
+      if (!val) continue;
+      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      if (isLove) tagLoves[tag] = (tagLoves[tag] || 0) + 1;
+    }
+  }
+
+  function score(tag) {
+    if (!tagCounts[tag]) return 0.5;
+    return (tagLoves[tag] || 0) / tagCounts[tag];
+  }
+
+  // Metal preference
+  const metalScores = { warm: score('warmMetal'), cool: score('coolMetal'), black: score('blackMetal') };
+  const topMetal = Object.entries(metalScores).sort((a,b) => b[1] - a[1])[0];
+
+  // Color mood
+  const colorScores = { brightAiry: score('brightAiry'), warmEarthy: score('warmEarthy'), moodyDark: score('moodyDark'), crispNeutral: score('crispNeutral') };
+  const topColor = Object.entries(colorScores).sort((a,b) => b[1] - a[1])[0];
+
+  ST.tasteProfile = {
+    metalPreference: topMetal[0],
+    metalScore: metalScores,
+    patternTolerance: score('busyPattern'),
+    colorMood: topColor[0],
+    colorMoodScore: colorScores,
+    textureAffinity: {
+      naturalStone: score('naturalStone'),
+      naturalWood: score('naturalWood'),
+      handmade: score('handmadeTexture'),
+      polished: score('polishedSurface'),
+    },
+    contrastPreference: score('highContrast'),
+  };
+}
+
+// ── Lifestyle & Investment ───────────────────
+function renderLifestyle() {
+  const ls = ST.lifestyle || {};
+  const rooms = ST.rms || [];
+  const ranking = ls.investmentRanking || rooms.map(r => r.id);
+
+  function tierForRank(i) {
+    if (i < 2) return 'showpiece';
+    if (i < 4) return 'elevated';
+    return 'essential';
+  }
+
+  function tierLabel(t) {
+    return { showpiece: 'Showpiece', elevated: 'Elevated', essential: 'Essential' }[t] || '';
+  }
+
+  // Require core questions + ranking
+  const allDone = ls.kitchenUse && ls.householdType && ls.maintenanceTolerance && ls.decisionStyle && ranking.length > 0;
+
+  function optBtn(key, val, label) {
+    return `<button class="lifestyle-opt ${ls[key] === val ? 'selected' : ''}"
+                    onclick="setLifestyle('${key}','${val}')">${label}</button>`;
+  }
+
+  return `
+    <div class="lifestyle-shell">
+      <div class="lifestyle-hd">
+        <div class="lifestyle-eyebrow">Step 3 \u00b7 Your lifestyle</div>
+        <div class="lifestyle-title">How do you actually live?</div>
+        <div class="lifestyle-sub">This shapes which materials Fox recommends \u2014 taste is only half the equation.</div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">How do you use your kitchen?</div>
+        <div class="lifestyle-options">
+          ${optBtn('kitchenUse', 'quickMeals', 'Quick meals & coffee')}
+          ${optBtn('kitchenUse', 'seriousCooking', 'Serious cooking')}
+          ${optBtn('kitchenUse', 'entertaining', 'The entertaining hub')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">How messy does the kitchen get?</div>
+        <div class="lifestyle-options">
+          ${optBtn('kitchenMessLevel', 'light', 'Light use')}
+          ${optBtn('kitchenMessLevel', 'normal', 'Normal family')}
+          ${optBtn('kitchenMessLevel', 'heavy', 'Heavy \u2014 we spill, we stain, we live')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">Who\u2019s in the house?</div>
+        <div class="lifestyle-options">
+          ${optBtn('householdType', 'justUs', 'Just us')}
+          ${optBtn('householdType', 'kids', 'Kids')}
+          ${optBtn('householdType', 'kidsPets', 'Kids + pets')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">Primary bath vibe?</div>
+        <div class="lifestyle-options">
+          ${optBtn('bathPriority', 'functional', 'Quick functional morning')}
+          ${optBtn('bathPriority', 'spaRetreat', 'Spa retreat')}
+          ${optBtn('bathPriority', 'both', 'Both \u2014 double vanity territory')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">How do you feel about maintenance?</div>
+        <div class="lifestyle-options">
+          ${optBtn('maintenanceTolerance', 'embracePatina', 'I don\u2019t mind patina and aging')}
+          ${optBtn('maintenanceTolerance', 'easyForgiving', 'I want easy and forgiving')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">How often do you host?</div>
+        <div class="lifestyle-options">
+          ${optBtn('hostingFrequency', 'often', 'Often')}
+          ${optBtn('hostingFrequency', 'occasionally', 'Occasionally')}
+          ${optBtn('hostingFrequency', 'rarely', 'Rarely')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">When you\u2019re stuck between two options, you usually\u2026</div>
+        <div class="lifestyle-options" style="flex-direction:column;">
+          ${optBtn('decisionStyle', 'delegator', 'Want someone to just tell me the right answer')}
+          ${optBtn('decisionStyle', 'collaborative', 'Want to see both side by side and talk it through')}
+          ${optBtn('decisionStyle', 'controller', 'Need to research it myself before deciding')}
+          ${optBtn('decisionStyle', 'anxious', 'Worry I\u2019ll pick the wrong one either way')}
+        </div>
+      </div>
+
+      <div class="lifestyle-section">
+        <div class="lifestyle-q">Where should we invest the most?</div>
+        <div class="lifestyle-sub" style="margin-bottom:12px;font-size:13px;">
+          Drag to rank \u2014 rooms at the top get the premium treatment, rooms at the bottom stay smart and simple.
+        </div>
+        <div class="lifestyle-rank-list" id="rank-list">
+          ${ranking.map((roomId, i) => {
+            const room = rooms.find(r => r.id === roomId);
+            if (!room) return '';
+            const tier = tierForRank(i);
+            const numClass = i < 2 ? 'top' : i < 4 ? 'mid' : 'low';
+            return `
+              <div class="lifestyle-rank-item" draggable="true" data-room-id="${esc(roomId)}"
+                   ondragstart="rankDragStart(event)" ondragover="rankDragOver(event)"
+                   ondrop="rankDrop(event)" ondragend="rankDragEnd(event)"
+                   ontouchstart="rankTouchStart(event)" ontouchmove="rankTouchMove(event)" ontouchend="rankTouchEnd(event)">
+                <div class="lifestyle-rank-num ${numClass}">${i + 1}</div>
+                <div class="lifestyle-rank-name">${esc(room.name)}</div>
+                <span class="lifestyle-rank-tier ${tier}">${tierLabel(tier)}</span>
+                <div class="lifestyle-rank-grip">\u2807</div>
+              </div>`;
+          }).join('')}
+        </div>
+        <div class="lifestyle-note">
+          Top 2 rooms \u2192 <strong>Showpiece</strong> finishes &nbsp;\u00b7&nbsp;
+          Next 2 \u2192 <strong>Elevated</strong> &nbsp;\u00b7&nbsp;
+          Rest \u2192 <strong>Essential</strong> (still great \u2014 just smarter)
+        </div>
+      </div>
+
+      <div class="lifestyle-footer">
+        <button class="quiz-back" onclick="backFromLifestyle()">← Back</button>
+        <button class="btn-primary" onclick="completeLifestyle()" ${allDone ? '' : 'disabled'}>
+          Set my boundaries \u2192
+        </button>
+      </div>
+    </div>`;
+}
+
+function setLifestyle(key, value) {
+  if (!ST.lifestyle) ST.lifestyle = { investmentRanking: ST.rms.map(r => r.id) };
+  ST.lifestyle[key] = value;
+  scheduleSave();
+  render();
+}
+
+// Drag-to-rank handlers
+let _dragRoomId = null;
+
+function rankDragStart(e) {
+  _dragRoomId = e.target.closest('[data-room-id]').dataset.roomId;
+  e.target.closest('.lifestyle-rank-item').classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function rankDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function rankDrop(e) {
+  e.preventDefault();
+  const targetId = e.target.closest('[data-room-id]')?.dataset.roomId;
+  if (!targetId || !_dragRoomId || targetId === _dragRoomId) return;
+
+  if (!ST.lifestyle) ST.lifestyle = { investmentRanking: ST.rms.map(r => r.id) };
+  const ranking = ST.lifestyle.investmentRanking;
+  const fromIdx = ranking.indexOf(_dragRoomId);
+  const toIdx = ranking.indexOf(targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  ranking.splice(fromIdx, 1);
+  ranking.splice(toIdx, 0, _dragRoomId);
+  scheduleSave();
+  render();
+}
+
+function rankDragEnd(e) {
+  _dragRoomId = null;
+  document.querySelectorAll('.lifestyle-rank-item').forEach(el => el.classList.remove('dragging'));
+}
+
+// Touch-based drag for mobile
+let _rankTouchItem = null;
+let _rankTouchStartY = 0;
+let _rankTouchClone = null;
+
+function rankTouchStart(e) {
+  const item = e.target.closest('[data-room-id]');
+  if (!item) return;
+  _rankTouchItem = item;
+  _rankTouchStartY = e.touches[0].clientY;
+  item.classList.add('dragging');
+}
+
+function rankTouchMove(e) {
+  if (!_rankTouchItem) return;
+  e.preventDefault();
+  const y = e.touches[0].clientY;
+  const list = document.getElementById('rank-list');
+  if (!list) return;
+
+  const items = Array.from(list.querySelectorAll('.lifestyle-rank-item'));
+  const currentIdx = items.indexOf(_rankTouchItem);
+
+  // Find which item we're hovering over
+  for (let i = 0; i < items.length; i++) {
+    if (i === currentIdx) continue;
+    const rect = items[i].getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    if (y < mid && i < currentIdx) {
+      list.insertBefore(_rankTouchItem, items[i]);
+      updateRankingFromDOM();
+      break;
+    } else if (y > mid && i > currentIdx) {
+      list.insertBefore(_rankTouchItem, items[i].nextSibling);
+      updateRankingFromDOM();
+      break;
+    }
+  }
+}
+
+function rankTouchEnd(e) {
+  if (_rankTouchItem) {
+    _rankTouchItem.classList.remove('dragging');
+    _rankTouchItem = null;
+    render(); // re-render to update tier badges
+  }
+}
+
+function updateRankingFromDOM() {
+  const list = document.getElementById('rank-list');
+  if (!list) return;
+  const items = Array.from(list.querySelectorAll('[data-room-id]'));
+  if (!ST.lifestyle) ST.lifestyle = { investmentRanking: ST.rms.map(r => r.id) };
+  ST.lifestyle.investmentRanking = items.map(el => el.dataset.roomId);
+  scheduleSave();
+}
+
+function deriveBudgetTiers(ranking) {
+  const tiers = {};
+  ranking.forEach((roomId, i) => {
+    if (i < 2) tiers[roomId] = 'showpiece';
+    else if (i < 4) tiers[roomId] = 'elevated';
+    else tiers[roomId] = 'essential';
+  });
+  return tiers;
+}
+
+function backFromLifestyle() {
+  // Go back to comparisons (at last step)
+  const pairs = ST.comparisonPairs || [];
+  const nwSets = ST.neverWantSets || [];
+  ST.compIdx = Math.max(0, pairs.length + nwSets.length - 1);
+  ST.phase = 'comparisons';
+  render();
+}
+
+function completeLifestyle() {
+  if (!ST.lifestyle || !ST.lifestyle.kitchenUse || !ST.lifestyle.householdType || !ST.lifestyle.maintenanceTolerance || !ST.lifestyle.decisionStyle) {
+    showToast('Answer the required questions first');
+    return;
+  }
+  // Move to guardrails (they'll trigger analysis when done)
+  if (!ST.guardrails) ST.guardrails = { abstractGuardrails: [], specificRedFlags: [] };
+  ST.phase = 'guardrails';
+  scheduleSave();
+  render();
+}
+
+// Legacy completeLifestyle path for old quiz flow
+async function completeLifestyleLegacy() {
+  if (!ST.lifestyle || !ST.lifestyle.kitchenUse || !ST.lifestyle.durability) {
+    showToast('Answer all questions first');
+    return;
+  }
+  const ranking = ST.lifestyle.investmentRanking || ST.rms.map(r => r.id);
+  ST.budgetTiers = deriveBudgetTiers(ranking);
+  scheduleSave();
+  ST.phase = 'analyzing';
+  render();
+  try {
+    await analyzeQuiz();
+  } catch (err) {
+    console.error('Style analysis failed:', err);
+    ST.phase = 'error';
+    ST.errorMessage = 'Style analysis failed: ' + err.message;
+    render();
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Style Fingerprint Engine
+//  Computes the 12-dimension taste profile + confidence +
+//  coherence + taste maturity + style fit + derived directions.
+//  All scoring constants are TUNABLE.
+// ─────────────────────────────────────────────────────────
+
+const TASTE_DIMS = [
+  'warmth', 'formality', 'traditionalContemporary', 'restraintOrnament',
+  'tonalContrast', 'naturalManufactured', 'mattePolished', 'quietExpressive',
+  'softStructured', 'patternTolerance', 'colorTolerance', 'riskTolerance',
+];
+
+// Dimension-specific base confidence adjustments (caution/experimental dims start lower)
+const DIM_CONFIDENCE_BASE = {
+  naturalManufactured: -0.15,
+  restraintOrnament: -0.10,
+  traditionalContemporary: -0.05,
+  quietExpressive: -0.05,
+};
+
+// Coherence compatibility matrix — pairs that are naturally compatible, neutral, or in tension
+const COHERENCE_RULES = [
+  // [dimA, rangeA, dimB, rangeB, relationship] — 'compatible' | 'tension' | 'moderate_tension'
+  // rangeA/B: 'high' = >=7, 'low' = <=3
+  { a: 'warmth', aRange: 'high', b: 'naturalManufactured', bRange: 'high', rel: 'compatible' },
+  { a: 'warmth', aRange: 'high', b: 'formality', bRange: 'high', rel: 'compatible' },
+  { a: 'warmth', aRange: 'low', b: 'mattePolished', bRange: 'high', rel: 'compatible' },
+  { a: 'warmth', aRange: 'low', b: 'softStructured', bRange: 'high', rel: 'compatible' },
+  { a: 'naturalManufactured', aRange: 'high', b: 'mattePolished', bRange: 'low', rel: 'compatible' },
+  { a: 'quietExpressive', aRange: 'low', b: 'patternTolerance', bRange: 'low', rel: 'compatible' },
+  // Tensions
+  { a: 'restraintOrnament', aRange: 'high', b: 'traditionalContemporary', bRange: 'low', rel: 'tension' },
+  { a: 'mattePolished', aRange: 'high', b: 'naturalManufactured', bRange: 'high', rel: 'tension' },
+  { a: 'quietExpressive', aRange: 'low', b: 'colorTolerance', bRange: 'high', rel: 'moderate_tension' },
+  { a: 'restraintOrnament', aRange: 'low', b: 'patternTolerance', bRange: 'high', rel: 'tension' },
+  { a: 'quietExpressive', aRange: 'high', b: 'riskTolerance', bRange: 'low', rel: 'moderate_tension' },
+];
+
+function computeStyleFingerprint() {
+  const dims = {};
+  const confidence = {};
+
+  // Step 1: Score from comparisons (primary signal)
+  const pairs = ST.comparisonPairs || [];
+  for (const pair of pairs) {
+    const result = ST.comparisonResults[pair.id];
+    if (!result || !result.pick) {
+      dims[pair.dimension] = 5; // neutral default
+      confidence[pair.dimension] = 0.2;
+      continue;
+    }
+    let score = result.pick === 'A' ? pair.aScore : pair.bScore;
+    // Affinity modifiers for pairs that have them
+    if (pair.hasAffinity && result.affinity) {
+      if (result.affinity === 'ok') {
+        // Nudge toward center
+        score = score < 5 ? score + 1 : score - 1;
+      } else if (result.affinity === 'neither') {
+        score = 5; // dimension not found
+      }
+    }
+    dims[pair.dimension] = score;
+    // Base confidence from comparison
+    let conf = pair.hasAffinity
+      ? (result.affinity === 'love' ? 0.35 : result.affinity === 'ok' ? 0.25 : 0.10)
+      : 0.25;
+    confidence[pair.dimension] = conf;
+  }
+
+  // Score risk tolerance from never-want sets
+  const nwSets = ST.neverWantSets || [];
+  let riskScores = [];
+  for (const nwSet of nwSets) {
+    const rejected = ST.comparisonResults[nwSet.id];
+    if (!rejected) continue;
+    const opt = nwSet.options.find(o => o.id === rejected);
+    if (opt) riskScores.push(opt.riskScore);
+  }
+  if (riskScores.length > 0) {
+    dims.riskTolerance = Math.round(riskScores.reduce((a, b) => a + b, 0) / riskScores.length);
+    confidence.riskTolerance = 0.15 * riskScores.length; // more sets = more confidence
+  } else {
+    dims.riskTolerance = 5;
+    confidence.riskTolerance = 0.1;
+  }
+
+  // Step 2: Apply identity word modifiers (+/-1 max per dimension)
+  const ip = ST.identityProfile || { positiveWords: [], negativeWords: [] };
+  const catalog = ST.catalog || {};
+  const wordDefs = catalog.identityWords || { positive: [], negative: [] };
+  const wordMods = {}; // accumulate per dimension
+
+  function accumulateWordMods(selectedWords, wordList) {
+    for (const word of selectedWords) {
+      const def = wordList.find(w => w.word === word);
+      if (!def || !def.dims) continue;
+      for (const [dim, val] of Object.entries(def.dims)) {
+        if (!wordMods[dim]) wordMods[dim] = 0;
+        wordMods[dim] += val;
+      }
+    }
+  }
+  accumulateWordMods(ip.positiveWords || [], wordDefs.positive);
+  accumulateWordMods(ip.negativeWords || [], wordDefs.negative);
+
+  // Apply with clamp to +/-1
+  for (const dim of TASTE_DIMS) {
+    if (!dims[dim] && dims[dim] !== 0) dims[dim] = 5;
+    const mod = Math.max(-1, Math.min(1, wordMods[dim] || 0));
+    dims[dim] = Math.max(0, Math.min(10, dims[dim] + mod));
+
+    // Adjust confidence based on word agreement
+    if (wordMods[dim]) {
+      const compScore = dims[dim] - mod; // original comparison score
+      const wordDirection = mod > 0 ? 1 : -1;
+      const compDirection = compScore >= 5 ? 1 : -1;
+      if (wordDirection === compDirection || compScore === 5) {
+        confidence[dim] = (confidence[dim] || 0) + 0.20; // words agree
+      } else {
+        confidence[dim] = (confidence[dim] || 0) - 0.15; // words contradict
+        confidence[dim + '_conflicted'] = true;
+      }
+    }
+  }
+
+  // Step 3: Apply dimension-specific base confidence adjustments
+  for (const [dim, adj] of Object.entries(DIM_CONFIDENCE_BASE)) {
+    if (confidence[dim] !== undefined) confidence[dim] += adj;
+  }
+
+  // Clamp confidence to 0-1
+  for (const dim of TASTE_DIMS) {
+    confidence[dim] = Math.max(0, Math.min(1, confidence[dim] || 0));
+  }
+
+  // Step 4: Compute coherence
+  const coherence = computeCoherence(dims);
+
+  // Step 5: Compute taste maturity
+  const tasteMaturity = computeTasteMaturity();
+
+  // Step 6: Derive material directions
+  const derived = deriveMaterialDirections(dims);
+
+  // Step 7: Compute style fit via centroids
+  const styleFit = computeStyleFit(dims);
+
+  // Build structured dimensions with score + confidence + label
+  const structuredDims = {};
+  for (const dim of TASTE_DIMS) {
+    const conflicted = !!confidence[dim + '_conflicted'];
+    const conf = confidence[dim] || 0;
+    let label;
+    if (conflicted) label = 'conflicted';
+    else if (conf >= 0.75) label = 'high';
+    else if (conf >= 0.50) label = 'medium';
+    else if (conf >= 0.25) label = 'low';
+    else label = 'low';
+
+    structuredDims[dim] = {
+      score: dims[dim] || 5,
+      confidence: conf,
+      label,
+      conflicted,
+    };
+  }
+
+  ST.styleFingerprint = {
+    dimensions: structuredDims,
+    coherence,
+    tasteMaturity,
+    derived,
+    materialDirections: derived,
+    styleFit,
+    luxuryExpression: ip.luxuryExpression || null,
+    decisionStyle: ST.lifestyle?.decisionStyle || null,
+    maintenanceTolerance: ST.lifestyle?.maintenanceTolerance || null,
+  };
+
+  // Also set the style name for downstream compatibility
+  ST.style = styleFit.primary;
+  ST.styleProfile = (ST.catalog?.styles || {})[styleFit.primary] || null;
+}
+
+function computeCoherence(dims) {
+  let tensionWeight = 0;
+  let maxPossibleTension = 0;
+  const conflicts = [];
+
+  for (const rule of COHERENCE_RULES) {
+    const valA = dims[rule.a] || 5;
+    const valB = dims[rule.b] || 5;
+    const aInRange = rule.aRange === 'high' ? valA >= 7 : valA <= 3;
+    const bInRange = rule.bRange === 'high' ? valB >= 7 : valB <= 3;
+
+    if (rule.rel === 'compatible') {
+      // Compatible pairs reduce tension — no action needed
+      continue;
+    }
+
+    const weight = rule.rel === 'tension' ? 1.0 : 0.5;
+    maxPossibleTension += weight;
+
+    if (aInRange && bInRange) {
+      tensionWeight += weight;
+      conflicts.push({
+        dims: [rule.a, rule.b],
+        severity: rule.rel === 'tension' ? 'worth_discussing' : 'gentle_note',
+        note: `${rule.a} (${Math.round(valA)}) + ${rule.b} (${Math.round(valB)}) may pull in different directions`,
+      });
+    }
+  }
+
+  const score = maxPossibleTension > 0 ? 1 - (tensionWeight / maxPossibleTension) : 1;
+  let classification;
+  if (score >= 0.85) classification = 'highly_coherent';
+  else if (score >= 0.65) classification = 'mostly_aligned';
+  else if (score >= 0.45) classification = 'mixed';
+  else classification = 'scattered';
+
+  return { score: Math.round(score * 100), classification, conflicts };
+}
+
+function computeTasteMaturity() {
+  const ip = ST.identityProfile || { positiveWords: [], negativeWords: [] };
+  const catalog = ST.catalog || {};
+  const wordDefs = catalog.identityWords || { positive: [] };
+
+  let signals = [];
+
+  // Signal 1: Word bucket distribution — material/visual > social = higher maturity
+  const buckets = { emotional: 0, visual: 0, material: 0, social: 0 };
+  for (const word of (ip.positiveWords || [])) {
+    const def = wordDefs.positive.find(w => w.word === word);
+    if (def) buckets[def.bucket] = (buckets[def.bucket] || 0) + 1;
+  }
+  const socialRatio = buckets.social / Math.max(1, ip.positiveWords?.length || 1);
+  signals.push(1 - socialRatio); // low social = high maturity signal
+
+  // Signal 2: Affinity check responses — "love" = high maturity, "neither" = low
+  let loveCount = 0, totalAffinity = 0;
+  for (const [id, result] of Object.entries(ST.comparisonResults)) {
+    if (result && result.affinity) {
+      totalAffinity++;
+      if (result.affinity === 'love') loveCount++;
+    }
+  }
+  if (totalAffinity > 0) signals.push(loveCount / totalAffinity);
+
+  // Signal 3: Coherence (already computed, but use a simple proxy)
+  const fp = ST.styleFingerprint;
+  if (fp && fp.coherence) signals.push(fp.coherence.score / 100);
+
+  // Signal 4: Abstract guardrails vs specific red flags
+  const gr = ST.guardrails || { abstractGuardrails: [], specificRedFlags: [] };
+  const absCount = gr.abstractGuardrails.length;
+  const rfCount = gr.specificRedFlags.length;
+  if (absCount + rfCount > 0) {
+    signals.push(absCount / (absCount + rfCount)); // more abstract = higher maturity
+  }
+
+  // Weighted average
+  if (signals.length === 0) return 0.5;
+  return Math.round((signals.reduce((a, b) => a + b, 0) / signals.length) * 100) / 100;
+}
+
+function deriveMaterialDirections(dims) {
+  const d = {};
+
+  // Metals — from warmth + mattePolished
+  if (dims.warmth >= 7) {
+    d.preferredMetals = dims.mattePolished >= 6
+      ? ['polished brass', 'brushed gold']
+      : ['unlacquered brass', 'oil-rubbed bronze'];
+  } else if (dims.warmth <= 3) {
+    d.preferredMetals = dims.mattePolished >= 6
+      ? ['polished chrome', 'polished nickel']
+      : ['brushed nickel', 'satin chrome'];
+  } else {
+    d.preferredMetals = ['brushed brass', 'brushed nickel'];
+  }
+
+  // Woods — from warmth + traditionalContemporary
+  if (dims.warmth >= 7 && dims.traditionalContemporary >= 6) {
+    d.woodFamilies = ['walnut', 'cherry', 'warm-stained oak'];
+  } else if (dims.warmth >= 7) {
+    d.woodFamilies = ['white oak', 'rift-cut oak', 'light walnut'];
+  } else {
+    d.woodFamilies = ['rift-cut white oak', 'oiled walnut', 'ash'];
+  }
+
+  // Stones — from naturalManufactured + tonalContrast + patternTolerance
+  if (dims.naturalManufactured >= 7) {
+    if (dims.patternTolerance >= 6) d.stoneFamilies = ['book-matched marble', 'dramatic quartzite'];
+    else d.stoneFamilies = ['honed limestone', 'soft-veined quartzite', 'soapstone'];
+  } else {
+    d.stoneFamilies = ['engineered quartz', 'porcelain slab'];
+  }
+
+  // Paint direction — from warmth + tonalContrast + colorTolerance
+  if (dims.warmth >= 7 && dims.colorTolerance <= 3) d.paintDirection = 'warm whites, creamy neutrals';
+  else if (dims.warmth <= 3 && dims.colorTolerance <= 3) d.paintDirection = 'bright whites, cool greys';
+  else if (dims.colorTolerance >= 7) d.paintDirection = 'saturated accent walls, deep tones';
+  else d.paintDirection = 'balanced neutrals with muted color moments';
+
+  // Cabinet tendency — from formality + restraintOrnament + traditionalContemporary
+  if (dims.formality >= 7 && dims.restraintOrnament >= 6) d.cabinetTendency = 'inset beaded frame, painted or stained';
+  else if (dims.formality >= 7 && dims.restraintOrnament <= 3) d.cabinetTendency = 'flat front, handleless or integrated pull';
+  else if (dims.restraintOrnament >= 5) d.cabinetTendency = 'shaker or transitional, classic proportions';
+  else d.cabinetTendency = 'clean shaker or slab, simple hardware';
+
+  // Tile tendency — from mattePolished + naturalManufactured + patternTolerance
+  if (dims.naturalManufactured >= 7 && dims.mattePolished <= 3) d.tileTendency = 'handmade-look, matte, zellige or cotto';
+  else if (dims.patternTolerance >= 7) d.tileTendency = 'patterned encaustic, mosaic, or decorative';
+  else d.tileTendency = 'clean subway, large-format porcelain, or slab';
+
+  return d;
+}
+
+function computeStyleFit(dims) {
+  // STYLE_CENTROIDS are served via catalog-data.js on the backend,
+  // but for client-side computation we define them inline.
+  // Must match catalog-data.js STYLE_CENTROIDS (calibrated values)
+  const centroids = {
+    'Modern Farmhouse':   { warmth: 8, formality: 3, traditionalContemporary: 6, restraintOrnament: 4, tonalContrast: 4, naturalManufactured: 7, mattePolished: 3, quietExpressive: 4, softStructured: 5, patternTolerance: 4, colorTolerance: 3, riskTolerance: 3 },
+    'Transitional':       { warmth: 6, formality: 6, traditionalContemporary: 5, restraintOrnament: 4, tonalContrast: 4, naturalManufactured: 5, mattePolished: 5, quietExpressive: 3, softStructured: 5, patternTolerance: 3, colorTolerance: 3, riskTolerance: 3 },
+    'Modern Traditional': { warmth: 7, formality: 8, traditionalContemporary: 8, restraintOrnament: 8, tonalContrast: 5, naturalManufactured: 8, mattePolished: 4, quietExpressive: 4, softStructured: 5, patternTolerance: 4, colorTolerance: 5, riskTolerance: 3 },
+    'Organic Modern':     { warmth: 8, formality: 3, traditionalContemporary: 4, restraintOrnament: 5, tonalContrast: 3, naturalManufactured: 9, mattePolished: 2, quietExpressive: 4, softStructured: 2, patternTolerance: 5, colorTolerance: 5, riskTolerance: 6 },
+    'Clean Modern':       { warmth: 3, formality: 6, traditionalContemporary: 1, restraintOrnament: 1, tonalContrast: 5, naturalManufactured: 4, mattePolished: 4, quietExpressive: 3, softStructured: 8, patternTolerance: 1, colorTolerance: 2, riskTolerance: 4 },
+    'Warm Luxury':        { warmth: 7, formality: 8, traditionalContemporary: 6, restraintOrnament: 7, tonalContrast: 7, naturalManufactured: 8, mattePolished: 6, quietExpressive: 7, softStructured: 5, patternTolerance: 6, colorTolerance: 8, riskTolerance: 6 },
+  };
+
+  const scores = {};
+  for (const [style, centroid] of Object.entries(centroids)) {
+    let sumSq = 0;
+    for (const dim of TASTE_DIMS) {
+      const diff = (dims[dim] || 5) - (centroid[dim] || 5);
+      sumSq += diff * diff;
+    }
+    // Convert distance to a 0-100 similarity score (lower distance = higher score)
+    // Max possible distance = sqrt(12 * 10^2) = ~34.6
+    const distance = Math.sqrt(sumSq);
+    scores[style] = Math.round(Math.max(0, 100 - (distance / 34.6) * 100));
+  }
+
+  // Sort by score descending
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const primary = sorted[0][0];
+  const secondary = sorted[1][0];
+  const topScore = sorted[0][1];
+  const gap = sorted[0][1] - sorted[1][1];
+  // Confidence: bigger gap between top two = more confident
+  const confidence = Math.min(100, Math.round(50 + gap * 2));
+
+  return { primary, secondary, confidence, scores };
+}
+
+// ── Profile analysis (replaces analyzeQuiz for new flow) ──
+async function analyzeProfile() {
+  const fp = ST.styleFingerprint;
+  if (!fp) {
+    ST.phase = 'error';
+    ST.errorMessage = 'No fingerprint computed';
+    render();
+    return;
+  }
+
+  const userMsg = JSON.stringify({
+    fingerprint: fp,
+    identityProfile: ST.identityProfile,
+    guardrails: ST.guardrails,
+    lifestyle: ST.lifestyle,
+  });
+
+  try {
+    const res = await fetch('/.netlify/functions/design-agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'profile-analyze',
+        messages: [{ role: 'user', content: userMsg }],
+        context: { style: fp.styleFit.primary },
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const reply = data.reply || '';
+
+    // Try to parse JSON from reply
+    let parsed;
+    try {
+      const jsonMatch = reply.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    } catch (e) {
+      parsed = {};
+    }
+
+    ST.style = parsed.style || fp.styleFit.primary;
+    ST.styleProfile = (ST.catalog?.styles || {})[ST.style] || null;
+    ST.styleSummary = parsed.summary || '';
+    ST.styleGreeting = parsed.greeting || '';
+    ST.designConcept = parsed.conceptStatement || '';
+    ST.designGuardrails = parsed.designGuardrails || [];
+    ST.inconsistencies = parsed.inconsistencies || [];
+    ST.livabilityNotes = parsed.livabilityNotes || [];
+
+    scheduleSave();
+    stopAnalyzeAnimation();
+    ST.phase = 'reveal';
+    render();
+  } catch (err) {
+    console.error('Profile analysis failed:', err);
+    stopAnalyzeAnimation();
+    // Fall back to fingerprint-only reveal (no Claude interpretation)
+    ST.style = fp.styleFit.primary;
+    ST.styleProfile = (ST.catalog?.styles || {})[ST.style] || null;
+    ST.styleSummary = `Your taste aligns most closely with ${fp.styleFit.primary} with ${fp.styleFit.secondary} as a secondary influence.`;
+    ST.styleGreeting = '';
+    ST.designConcept = '';
+    scheduleSave();
+    ST.phase = 'reveal';
+    render();
+  }
+}
+
+// ── Analyzing ─────────────────────────────────
+const ANALYZE_STEPS = [
+  'Reading your identity words…',
+  'Analyzing your comparisons…',
+  'Computing your taste fingerprint…',
+  'Fox is building your design concept…',
+];
+let analyzeStepIdx = 0;
+let analyzeInterval = null;
+
+function startAnalyzeAnimation() {
+  analyzeStepIdx = 0;
+  const el = document.getElementById('analyze-step');
+  if (el) el.textContent = ANALYZE_STEPS[0];
+  analyzeInterval = setInterval(() => {
+    analyzeStepIdx = Math.min(analyzeStepIdx + 1, ANALYZE_STEPS.length - 1);
+    const el = document.getElementById('analyze-step');
+    if (el) {
+      el.style.opacity = '0';
+      setTimeout(() => {
+        el.textContent = ANALYZE_STEPS[analyzeStepIdx];
+        el.style.opacity = '1';
+      }, 200);
+    }
+  }, 2200);
+}
+
+function stopAnalyzeAnimation() {
+  if (analyzeInterval) { clearInterval(analyzeInterval); analyzeInterval = null; }
+}
+
+function renderAnalyzing() {
+  setTimeout(startAnalyzeAnimation, 100);
+  return `
+    <div class="fox-analyzing">
+      <div class="fox-spinner"></div>
+      <h2 id="analyze-step" style="transition:opacity .2s">${ANALYZE_STEPS[0]}</h2>
+      <p>This takes about 10 seconds.</p>
+    </div>`;
+}
+
+async function analyzeQuiz() {
+  ST.phase = 'analyzing';
+  render();
+
+  // Build a single user message containing the answers as readable text
+  const lines = ST.quiz.map(q => {
+    const letter = ST.quizAnswers[q.id];
+    const opt = q.options.find(o => o.letter === letter);
+    return `${q.id} (${q.prompt}): ${letter} — ${opt ? opt.label : '(no answer)'}`;
+  });
+  const userText = `Here are my quiz answers:\n${lines.join('\n')}`;
+
+  try {
+    const res = await fetch('/.netlify/functions/design-agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'quiz-analyze',
+        context: { clientName: CLIENT_NAME },
+        messages: [{ role: 'user', content: userText }],
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`design-agent error ${res.status}: ${err}`);
+    }
+    const data = await res.json();
+    let parsed;
+    try { parsed = JSON.parse(data.reply); }
+    catch (e) { throw new Error('Fox returned unparseable JSON: ' + (data.reply || '').slice(0, 200)); }
+
+    ST.style         = parsed.style || '';
+    ST.styleSummary  = parsed.summary || '';
+    ST.styleGreeting = parsed.greeting || '';
+    ST.styleProfile  = (ST.catalog && ST.catalog.styles && ST.catalog.styles[ST.style]) || null;
+    ST.phase = 'reveal';
+    scheduleSave();
+    render();
+  } catch (err) {
+    console.error(err);
+    ST.phase = 'error';
+    ST.errorMessage = err.message || String(err);
+    render();
+  }
+}
+
+// ── Reveal ────────────────────────────────────
+function renderReveal() {
+  const profile = ST.styleProfile || (ST.catalog && ST.catalog.styles && ST.catalog.styles[ST.style]) || {};
+  const palette = Array.isArray(profile.palette) ? profile.palette : [];
+  const keywords = Array.isArray(profile.keywords) ? profile.keywords : [];
+  const fp = ST.styleFingerprint;
+  const hasV2 = !!fp;
+
+  // V2 concept section
+  const conceptHtml = ST.designConcept ? `
+    <div class="reveal-concept">${esc(ST.designConcept)}</div>` : '';
+
+  // V2 guardrails
+  const guardrailsHtml = (ST.designGuardrails && ST.designGuardrails.length) ? `
+    <div class="reveal-guardrails">
+      <div class="reveal-section-label">Your design guardrails</div>
+      ${ST.designGuardrails.map(g => `<div class="reveal-guardrail-item">${esc(g)}</div>`).join('')}
+    </div>` : '';
+
+  // V2 inconsistencies (gentle notes)
+  const inconsistenciesHtml = (ST.inconsistencies && ST.inconsistencies.length) ? `
+    <div class="reveal-notes">
+      <div class="reveal-section-label">A few things Fox noticed</div>
+      ${ST.inconsistencies.map(n => `<div class="reveal-note-item">${esc(n)}</div>`).join('')}
+    </div>` : '';
+
+  // V2 material directions preview
+  const md = fp?.derived || fp?.materialDirections || {};
+  const materialHtml = hasV2 && Object.keys(md).length ? `
+    <div class="reveal-materials">
+      <div class="reveal-section-label">Where your taste points</div>
+      <div class="reveal-material-grid">
+        ${md.preferredMetals ? `<div class="reveal-material-item"><span class="reveal-material-label">Metals</span><span class="reveal-material-val">${esc(md.preferredMetals.join(', '))}</span></div>` : ''}
+        ${md.woodFamilies ? `<div class="reveal-material-item"><span class="reveal-material-label">Woods</span><span class="reveal-material-val">${esc(md.woodFamilies.join(', '))}</span></div>` : ''}
+        ${md.stoneFamilies ? `<div class="reveal-material-item"><span class="reveal-material-label">Stone</span><span class="reveal-material-val">${esc(md.stoneFamilies.join(', '))}</span></div>` : ''}
+        ${md.tileTendency ? `<div class="reveal-material-item"><span class="reveal-material-label">Tile</span><span class="reveal-material-val">${esc(md.tileTendency)}</span></div>` : ''}
+        ${md.paintDirection ? `<div class="reveal-material-item"><span class="reveal-material-label">Paint</span><span class="reveal-material-val">${esc(md.paintDirection)}</span></div>` : ''}
+        ${md.cabinetTendency ? `<div class="reveal-material-item"><span class="reveal-material-label">Cabinets</span><span class="reveal-material-val">${esc(md.cabinetTendency)}</span></div>` : ''}
+      </div>
+    </div>` : '';
+
+  // V2 livability notes
+  const livabilityHtml = (ST.livabilityNotes && ST.livabilityNotes.length) ? `
+    <div class="reveal-notes">
+      <div class="reveal-section-label">How Fox will design for your life</div>
+      ${ST.livabilityNotes.map(n => `<div class="reveal-note-item">${esc(n)}</div>`).join('')}
+    </div>` : '';
+
+  // V2 calibration dashboard (internal, collapsible)
+  const calibrationHtml = hasV2 ? renderCalibrationDashboard(fp) : '';
+
+  return `
+    <div class="reveal-card reveal-animate">
+      <div class="reveal-eyebrow">Your style profile</div>
+      <div class="reveal-style">${esc(ST.style)}</div>
+      ${profile.tagline ? `<div class="reveal-tagline">${esc(profile.tagline)}</div>` : ''}
+      ${conceptHtml}
+      ${palette.length ? `
+        <div class="reveal-palette">
+          ${palette.map(c => `<div class="reveal-swatch" style="background:${esc(c)}"></div>`).join('')}
+        </div>` : ''}
+      <div class="reveal-greeting">${esc(ST.styleGreeting)}</div>
+      ${materialHtml}
+      ${guardrailsHtml}
+      ${inconsistenciesHtml}
+      ${livabilityHtml}
+      ${keywords.length ? `
+        <div class="reveal-keywords">
+          ${keywords.map(k => `<span class="reveal-keyword">${esc(k)}</span>`).join('')}
+        </div>` : ''}
+      <div class="reveal-cta">
+        <button class="btn-primary" onclick="enterHome()">Start designing →</button>
+        <button class="btn-secondary" onclick="restartProfile()">Start over</button>
+      </div>
+      ${calibrationHtml}
+    </div>`;
+}
+
+function renderCalibrationDashboard(fp) {
+  if (!fp) return '';
+  const dims = fp.dimensions || {};
+  const dimRows = Object.entries(dims).map(([name, d]) => {
+    const pct = ((d.score || 5) / 10 * 100).toFixed(0);
+    const confClass = d.confidence >= 0.75 ? 'high' : d.confidence >= 0.5 ? 'med' : d.conflicted ? 'conflict' : 'low';
+    return `<tr>
+      <td class="cal-dim-name">${esc(name)}</td>
+      <td class="cal-dim-bar"><div class="cal-bar-track"><div class="cal-bar-fill" style="width:${pct}%"></div></div></td>
+      <td class="cal-dim-score">${(d.score || 0).toFixed(1)}</td>
+      <td class="cal-dim-conf ${confClass}">${d.conflicted ? 'CONFLICT' : (d.confidence || 0).toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  const coh = fp.coherence || {};
+  const conflicts = (coh.conflicts || []).map(c =>
+    `<div class="cal-conflict">${esc(c.dimA || '')} vs ${esc(c.dimB || '')} — ${esc(c.severity || '')}${c.description ? ': ' + esc(c.description) : ''}</div>`
+  ).join('') || '<div class="cal-none">No conflicts</div>';
+
+  const styleFit = fp.styleFit || {};
+  const styleRows = Object.entries(styleFit.scores || {}).sort((a, b) => b[1] - a[1]).map(([name, score]) =>
+    `<tr><td>${esc(name)}</td><td>${score}%</td><td>${name === styleFit.primary ? 'PRIMARY' : name === styleFit.secondary ? 'secondary' : ''}</td></tr>`
+  ).join('');
+
+  const md = fp.materialDirections || {};
+  const mdLines = Object.entries(md).map(([k, v]) =>
+    `<div><strong>${esc(k)}:</strong> ${esc(Array.isArray(v) ? v.join(', ') : String(v))}</div>`
+  ).join('');
+
+  return `
+    <details class="cal-dashboard">
+      <summary class="cal-toggle">Calibration Dashboard (internal)</summary>
+      <div class="cal-body">
+        <div class="cal-section">
+          <div class="cal-section-title">Dimensions</div>
+          <table class="cal-table"><thead><tr><th>Dim</th><th>Bar</th><th>Score</th><th>Conf</th></tr></thead>
+          <tbody>${dimRows}</tbody></table>
+        </div>
+        <div class="cal-section">
+          <div class="cal-section-title">Coherence: ${(coh.score || 0)}/100 — ${esc(coh.classification || '?')}</div>
+          ${conflicts}
+        </div>
+        <div class="cal-section">
+          <div class="cal-section-title">Taste Maturity: ${(fp.tasteMaturity || 0).toFixed(2)}</div>
+        </div>
+        <div class="cal-section">
+          <div class="cal-section-title">Style Fit (similarity, higher = closer)</div>
+          <table class="cal-table"><thead><tr><th>Style</th><th>Match</th><th></th></tr></thead>
+          <tbody>${styleRows}</tbody></table>
+          <div>Confidence: ${styleFit.confidence || '?'}%</div>
+        </div>
+        <div class="cal-section">
+          <div class="cal-section-title">Derived Material Directions</div>
+          ${mdLines}
+        </div>
+        <div class="cal-section">
+          <div class="cal-section-title">Identity Profile</div>
+          <div>Positive: ${esc((ST.identityProfile?.positiveWords || []).join(', '))}</div>
+          <div>Negative: ${esc((ST.identityProfile?.negativeWords || []).join(', '))}</div>
+          <div>Luxury: ${esc(ST.identityProfile?.luxuryExpression || 'none')}</div>
+        </div>
+        <div class="cal-section">
+          <div class="cal-section-title">Raw Fingerprint JSON</div>
+          <pre class="cal-json">${esc(JSON.stringify(fp, null, 2))}</pre>
+        </div>
+      </div>
+    </details>`;
+}
+
+function restartProfile() {
+  ST.identityProfile = null;
+  ST.comparisonResults = {};
+  ST.compIdx = 0;
+  ST.affinityPending = null;
+  ST.guardrails = null;
+  ST.styleFingerprint = null;
+  ST.designConcept = '';
+  ST.designGuardrails = [];
+  ST.inconsistencies = [];
+  ST.livabilityNotes = [];
+  ST.lifestyle = null;
+  ST.style = ''; ST.styleSummary = ''; ST.styleGreeting = '';
+  ST.budgetTiers = {};
+  ST.boardPicks = {};
+  ST.designPackage = null;
+  ST.picks = {};
+  ST.phase = 'identity';
+  scheduleSave();
+  render();
+}
+
+// Route from reveal through budget → package → home.
+// Skip phases that are already completed.
+function enterHome() {
+  if (!allBudgetTiersSet()) {
+    ST.phase = 'budget';
+  } else if (!ST.designPackage) {
+    // Budget done but no package yet — generate it
+    completeBudget();
+    return;
+  } else {
+    ST.phase = 'package';
+  }
+  scheduleSave();
+  render();
+}
+function restartQuiz() {
+  ST.qIdx = 0;
+  ST.quizAnswers = {};
+  ST.style = ''; ST.styleSummary = ''; ST.styleGreeting = '';
+  ST.budgetTiers = {};
+  ST.boardPicks = {};
+  ST.designPackage = null;
+  ST.expandedSwap = null;
+  ST.picks = {};
+  ST.swipeResults = {};
+  ST.swipeIndex = 0;
+  ST.tasteProfile = null;
+  ST.lifestyle = null;
+  ST.phase = 'quiz';
+  scheduleSave();
+  render();
+}
+
+// ── Budget calibration ────────────────────────
+// Shown once, between reveal and home. Client picks Essential / Elevated /
+// Showpiece for every room. Drives which design boards and catalog products
+// Fox recommends. No dollar amounts — tier meaning scales with project
+// budget/sqft, so we describe the *experience* instead of the price.
+
+// Library of tier definitions. Applies across all rooms. The description
+// and "includes" copy is deliberately outcome-focused, not spec-focused —
+// the client is deciding what the room should *feel* like, not picking a
+// line item.
+const BUDGET_TIERS = [
+  {
+    id: 'essential',
+    name: 'Essential',
+    tagline: 'Smart value that still looks great.',
+    desc:
+      'Quality finishes from trusted brands. Classic, durable choices ' +
+      'that look beautiful without the splurge. A room guests admire, ' +
+      'not one they linger in.',
+  },
+  {
+    id: 'elevated',
+    name: 'Elevated',
+    tagline: 'A clear step up. Designer-level detail.',
+    desc:
+      'Better materials, richer textures, and thoughtful moments of ' +
+      'upgrade — the kind of room that makes people say "ooh, nice." ' +
+      'The sweet spot most of our clients land in.',
+  },
+  {
+    id: 'showpiece',
+    name: 'Showpiece',
+    tagline: 'Heirloom materials. The rooms people remember.',
+    desc:
+      'Natural stone, custom millwork, statement lighting, and finishes ' +
+      'you\'d expect in a design magazine. This is the room guests won\'t ' +
+      'stop talking about.',
+  },
+];
+
+function allBudgetTiersSet() {
+  if (!ST.rms || !ST.rms.length) return false;
+  return ST.rms.every(rm => !!ST.budgetTiers[rm.id]);
+}
+
+function tierImageUrl(roomId, tierId) {
+  // Resolve from Drive board images loaded in catalog (style → room → tier)
+  const bi = ST.catalog && ST.catalog.boardImages;
+  if (bi && ST.style && bi[ST.style]) {
+    const room = bi[ST.style][roomId];
+    if (room && room[tierId]) return room[tierId];
+  }
+  return null;
+}
+
+function renderBudget() {
+  const rooms = ST.rms || [];
+  const doneCount = rooms.filter(rm => !!ST.budgetTiers[rm.id]).length;
+  const totalCount = rooms.length;
+  const allDone = doneCount === totalCount && totalCount > 0;
+
+  return `
+    <div class="budget-shell">
+      <div class="budget-hd">
+        <div class="budget-eyebrow">Step 2 of 3 · Calibrate</div>
+        <div class="budget-title">How should each room feel?</div>
+        <div class="budget-sub">
+          Before I pull together design options, tell me the level you want for each space.
+          You can mix — a showpiece kitchen and essential guest bath is totally normal.
+          You can change any of these later.
+        </div>
+      </div>
+
+      ${rooms.map(rm => {
+        const current = ST.budgetTiers[rm.id] || '';
+        return `
+          <div class="budget-room">
+            <div class="budget-room-hd">
+              <div class="budget-room-name">${esc(rm.name)}</div>
+              <div class="budget-room-hint">${current ? 'Selected' : 'Choose one'}</div>
+            </div>
+            <div class="budget-tier-grid">
+              ${BUDGET_TIERS.map(t => {
+                const img = tierImageUrl(rm.id, t.id);
+                const selected = current === t.id;
+                return `
+                  <button type="button"
+                          class="budget-tier ${selected ? 'selected' : ''}"
+                          onclick="selectTier('${esc(rm.id)}','${esc(t.id)}')">
+                    ${img
+                      ? `<div class="budget-tier-img" style="background-image:url('${esc(img)}')"></div>`
+                      : `<div class="budget-tier-img-fallback">${esc(t.name)}</div>`}
+                    <div class="budget-tier-body">
+                      <div class="budget-tier-name">
+                        ${esc(t.name)}
+                        ${selected ? '<span class="budget-tier-check">✓</span>' : ''}
+                      </div>
+                      <div class="budget-tier-desc">${esc(t.desc)}</div>
+                    </div>
+                  </button>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }).join('')}
+
+      <div class="budget-footer">
+        <div class="budget-footer-status">
+          <strong>${doneCount} of ${totalCount}</strong> rooms calibrated
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn-secondary" onclick="backToReveal()">Back</button>
+          <button class="btn-primary"
+                  onclick="completeBudget()"
+                  ${allDone ? '' : 'disabled style="opacity:.4;cursor:default"'}>
+            Continue →
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function selectTier(roomId, tierId) {
+  ST.budgetTiers[roomId] = tierId;
+  scheduleSave();
+  render();
+  // Light haptic feedback via toast on the final room.
+  if (allBudgetTiersSet()) showToast('All rooms calibrated — ready to continue');
+}
+
+function backToReveal() {
+  ST.phase = 'reveal';
+  render();
+}
+
+async function completeBudget() {
+  if (!allBudgetTiersSet()) {
+    showToast('Pick a tier for every room first');
+    return;
+  }
+  // Generate the auto-populated design package
+  ST.phase = 'generating';
+  render();
+  try {
+    const res = await fetch('/.netlify/functions/generate-package', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        style: ST.style,
+        budgetTiers: ST.budgetTiers,
+        rooms: ST.rms.map(r => ({ id: r.id, name: r.name })),
+      }),
+    });
+    if (!res.ok) throw new Error(`generate-package ${res.status}`);
+    const data = await res.json();
+    ST.designPackage = data.package;
+    // Auto-populate picks from the package
+    for (const [roomId, categories] of Object.entries(ST.designPackage)) {
+      for (const [cat, sel] of Object.entries(categories)) {
+        const k = cellKey(roomId, cat);
+        if (!ST.picks[k]) {
+          ST.picks[k] = {
+            tier: sel.selected.tier,
+            name: sel.selected.name,
+            note: sel.selected.note,
+            imageUrl: sel.selected.imageUrl,
+            autoGenerated: true,
+          };
+        }
+      }
+    }
+    ST.phase = 'package';
+  } catch (err) {
+    console.error('Package generation failed:', err);
+    showToast('Could not generate package — falling back to manual');
+    ST.phase = 'home';
+  }
+  scheduleSave();
+  render();
+}
+
+// ── Design Boards ─────────────────────────────
+// Shows 3 full-room design boards per room (Essential / Elevated / Showpiece),
+// each rendered in the client's identified style. The board matching their
+// budget tier is badged "Recommended". Client picks one per room.
+
+// The 4 rooms that have design boards in v1. We show boards for these rooms
+// only; other rooms go straight to the category-level chat.
+const BOARD_ROOMS = ['kitchen', 'master_bath', 'living_room', 'exterior'];
+const BOARD_ROOM_NAMES = {
+  kitchen: 'Kitchen', master_bath: 'Primary Bath',
+  living_room: 'Living Room', exterior: 'Exterior',
+};
+
+function allBoardPicksSet() {
+  return BOARD_ROOMS.every(rm => !!ST.boardPicks[rm]);
+}
+
+// Resolve the board image URL for a given style + room + tier.
+// Reads from catalog.boardImages loaded via style-catalog?withPhotos=1.
+function boardImageUrl(style, roomId, tier) {
+  const bi = ST.catalog && ST.catalog.boardImages;
+  if (bi && style && bi[style]) {
+    const room = bi[style][roomId];
+    if (room && room[tier]) return room[tier];
+  }
+  return null;
+}
+
+const BOARD_TIER_LABELS = {
+  essential: 'Essential', elevated: 'Elevated', showpiece: 'Showpiece',
+};
+const BOARD_TIER_DESCS = {
+  essential: 'Smart value, quality finishes, looks great.',
+  elevated: 'Designer-level materials and thoughtful details.',
+  showpiece: 'Heirloom materials, statement details, magazine-worthy.',
+};
+
+function renderBoards() {
+  const rooms = BOARD_ROOMS;
+  const doneCount = rooms.filter(rm => !!ST.boardPicks[rm]).length;
+  const totalCount = rooms.length;
+  const allDone = doneCount === totalCount;
+
+  return `
+    <div class="boards-shell">
+      <div class="boards-hd">
+        <div class="boards-eyebrow">Step 3 of 3 · Choose your vision</div>
+        <div class="boards-title">Pick the design direction for each room.</div>
+        <div class="boards-sub">
+          I've put together three design options per room based on your
+          ${esc(ST.style)} style. Your budget choice is marked "Recommended"
+          but you can pick any — it's your house.
+        </div>
+      </div>
+
+      ${rooms.map(rm => {
+        const rmName = BOARD_ROOM_NAMES[rm] || rm;
+        const current = ST.boardPicks[rm] || '';
+        const recommended = ST.budgetTiers[rm] || 'elevated';
+        return `
+          <div class="boards-room">
+            <div class="boards-room-hd">
+              <div class="boards-room-name">${esc(rmName)}</div>
+              <div class="boards-room-hint">${current ? 'Selected' : 'Choose one'}</div>
+            </div>
+            <div class="boards-grid">
+              ${['essential', 'elevated', 'showpiece'].map(tier => {
+                const selected = current === tier;
+                const isRec = tier === recommended;
+                const img = boardImageUrl(ST.style, rm, tier);
+                return `
+                  <button type="button"
+                          class="board-card ${selected ? 'selected' : ''}"
+                          onclick="selectBoard('${esc(rm)}','${esc(tier)}')">
+                    ${isRec ? '<div class="board-card-badge">Recommended</div>' : ''}
+                    ${img
+                      ? `<img class="board-card-img" src="${esc(img)}" alt="${esc(rmName)} ${esc(BOARD_TIER_LABELS[tier])}" referrerpolicy="no-referrer">`
+                      : `<div class="board-card-img-fallback">${esc(BOARD_TIER_LABELS[tier])}</div>`}
+                    <div class="board-card-body">
+                      <div class="board-card-tier">
+                        ${esc(BOARD_TIER_LABELS[tier])}
+                        ${selected ? '<span class="board-card-check">✓</span>' : ''}
+                      </div>
+                      <div class="board-card-desc">${esc(BOARD_TIER_DESCS[tier])}</div>
+                    </div>
+                  </button>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }).join('')}
+
+      <div class="boards-footer">
+        <div class="boards-footer-status">
+          <strong>${doneCount} of ${totalCount}</strong> rooms chosen
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn-secondary" onclick="backToBudget()">Back</button>
+          <button class="btn-primary"
+                  onclick="completeBoards()"
+                  ${allDone ? '' : 'disabled style="opacity:.4;cursor:default"'}>
+            Let's go →
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function selectBoard(roomId, tier) {
+  ST.boardPicks[roomId] = tier;
+  scheduleSave();
+  render();
+  if (allBoardPicksSet()) showToast('All rooms chosen — ready to start!');
+}
+
+function backToBudget() {
+  ST.phase = 'budget';
+  render();
+}
+
+function completeBoards() {
+  if (!allBoardPicksSet()) {
+    showToast('Pick a design for every room first');
+    return;
+  }
+  ST.phase = 'home';
+  scheduleSave();
+  render();
+}
+
+// ── Package Review ────────────────────────────
+// Shows all selections auto-populated from the design package.
+// Each product is a visual card with image. Tap to expand swap options.
+
+function productImageUrl(styleName, category, tier) {
+  if (!styleName) return null;
+  const slug = styleName.toLowerCase().replace(/\s+/g, '-');
+  return `/images/products/${slug}/${category}/${tier.toLowerCase()}.png`;
+}
+
+function renderPackageReview() {
+  if (!ST.designPackage) return renderLoading('Loading package…');
+  const rooms = ST.rms || [];
+
+  return `
+    <div class="package-shell">
+      <div class="package-hd">
+        <div class="package-eyebrow">Your ${esc(ST.style)} Design Package</div>
+        <div class="package-title">Every selection, picked for you.</div>
+        <div class="package-sub">
+          Based on your style and budget preferences, here's your fully designed home.
+          Tap any card to see alternatives and swap. When you're happy, finalize below.
+        </div>
+      </div>
+
+      ${rooms.map(rm => {
+        const pkgRoom = ST.designPackage[rm.id];
+        if (!pkgRoom || !Object.keys(pkgRoom).length) return '';
+        const tierLabel = ST.budgetTiers[rm.id] || '';
+        return `
+          <div class="package-room">
+            <div class="package-room-hd">
+              <div class="package-room-name">${esc(rm.name)}</div>
+              ${tierLabel ? `<div class="package-room-tier">${esc(tierLabel)}</div>` : ''}
+            </div>
+            <div class="package-grid">
+              ${Object.entries(pkgRoom).map(([cat, sel]) => {
+                const pick = ST.picks[cellKey(rm.id, cat)];
+                const current = pick || sel.selected;
+                const swapId = rm.id + '::' + cat;
+                const isOpen = ST.expandedSwap === swapId;
+                const imgUrl = current.imageUrl || productImageUrl(ST.style, cat, current.tier);
+                return `
+                  <div class="product-card" onclick="toggleSwapPanel('${esc(swapId)}')">
+                    ${imgUrl
+                      ? `<img class="product-card-img" src="${esc(imgUrl)}" alt="" referrerpolicy="no-referrer"
+                              onerror="this.outerHTML='<div class=\\'product-card-img-fallback\\'>${esc(CAT_LABELS[cat] || cat)}</div>'">`
+                      : `<div class="product-card-img-fallback">${esc(CAT_LABELS[cat] || cat)}</div>`}
+                    <div class="product-card-body">
+                      <div class="product-card-cat">${esc(CAT_LABELS[cat] || cat)}</div>
+                      <div class="product-card-name">${esc(current.name)}</div>
+                      <span class="product-card-tier-badge tier-${(current.tier || '').toLowerCase()}">${esc(current.tier)}</span>
+                      <div class="product-card-note">${esc(current.note || '')}</div>
+                    </div>
+                    ${isOpen ? renderSwapPanel(rm.id, cat, sel) : ''}
+                  </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }).join('')}
+
+      <div class="package-footer">
+        <button class="btn-secondary" onclick="backToBudgetFromPackage()">Back to priorities</button>
+        <button class="btn-primary" onclick="finalizePackage()">Looks great — let's go</button>
+      </div>
+
+      <div class="package-refine-hint">
+        Want to fine-tune a specific selection? Finalize first, then
+        <a onclick="finalizePackage()">chat with Fox</a> about any room.
+      </div>
+    </div>`;
+}
+
+function renderSwapPanel(roomId, cat, sel) {
+  const currentTier = (ST.picks[cellKey(roomId, cat)] || sel.selected).tier;
+  const allOptions = [sel.selected, ...sel.alternatives].filter(o => o.tier !== currentTier);
+  return `
+    <div class="swap-panel" onclick="event.stopPropagation()">
+      <div class="swap-panel-title">Swap to:</div>
+      <div class="swap-options">
+        ${allOptions.map(opt => {
+          const img = opt.imageUrl || productImageUrl(ST.style, cat, opt.tier);
+          return `
+            <div class="swap-option" onclick="swapSelection('${esc(roomId)}','${esc(cat)}',${JSON.stringify(opt).replace(/'/g, '\\\'')})">
+              ${img
+                ? `<img class="swap-option-img" src="${esc(img)}" alt=""
+                        onerror="this.style.display='none';this.nextElementSibling.classList.add('show')">`
+                : ''}
+              <div class="swap-option-body">
+                <div class="swap-option-name">${esc(opt.name)}</div>
+                <div class="swap-option-tier">${esc(opt.tier)}</div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function toggleSwapPanel(swapId) {
+  ST.expandedSwap = (ST.expandedSwap === swapId) ? null : swapId;
+  render();
+}
+
+function swapSelection(roomId, cat, newPick) {
+  ST.picks[cellKey(roomId, cat)] = {
+    tier: newPick.tier,
+    name: newPick.name,
+    note: newPick.note || '',
+    imageUrl: newPick.imageUrl || productImageUrl(ST.style, cat, newPick.tier),
+    autoGenerated: false,
+  };
+  ST.expandedSwap = null;
+  scheduleSave();
+  render();
+  showToast(`Swapped to ${newPick.name}`);
+}
+
+function backToBudgetFromPackage() {
+  ST.phase = 'lifestyle';
+  ST.designPackage = null; // regenerate after re-ranking
+  render();
+}
+
+function finalizePackage() {
+  ST.phase = 'home';
+  scheduleSave();
+  render();
+}
+
+// ── Home (room/category grid) ─────────────────
+function renderHome() {
+  // Build a combined progress count
+  let totalCells = 0, doneCells = 0;
+  ST.rms.forEach(rm => {
+    const cats = categoriesFor(rm);
+    cats.forEach(cat => {
+      totalCells++;
+      if (ST.picks[cellKey(rm.id, cat)]) doneCells++;
+    });
+  });
+  const pctNum = totalCells ? Math.round(doneCells / totalCells * 100) : 0;
+
+  return `
+    <div class="home-header">
+      <div class="home-header-text">
+        <div class="home-eyebrow">Selections with Fox</div>
+        <div class="home-title">Hi ${esc(CLIENT_NAME.split(' ')[0] || CLIENT_NAME)} — let's pick out your home.</div>
+      </div>
+      <div class="home-style-badge">
+        <span class="dot"></span>
+        ${esc(ST.style)}
+      </div>
+    </div>
+
+    <div class="home-progress">
+      <div class="home-progress-row">
+        <div class="home-progress-label">${doneCells} of ${totalCells} decisions made</div>
+        <div class="home-progress-pct">${pctNum}%</div>
+      </div>
+      <div class="home-progress-bar"><div class="home-progress-fill" style="width:${pctNum}%"></div></div>
+    </div>
+
+    ${ST.rms.map(rm => {
+      const cats = categoriesFor(rm);
+      if (!cats.length) return '';
+      const rmDone = cats.filter(c => ST.picks[cellKey(rm.id, c)]).length;
+      return `
+        <div class="room-section">
+          <div class="room-section-hd">
+            <div class="room-name">${esc(rm.name)}</div>
+            <div class="room-progress">${rmDone} / ${cats.length}</div>
+          </div>
+          <div class="cat-grid">
+            ${cats.map(cat => {
+              const pick = ST.picks[cellKey(rm.id, cat)];
+              const done = !!pick;
+              return `
+                <button type="button" class="cat-tile ${done ? 'done' : ''}" onclick="openChat('${esc(rm.id)}','${esc(cat)}')">
+                  <div class="cat-tile-name">
+                    ${esc(CAT_LABELS[cat] || cat)}
+                    ${done ? '<span class="cat-tile-check">✓</span>' : ''}
+                  </div>
+                  <div class="cat-tile-status">${done ? 'Picked' : 'Tap to chat with Fox'}</div>
+                  ${done && pick.name ? `<div class="cat-tile-pick">${esc(pick.tier || '')} ${esc(pick.name)}</div>` : ''}
+                </button>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }).join('')}`;
+}
+
+// ── Chat ──────────────────────────────────────
+function cellKey(roomId, cat) { return `${roomId}::${cat}`; }
+function chatThread() {
+  const k = cellKey(ST.currentRoomId, ST.currentCategory);
+  if (!ST.chatHistory[k]) ST.chatHistory[k] = [];
+  return ST.chatHistory[k];
+}
+
+function openChat(roomId, category) {
+  const room = ST.rms.find(r => r.id === roomId);
+  if (!room) return;
+  ST.currentRoom = room.name;
+  ST.currentRoomId = roomId;
+  ST.currentCategory = category;
+  ST.phase = 'chat';
+  render();
+  // If no messages yet, send the opening prompt for Fox
+  const thread = chatThread();
+  if (thread.length === 0) {
+    sendOpeningMessage();
+  }
+}
+
+function backToHome() {
+  ST.phase = 'home';
+  render();
+}
+
+function renderChat() {
+  const thread = chatThread();
+  const k = cellKey(ST.currentRoomId, ST.currentCategory);
+  const lockedPick = ST.picks[k];
+
+  return `
+    <div class="chat-shell">
+      <div class="chat-hd">
+        <div class="chat-hd-l">
+          <div class="chat-hd-text">
+            <div class="chat-hd-room">${esc(ST.currentRoom)}</div>
+            <div class="chat-hd-cat">${esc(CAT_LABELS[ST.currentCategory] || ST.currentCategory)}</div>
+          </div>
+        </div>
+        <button class="chat-hd-back" onclick="backToHome()">← All rooms</button>
+      </div>
+      <div class="chat-body" id="chat-body">
+        ${thread.map(renderChatMsg).join('')}
+        ${ST.awaitingFox ? `
+          <div class="chat-msg fox">
+            <div class="chat-bubble">
+              <div class="chat-thinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            </div>
+          </div>` : ''}
+      </div>
+      ${lockedPick ? `
+        <div class="chat-locked-banner">
+          <div class="chat-locked-text">
+            ✓ Picked: ${esc(lockedPick.tier || '')} ${esc(lockedPick.name)}
+            <small>${esc(lockedPick.priceRange || '')}</small>
+          </div>
+          <button class="btn-secondary" onclick="changePick()" style="padding:7px 14px;font-size:12px">Change pick</button>
+        </div>` : `
+        <div class="chat-foot">
+          <textarea class="chat-input" id="chat-input" placeholder="Ask Fox anything…" rows="1"
+            oninput="autosizeInput(this)"
+            onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();onChatSend()}"></textarea>
+          <button class="chat-send" onclick="onChatSend()">Send</button>
+        </div>`}
+    </div>`;
+}
+
+function renderChatMsg(m, idx) {
+  if (m.role === 'user') {
+    return `<div class="chat-msg user"><div class="chat-bubble">${esc(m.content)}</div></div>`;
+  }
+  // assistant
+  const picks = Array.isArray(m.picks) ? m.picks : null;
+  const isLast = idx === undefined; // unused
+  const k = cellKey(ST.currentRoomId, ST.currentCategory);
+  const lockedPick = ST.picks[k];
+  return `
+    <div class="chat-msg fox">
+      <div style="max-width:88%">
+        <div class="chat-bubble">${mdRender(m.content)}</div>
+        ${picks && !lockedPick ? `
+          <div class="pick-cards">
+            ${picks.map((pk, pi) => `
+              <button type="button" class="pick-card ${pk.myPick ? 'foxpick' : ''}" onclick="lockInPick(${esc(JSON.stringify(JSON.stringify(pk)))})">
+                ${pk.myPick ? '<div class="pick-card-foxpick-tag">Fox\u2019s pick</div>' : ''}
+                <div class="pick-card-tier">${esc(pk.tier || '')} ${pk.priceRange ? '· <span class="pick-card-price">' + esc(pk.priceRange) + '</span>' : ''}</div>
+                <div class="pick-card-name">${esc(pk.name || '')}</div>
+                <div class="pick-card-why">${esc(pk.why || '')}</div>
+              </button>`).join('')}
+          </div>` : ''}
+      </div>
+    </div>`;
+}
+
+function autosizeInput(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function scrollChatToBottom() {
+  const body = $('#chat-body');
+  if (body) body.scrollTop = body.scrollHeight;
+}
+
+async function sendOpeningMessage() {
+  // Auto-send a structured opener so Fox immediately presents 3 picks
+  const opener = `Show me my three ${CAT_LABELS[ST.currentCategory] || ST.currentCategory} picks for the ${ST.currentRoom}.`;
+  await sendUserMessage(opener);
+}
+
+async function onChatSend() {
+  const input = $('#chat-input');
+  if (!input) return;
+  const text = (input.value || '').trim();
+  if (!text) return;
+  input.value = '';
+  autosizeInput(input);
+  await sendUserMessage(text);
+}
+
+// Fetch matching products from the real catalog API for Fox's context
+async function fetchCatalogForChat(category, style, fingerprint) {
+  try {
+    const res = await fetch('/.netlify/functions/product-catalog', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, style, fingerprint, limit: 12 }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.products?.length) return null;
+    // Format for Fox's catalog context — include Fox Notes and Pairings (the design opinion)
+    return data.products.map(p => ({
+      name: p.name,
+      vendor: p.vendor,
+      tier: p.tier,
+      priceRange: p.priceRange,
+      notes: p.notes,
+      foxNotes: p.foxNotes,
+      pairings: p.pairings,
+      tasteMatch: p.tasteMatchScore,
+      imageUrl: p.imageUrl,
+    }));
+  } catch (e) {
+    console.warn('Catalog fetch failed:', e);
+    return null;
+  }
+}
+
+async function sendUserMessage(content) {
+  const thread = chatThread();
+  thread.push({ role: 'user', content });
+  ST.awaitingFox = true;
+  render();
+  scheduleSave();
+
+  try {
+    // Build the messages array — strip our `picks` metadata from assistant turns
+    const apiMessages = thread.map(m => ({
+      role:    m.role,
+      content: m.content,
+    }));
+
+    // Fetch real products from catalog if we have a category
+    const catMap = {
+      flooring: 'Flooring', tile: 'Floor Tile', backsplash: 'Backsplash Tile',
+      countertops: 'Countertops', cabinetry: 'Cabinetry', hardware: 'Cabinet Hardware',
+      plumbing: 'Plumbing Fixtures', lighting: 'Lighting', paint: 'Paint',
+      vanity: 'Vanities', mirror: 'Mirrors',
+    };
+    const notionCategory = catMap[ST.currentCategory] || null;
+    let realCatalog = null;
+    if (notionCategory && thread.length <= 2) {
+      // Only fetch on first message in a category thread to avoid repeated API calls
+      realCatalog = await fetchCatalogForChat(notionCategory, ST.style, ST.styleFingerprint);
+    }
+
+    const context = {
+      clientName:   CLIENT_NAME,
+      style:        ST.style,
+      room:         ST.currentRoom,
+      roomId:       ST.currentRoomId,
+      category:     ST.currentCategory,
+      budgetTier:   ST.budgetTiers[ST.currentRoomId] || '',
+      boardPick:    ST.boardPicks[ST.currentRoomId] || '',
+      answersSoFar: collectLockedPicksContext(),
+      catalog:          realCatalog,
+      fingerprint:      ST.styleFingerprint || null,
+      designGuardrails: ST.designGuardrails || [],
+      designConcept:    ST.designConcept || '',
+    };
+
+    const res = await fetch('/.netlify/functions/design-agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'chat', context, messages: apiMessages }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`design-agent ${res.status}: ${err}`);
+    }
+    const data = await res.json();
+    thread.push({
+      role: 'assistant',
+      content: data.reply || '',
+      picks: data.picks || null,
+    });
+  } catch (err) {
+    console.error(err);
+    thread.push({
+      role: 'assistant',
+      content: `Sorry — I hit a snag reaching the server. Try sending that again, or refresh the page.\n\n*${err.message || err}*`,
+    });
+  } finally {
+    ST.awaitingFox = false;
+    scheduleSave();
+    render();
+  }
+}
+
+// Build a flat dictionary of locked picks across the project so Fox stays
+// consistent with prior decisions.
+function collectLockedPicksContext() {
+  const out = {};
+  Object.keys(ST.picks).forEach(k => {
+    const [roomId, cat] = k.split('::');
+    const room = (ST.rms.find(r => r.id === roomId) || {}).name || roomId;
+    const pk = ST.picks[k];
+    out[`${room} ${CAT_LABELS[cat] || cat}`] = `${pk.tier || ''} ${pk.name || ''}`.trim();
+  });
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────
+//  Picks
+// ─────────────────────────────────────────────────────────
+
+function lockInPick(pickJsonString) {
+  let pk;
+  try { pk = JSON.parse(pickJsonString); }
+  catch (e) { console.warn('bad pick payload', e); return; }
+
+  const k = cellKey(ST.currentRoomId, ST.currentCategory);
+  ST.picks[k] = {
+    tier:       pk.tier || '',
+    name:       pk.name || '',
+    priceRange: pk.priceRange || '',
+    why:        pk.why || '',
+    myPick:     !!pk.myPick,
+    pickedAt:   new Date().toISOString(),
+  };
+  ST.sav[`_v2_${k}`] = true;
+
+  // Mirror into v1-compatible product fields where it matters for the design book
+  mirrorPickToV1Fields(ST.currentRoomId, ST.currentCategory, ST.picks[k]);
+
+  // Append a confirmation user-message to the thread so Fox knows the choice
+  const thread = chatThread();
+  thread.push({
+    role: 'user',
+    content: `I'll go with the ${pk.tier || ''} option — ${pk.name}.`,
+  });
+  // Also append a closing assistant note (no API call) so the conversation feels finished
+  thread.push({
+    role: 'assistant',
+    content: `Great pick. **${pk.name}** is locked in for the ${ST.currentRoom} ${(CAT_LABELS[ST.currentCategory] || ST.currentCategory).toLowerCase()}. Hit "← All rooms" when you're ready for the next decision.`,
+  });
+
+  scheduleSave();
+  showToast('Pick saved');
+  render();
+}
+
+function changePick() {
+  const k = cellKey(ST.currentRoomId, ST.currentCategory);
+  delete ST.picks[k];
+  delete ST.sav[`_v2_${k}`];
+  scheduleSave();
+  render();
+}
+
+// Best-effort mapping from (room, category, pick) to v1's design-book field
+// keys. Anything unmapped still lives under _v2_picks so the v2 page itself
+// always has the data.
+function mirrorPickToV1Fields(roomId, cat, pick) {
+  const product = pick.name || '';
+  const rk = roomId; // already snake_case
+  const ans = ST.ans;
+
+  if (cat === 'countertops' && roomId === 'kitchen') {
+    ans['countertops_ct_product'] = product;
+    ans['countertops_ct_kit']     = product;
+  } else if (cat === 'countertops') {
+    ans[`ct_bath_${rk}_mat`]     = product;
+    ans[`ct_bath_product_${rk}`] = product;
+  } else if (cat === 'flooring') {
+    ans[`flooring_floor_${rk}`]   = product;
+    ans[`flooring_product_${rk}`] = product;
+  } else if (cat === 'tile') {
+    ans[`tile_floor_${rk}`]         = product;
+    ans[`tile_floor_product_${rk}`] = product;
+  } else if (cat === 'lighting') {
+    ans[`lighting_${rk}_pendant_product`] = product;
+  } else if (cat === 'plumbing' && roomId === 'kitchen') {
+    ans[`plumbing_${rk}_kitchen_sink_product`] = product;
+  } else if (cat === 'plumbing') {
+    ans[`plumbing_${rk}_shower_product`] = product;
+  } else if (cat === 'hardware') {
+    ans['hardware_hw_product'] = product;
+    ans['hardware_hw_finish']  = product;
+  } else if (cat === 'paint') {
+    ans[`paint_${rk}_color`]   = product;
+    ans[`paint_${rk}_product`] = product;
+  } else if (cat === 'appliances') {
+    ans['app_range_product'] = product;
+  } else if (cat === 'fireplace') {
+    ans['fireplace_fp_want']    = 'Yes';
+    ans['fireplace_fp_product'] = product;
+  } else if (cat === 'specialty_trim') {
+    ans['specialty_trim_beams_loc'] = product;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Boot
+// ─────────────────────────────────────────────────────────
+
+async function boot() {
+  render(); // loading screen
+
+  // 1) Load saved data
+  await loadAll();
+
+  // 2) Load quiz catalog (with photos)
+  try {
+    const res = await fetch('/.netlify/functions/style-catalog?withPhotos=1');
+    if (!res.ok) throw new Error(`style-catalog ${res.status}`);
+    const cat = await res.json();
+    ST.catalog = cat;
+    ST.quiz    = Array.isArray(cat.quiz) ? cat.quiz : [];
+    if (ST.style && cat.styles && cat.styles[ST.style]) {
+      ST.styleProfile = cat.styles[ST.style];
+    }
+    ST.swipeImages = Array.isArray(cat.swipeImages) ? cat.swipeImages : [];
+  } catch (err) {
+    ST.phase = 'error';
+    ST.errorMessage = 'Could not load style catalog: ' + err.message;
+    render();
+    return;
+  }
+
+  // 3) Hydrate V2 catalog data
+  if (ST.catalog) {
+    ST.comparisonPairs = Array.isArray(ST.catalog.comparisonPairs) ? ST.catalog.comparisonPairs : [];
+    ST.neverWantSets = Array.isArray(ST.catalog.neverWantSets) ? ST.catalog.neverWantSets : [];
+  }
+
+  // 4) Decide which phase to start in based on what's saved.
+  //    V2 flow: identity → comparisons → lifestyle → guardrails → analyzing → reveal → budget → package → home → chat
+  //    Legacy flow: quiz → tasteboard → lifestyle → analyzing → reveal → budget → package → home → chat
+  //    On reload we drop the user at the furthest completed step.
+
+  // Check if client is on V2 flow (has any V2 data)
+  const isV2 = ST.identityProfile || ST.styleFingerprint || (ST.comparisonResults && Object.keys(ST.comparisonResults).length > 0);
+
+  if (ST.style && ST.styleGreeting) {
+    // Post-analysis — same for V1 and V2
+    if (ST.designPackage) {
+      ST.phase = 'package';
+    } else if (ST.budgetTiers && Object.keys(ST.budgetTiers).length) {
+      completeBudget();
+      return;
+    } else {
+      ST.phase = 'reveal';
+    }
+  } else if (isV2) {
+    // V2 taste engine flow — resume at furthest incomplete step
+    if (ST.styleFingerprint && ST.lifestyle && ST.guardrails) {
+      // All data collected, fingerprint computed — run analysis
+      ST.phase = 'analyzing';
+      render();
+      analyzeProfile();
+      return;
+    } else if (ST.lifestyle && ST.comparisonResults && Object.keys(ST.comparisonResults).length > 0) {
+      // Has lifestyle + comparisons — go to guardrails
+      ST.phase = 'guardrails';
+    } else if (ST.comparisonResults && Object.keys(ST.comparisonResults).length > 0) {
+      // Has some comparisons — resume at lifestyle or comparisons
+      const totalSteps = (ST.comparisonPairs?.length || 0) + (ST.neverWantSets?.length || 0);
+      const doneCount = Object.keys(ST.comparisonResults).length;
+      if (doneCount >= totalSteps) {
+        ST.phase = 'lifestyle';
+      } else {
+        ST.phase = 'comparisons';
+        ST.compIdx = doneCount;
+      }
+    } else if (ST.identityProfile) {
+      // Has identity — go to comparisons
+      ST.phase = 'comparisons';
+      ST.compIdx = 0;
+    } else {
+      ST.phase = 'identity';
+    }
+  } else if (ST.lifestyle && ST.tasteProfile) {
+    // Legacy V1 flow — ready to analyze
+    completeLifestyleLegacy ? completeLifestyleLegacy() : completeLifestyle();
+    return;
+  } else if (ST.tasteProfile || Object.keys(ST.swipeResults).length > 0) {
+    if (ST.swipeImages.length && Object.keys(ST.swipeResults).length >= ST.swipeImages.length) {
+      ST.phase = 'lifestyle';
+    } else {
+      ST.phase = 'tasteboard';
+      ST.swipeIndex = Object.keys(ST.swipeResults).length;
+    }
+  } else {
+    // Fresh client — start V2 flow
+    ST.phase = 'identity';
+  }
+  render();
+}
+
+boot();
+</script>
+</body>
+</html>
