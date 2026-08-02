@@ -2,21 +2,25 @@
 // Reads the Billing tab from a client's Google Sheet using column Z tags
 // Returns structured budget data for the construction phase portal
 //
-// Column Z (index 25) = "Budget Portal Category" header, then:
+// Column tags (must live in the header row of the Billing tab):
 //   "Main Category"    — top-level groups (Design & Planning, Mech Systems, etc.)
 //   "Sub Main Category"— line items under each main category
 //   "Total Costs"      — total row (col Z = "Main Category" with "Total" in name)
 //   "Forecasted Total" — forecast row
 //
-// Column mapping:
-//   A (0)  = Category name
-//   B (1)  = Budgeted Cost
-//   D (3)  = Actual Cost
-//   F (5)  = Overage (Actual - Budget)
-//   G (6)  = Draw Date
-//   H (7)  = Funded By
-//   J (9)  = Notes
-//   Z (25) = Budget Portal Category tag
+// Columns are auto-detected by their header text (case-insensitive) so
+// clients can arrange their sheet however they want without matching
+// fixed positions. Any of these header words identifies each role:
+//   name    ← "Category" | "Item" | "Description" | "Name"
+//   budget  ← anything containing "Budget" (except "Budget Portal Category")
+//   actual  ← "Actual" | "Spent" | "Committed" | "Paid"
+//   overage ← "Overage" | "Variance"
+//   date    ← "Draw Date" | "Date"
+//   funded  ← "Funded" | "Funding" | "Source"
+//   notes   ← "Notes" | "Note" | "Comment"
+//   tag     ← "Budget Portal Category" | "Portal Category" | "Portal Tag"
+//
+// Percentage columns and anything that doesn't match are ignored.
 
 import { respond, corsHeaders } from './lib/supabase-client.js';
 
@@ -79,6 +83,42 @@ async function fetchTabValues(sheetId, tabTitle, apiKey) {
   return data.values || [];
 }
 
+// Auto-detect column indices by scanning header cells. Each role gets
+// assigned the FIRST cell whose text matches its matcher — so a sheet
+// with "Percentage" columns between Budget/Actual/Overage still ends
+// up mapping Budget → the "Budget" cell, not the neighboring
+// "Percentage" one. Tag matcher runs first so "Budget Portal Category"
+// binds to `tag` and never accidentally satisfies the `budget` matcher.
+function detectColumns(headerRow) {
+  const cols = {
+    name: -1, budget: -1, actual: -1, overage: -1,
+    date: -1, funded: -1, notes:  -1, tag:     -1,
+  };
+  const matchers = [
+    { key: 'tag',     re: /budget\s*portal|portal\s*category|portal\s*tag/i },
+    { key: 'name',    re: /^\s*(category|item|description|name)\s*$/i },
+    { key: 'overage', re: /overages?|variance|difference/i },
+    { key: 'actual',  re: /^\s*(actual|spent|committed|paid)/i },
+    { key: 'budget',  re: /budget/i },
+    { key: 'funded',  re: /funded|funding|source/i },
+    { key: 'date',    re: /(draw\s*date|date)/i },
+    { key: 'notes',   re: /^\s*(notes?|comment)/i },
+  ];
+  headerRow.forEach((cell, i) => {
+    const text = (cell || '').toString().trim();
+    if (!text) return;
+    // Percentage columns are visual clutter, never a role we care about
+    if (/^\s*(percentage|%)\s*$/i.test(text)) return;
+    for (const m of matchers) {
+      if (m.re.test(text)) {
+        if (cols[m.key] === -1) cols[m.key] = i;
+        break;  // one role per column
+      }
+    }
+  });
+  return cols;
+}
+
 // Parse the billing sheet rows into structured data
 function parseBillingData(rows) {
   const result = {
@@ -87,50 +127,50 @@ function parseBillingData(rows) {
     totalActual:    0,
     totalOverage:   0,
     forecastTotal:  0,
+    // Diagnostic — mirrored to admin/debug consumers, harmless to clients
+    detectedColumns: null,
   };
 
   if (!rows.length) return result;
 
-  // ── Find tag column dynamically from header row ──────────────────────────
-  // Look for "Budget Portal Category" in row 0 — don't hardcode column index
-  const headerRow = rows[0];
-  let tagCol = -1;
-  for (let i = 0; i < headerRow.length; i++) {
-    const h = (headerRow[i] || '').toString().toLowerCase().trim();
-    if (h.includes('budget portal') || h.includes('portal category')) {
-      tagCol = i;
-      break;
-    }
-  }
+  const headerRow = rows[0] || [];
+  const cols = detectColumns(headerRow);
+  result.detectedColumns = cols;
 
-  // Fallback: if header not found, try last column
-  if (tagCol === -1) tagCol = headerRow.length - 1;
+  // Sensible fallbacks so a partially-labeled sheet still renders SOMETHING
+  const NAME_COL   = cols.name   !== -1 ? cols.name   : 0;
+  const BUDGET_COL = cols.budget !== -1 ? cols.budget : 1;
+  const ACTUAL_COL = cols.actual !== -1 ? cols.actual : 3;
+  const OVER_COL   = cols.overage;
+  const DATE_COL   = cols.date;
+  const FUNDED_COL = cols.funded;
+  const NOTES_COL  = cols.notes;
+  // Tag column has a stronger fallback — last column tends to be Z in
+  // template-based sheets. Without it we can't classify anything.
+  const TAG_COL    = cols.tag !== -1 ? cols.tag : (headerRow.length - 1);
 
-  // ── Column indices (standard layout) ─────────────────────────────────────
-  const NAME_COL   = 0;
-  const BUDGET_COL = 1;
-  const ACTUAL_COL = 3;
-  const OVER_COL   = 5;
-  const DATE_COL   = 6;
-  const FUNDED_COL = 7;
-  const NOTES_COL  = 9;
+  const cellStr = (row, idx) => (idx >= 0 && row[idx] != null) ? String(row[idx]).trim() : '';
+  const cellNum = (row, idx) => (idx >= 0)                     ? parseCurrency(row[idx]) : 0;
 
   let currentMain = null;
 
-  for (const row of rows) {
-    const tag  = (row[tagCol] || '').toString().trim();
-    const name = (row[NAME_COL] || '').toString().trim();
+  // Skip the header row (row 0) — it's just labels, not data.
+  for (let ri = 1; ri < rows.length; ri++) {
+    const row  = rows[ri];
+    const tag  = cellStr(row, TAG_COL);
+    const name = cellStr(row, NAME_COL);
+    if (!name || !tag) continue;
+    // Skip a tag cell that's just the header itself (edge case)
+    if (/^\s*(budget\s*portal|portal\s*category|portal\s*tag)/i.test(tag)) continue;
 
-    if (!name || !tag || tag.toLowerCase() === 'budget portal category') continue;
+    const budget   = cellNum(row, BUDGET_COL);
+    const actual   = cellNum(row, ACTUAL_COL);
+    const overage  = cellNum(row, OVER_COL);
+    const drawDate = DATE_COL >= 0 ? formatDate(row[DATE_COL]) : null;
+    const fundedBy = cellStr(row, FUNDED_COL);
+    const notes    = cellStr(row, NOTES_COL);
 
-    const budget   = parseCurrency(row[BUDGET_COL]);
-    const actual   = parseCurrency(row[ACTUAL_COL]);
-    const overage  = parseCurrency(row[OVER_COL]);
-    const drawDate = formatDate(row[DATE_COL]);
-    const fundedBy = (row[FUNDED_COL] || '').toString().trim();
-    const notes    = (row[NOTES_COL]  || '').toString().trim();
-
-    if (tag === 'Main Category') {
+    if (/^\s*main\s*category\s*$/i.test(tag)) {
       if (name.toLowerCase().includes('total')) {
         result.totalBudget  = budget;
         result.totalActual  = actual;
@@ -143,7 +183,7 @@ function parseBillingData(rows) {
         subCategories: [] };
       result.mainCategories.push(currentMain);
 
-    } else if (tag === 'Sub Main Category' && currentMain) {
+    } else if (/^\s*sub\s*main\s*category\s*$/i.test(tag) && currentMain) {
       currentMain.subCategories.push({ name, budget, actual, overage, drawDate, fundedBy, notes });
 
     } else if (tag.toLowerCase().includes('forecast')) {
@@ -206,5 +246,8 @@ export const handler = async (event) => {
     totalOverage:     data.totalOverage,
     forecastTotal:    data.forecastTotal,
     categoryCount:    data.mainCategories.length,
+    // Diagnostic — which column index got mapped to which role. Handy for
+    // sheet-setup debugging without needing the debug-sheet endpoint.
+    detectedColumns:  data.detectedColumns,
   });
 };
