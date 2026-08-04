@@ -59,11 +59,38 @@ create table if not exists selection_items (
   updated_at   timestamptz default now()
 );
 
--- One row per derived item per client. Pin-authored rows have a
--- null item_key and are excluded from the constraint.
-create unique index if not exists selection_items_client_item_key
-  on selection_items (client_id, item_key)
-  where item_key is not null;
+-- One row per derived item per client.
+--
+-- This has to be a real unique CONSTRAINT rather than a partial unique
+-- index. selection-items-sync upserts with on_conflict=client_id,item_key,
+-- and Postgres will not infer a partial index as an ON CONFLICT target
+-- unless the statement also repeats the index predicate, which PostgREST
+-- does not emit. A partial index here fails every sync with "there is no
+-- unique or exclusion constraint matching the ON CONFLICT specification".
+--
+-- Pin-authored rows carry a null item_key and are still unconstrained,
+-- because Postgres treats nulls as distinct in a unique constraint, so
+-- any number of them can coexist for one client.
+-- Safe to re-run: if the constraint is already in place there is nothing
+-- to do, and its backing index must not be dropped.
+do $$
+begin
+  if exists (
+    select 1 from pg_constraint
+    where conname = 'selection_items_client_item_key' and contype = 'u'
+  ) then
+    return;
+  end if;
+
+  -- Clean up the standalone partial index if an earlier copy of this
+  -- file created one, then replace it with a real constraint.
+  if to_regclass('public.selection_items_client_item_key') is not null then
+    execute 'drop index public.selection_items_client_item_key';
+  end if;
+
+  alter table selection_items
+    add constraint selection_items_client_item_key unique (client_id, item_key);
+end $$;
 
 create index if not exists selection_items_client_idx
   on selection_items (client_id);
@@ -169,3 +196,42 @@ create policy "plans_update" on storage.objects for update
   using (bucket_id = 'plans') with check (bucket_id = 'plans');
 create policy "plans_delete" on storage.objects for delete
   using (bucket_id = 'plans');
+
+-- ── Verification ────────────────────────────────────────────
+-- Runs as part of the same script. Every row should say ok. If any
+-- row says MISSING, the statement above it did not apply and the
+-- Visual Selections page will error until it does.
+select 'selection_items table' as check_name,
+       case when to_regclass('public.selection_items') is not null
+            then 'ok' else 'MISSING' end as result
+union all
+select 'plans table',
+       case when to_regclass('public.plans') is not null then 'ok' else 'MISSING' end
+union all
+select 'pins table',
+       case when to_regclass('public.pins') is not null then 'ok' else 'MISSING' end
+union all
+select 'pins percentage constraints',
+       case when (select count(*) from pg_constraint
+                  where conname in ('pins_x_pct','pins_y_pct')) = 2
+            then 'ok' else 'MISSING' end
+union all
+select 'item_key unique constraint',
+       case when exists (select 1 from pg_constraint
+                         where conname = 'selection_items_client_item_key'
+                           and contype = 'u')
+            then 'ok' else 'MISSING' end
+union all
+select 'plans storage bucket',
+       case when exists (select 1 from storage.buckets where id = 'plans')
+            then 'ok' else 'MISSING' end
+union all
+select 'bucket is public',
+       case when exists (select 1 from storage.buckets where id = 'plans' and public)
+            then 'ok' else 'MISSING' end
+union all
+select 'rls policies on new tables',
+       case when (select count(*) from pg_policies
+                  where tablename in ('selection_items','plans','pins')
+                    and policyname = 'anon_all') = 3
+            then 'ok' else 'MISSING' end;
