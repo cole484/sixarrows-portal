@@ -5,16 +5,16 @@
 [functions]
   node_bundler = "esbuild"
 
-# PDF to PNG conversion for plan uploads. mupdf ships a WASM binary that
-# esbuild will not carry into the bundle, so this one function is traced
-# with nft and the dist folder is shipped alongside it.
+# PDF to PNG conversion is parked in netlify/functions-pending until the
+# deploy pipeline is confirmed working. It needs the mupdf WASM package
+# and a per-function nft bundler override, both of which were introduced
+# at the same time as this feature, so they are the first thing to rule
+# out if a build fails. Restoring it means moving the file back into
+# netlify/functions, reinstalling mupdf, and putting this block back:
 #
-# The -background suffix in the filename is what gives it a 15 minute
-# budget instead of the 10 second synchronous limit. A high resolution
-# architectural sheet is not a 10 second rasterize.
-[functions."plan-convert-background"]
-  node_bundler = "nft"
-  included_files = ["node_modules/mupdf/dist/**"]
+#   [functions."plan-convert-background"]
+#     node_bundler = "nft"
+#     included_files = ["node_modules/mupdf/dist/**"]
 
 # ── Scheduled update generation ───────────────────────────────────────────────
 # Monday 5:00 AM CT (10:00 UTC) — week preview

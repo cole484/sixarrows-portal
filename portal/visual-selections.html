@@ -721,10 +721,18 @@ function imageSize(file) {
 async function doUploadPlan() {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'application/pdf,image/png,image/jpeg';
+  input.accept = 'image/png,image/jpeg';
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
+
+    // Server side PDF conversion is parked until the deploy pipeline is
+    // confirmed. Say so plainly rather than accepting the file and
+    // leaving the plan stuck on "converting" forever.
+    if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
+      toast('PDF conversion is not enabled yet. Export the sheet as PNG or JPG for now.', true);
+      return;
+    }
 
     const label = prompt('Plan label (for example "Main Level" or "Front Elevation")',
       file.name.replace(/\.[^.]+$/, ''));
@@ -735,33 +743,13 @@ async function doUploadPlan() {
     toast('Uploading...');
     try {
       const url = await uploadFile(file, 'plan');
-      const isPdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
-
-      if (isPdf) {
-        // The row lands first so the poll has something to watch, then
-        // the background function fills in the rendered image.
-        const { plan } = await api('create_plan', {
-          label, plan_type: planType, source_url: url,
-          status: 'converting', sort_order: VS.plans.length,
-        });
-        await fetch(`${FN}/plan-convert-background`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            clientKey: VS.clientKey, planId: plan.id,
-            sourceUrl: url, label, planType,
-          }),
-        });
-        toast('Converting in the background');
-      } else {
-        const { w, h } = await imageSize(file);
-        await api('create_plan', {
-          label, plan_type: planType, image_url: url,
-          image_width: w, image_height: h,
-          status: 'ready', sort_order: VS.plans.length,
-        });
-        toast('Plan added');
-      }
+      const { w, h } = await imageSize(file);
+      await api('create_plan', {
+        label, plan_type: planType, image_url: url,
+        image_width: w, image_height: h,
+        status: 'ready', sort_order: VS.plans.length,
+      });
+      toast('Plan added');
       await loadAll();
     } catch (e) {
       toast(e.message, true);
