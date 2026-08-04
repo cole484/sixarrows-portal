@@ -1,3 +1,24 @@
-node_modules/
+# Dependencies are ignored by default, with deliberate exceptions below.
+# This repo already commits node_modules/@netlify/blobs, so the deploy
+# does not have to rely on an install step running to resolve them.
+node_modules/*
+node_modules/.*
+
+# Keep the committed dependencies the functions need at runtime.
+!node_modules/@netlify
+
+# mupdf is the PDF to PNG rasterizer used by plan-convert-background.
+# Only the files the function actually loads are kept. The .br copies
+# and the TypeScript definitions are dead weight in a deploy, and the
+# runtime was verified to work without them.
+!node_modules/mupdf
+node_modules/mupdf/*
+!node_modules/mupdf/package.json
+!node_modules/mupdf/dist
+node_modules/mupdf/dist/*
+!node_modules/mupdf/dist/mupdf.js
+!node_modules/mupdf/dist/mupdf-wasm.js
+!node_modules/mupdf/dist/mupdf-wasm.wasm
+
 .netlify/
 .DS_Store
