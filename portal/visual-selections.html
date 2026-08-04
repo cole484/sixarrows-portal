@@ -11,7 +11,12 @@
    responsive from the start because the client view in phase 2
    lands on phones.
    ------------------------------------------------------------ */
-.vs-root {
+/* Brand tokens sit on :root, not on .vs-root. Toasts and the sheet
+   picker are appended to document.body so they can overlay everything,
+   and a custom property defined on .vs-root would not reach them: they
+   are siblings, not descendants. Scoping these to .vs-root rendered the
+   picker with no background at all. */
+:root {
   --charcoal: #2e2e2e;
   --sage:     #757f69;
   --sage-dk:  #5d6553;
@@ -21,7 +26,9 @@
   --ink-30:   #b4b2a8;
   --line:     #ddd9cc;
   --warn:     #a8582f;
+}
 
+.vs-root {
   position: fixed;
   inset: 0;
   display: flex;
@@ -34,10 +41,17 @@
 /* Industry is the brand heading face. It is not a Google font, so it
    only applies where it is installed or licensed; Work Sans carries
    the fallback. */
-.vs-root h1, .vs-root h2, .vs-root h3, .vs-root .vs-head {
+.vs-root h1, .vs-root h2, .vs-root h3, .vs-root .vs-head,
+.vs-modal-box h2 {
   font-family: 'Industry', 'Industry Bold', 'Work Sans', sans-serif;
   font-weight: 700;
   letter-spacing: .01em;
+}
+
+/* Overlays live outside .vs-root, so they need the body font restated. */
+.vs-modal, .vs-toast {
+  font-family: 'Work Sans', system-ui, sans-serif;
+  color: var(--charcoal);
 }
 
 /* ── Top bar ── */
@@ -201,6 +215,31 @@
 
 .vs-login { max-width: 320px; margin: 12vh auto; background: var(--paper);
   padding: 24px; border-radius: 4px; border: 1px solid var(--line); }
+
+/* ── Sheet picker for multi page plan sets ── */
+.vs-modal {
+  position: fixed; inset: 0; z-index: 300; background: rgba(46,46,46,.6);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.vs-modal-box {
+  background: var(--paper); border-radius: 4px; padding: 20px;
+  width: min(900px, 100%); max-height: 88vh; display: flex; flex-direction: column;
+}
+.vs-modal-box h2 { font-size: 15px; margin: 0 0 10px; }
+.vs-sheet-actions { display: flex; gap: 6px; margin-bottom: 10px; }
+.vs-sheet-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px; overflow-y: auto; padding: 4px; flex: 1; min-height: 0;
+}
+.vs-sheet {
+  border: 1px solid var(--line); border-radius: 3px; padding: 8px;
+  display: flex; flex-direction: column; gap: 6px; cursor: pointer;
+  font-size: 12px; background: var(--paper);
+}
+.vs-sheet:has(input:checked) { border-color: var(--sage); box-shadow: 0 0 0 1px var(--sage); }
+.vs-sheet img { width: 100%; height: auto; border: 1px solid var(--line); background: #fff; }
+.vs-sheet select { font: inherit; font-size: 11px; padding: 3px; border: 1px solid var(--line); border-radius: 2px; }
+.vs-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
 /* ── Responsive: the rail and panel stack under the plan ── */
 @media (max-width: 900px) {
@@ -406,6 +445,22 @@ function scheduleClusterRender() {
     applyTransform();
   }, 80);
 }
+
+// A plan whose image will not load leaves an invisible stage that
+// silently swallows clicks, which reads as "pinning is broken" rather
+// than "the image is missing". Say which it is. Bound as a capture
+// phase listener because the error event does not bubble.
+document.addEventListener('error', (ev) => {
+  const img = ev.target;
+  if (!img.classList || !img.classList.contains('vs-plan-img')) return;
+  const stage = img.closest('.vs-stage');
+  if (!stage || stage.querySelector('.vs-empty')) return;
+  const note = document.createElement('div');
+  note.className = 'vs-empty';
+  note.textContent = 'The image for this plan could not be loaded. '
+    + 'Check that the plans storage bucket is public, then re-upload the sheet.';
+  stage.appendChild(note);
+}, true);
 
 // Transform-only update, so panning does not re-render the DOM.
 function applyTransform() {
@@ -718,41 +773,212 @@ function imageSize(file) {
   });
 }
 
+// ── PDF rasterizing ──────────────────────────────────────────
+//
+// Plan sets arrive as multi page PDFs, so the sheets have to be turned
+// into images before anything can be pinned to them.
+//
+// This runs in the staff browser at upload time using a vendored copy of
+// pdf.js, rather than server side. Two reasons. The library is a static
+// asset in the publish directory, so it adds nothing to the Netlify
+// function bundle and cannot affect a build. And a full architectural
+// sheet at print resolution is slow to rasterize, which is a much better
+// fit for a machine that is sitting there waiting than for a function
+// with a request timeout.
+//
+// The client never receives a PDF. Sheets are stored as PNG exactly as
+// before, so the viewer is unchanged.
+
+const PDF_LIB = './lib/pdfjs/pdf.min.mjs';
+const PDF_WORKER = './lib/pdfjs/pdf.worker.min.mjs';
+const SHEET_LONG_EDGE = 3600;   // px on the long edge of a rendered sheet
+const THUMB_LONG_EDGE = 220;
+const MAX_SHEETS = 60;
+
+let pdfjsLib = null;
+async function loadPdfJs() {
+  if (pdfjsLib) return pdfjsLib;
+  pdfjsLib = await import(PDF_LIB);
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(PDF_WORKER, location.href).href;
+  return pdfjsLib;
+}
+
+// Render one page into a canvas sized so its long edge hits the target.
+async function renderPdfPage(page, targetLongEdge) {
+  const base = page.getViewport({ scale: 1 });
+  const scale = targetLongEdge / Math.max(base.width, base.height);
+  const viewport = page.getViewport({ scale });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
+  const ctx = canvas.getContext('2d');
+
+  // Plans are line art on white. Without this the transparent areas
+  // render black once flattened into a PNG.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  await page.render({ canvasContext: ctx, viewport, background: '#ffffff' }).promise;
+  return canvas;
+}
+
+function canvasToBlob(canvas) {
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+}
+
+// Sheet picker. A full plan set carries title sheets, details and
+// schedules that nobody pins to, so importing all of them would bury the
+// two or three that matter.
+function pickSheets(thumbs, baseLabel) {
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'vs-modal';
+    wrap.innerHTML = `
+      <div class="vs-modal-box">
+        <h2>Choose sheets to import</h2>
+        <div class="vs-note">${thumbs.length} page${thumbs.length === 1 ? '' : 's'} found.
+          Pick the floor plans and elevations you want to pin to. You can rename each one after import.</div>
+        <div class="vs-sheet-actions">
+          <button class="vs-btn ghost sm" data-pick="all">Select all</button>
+          <button class="vs-btn ghost sm" data-pick="none">Select none</button>
+        </div>
+        <div class="vs-sheet-grid">
+          ${thumbs.map((t, i) => `
+            <label class="vs-sheet" data-i="${i}">
+              <input type="checkbox" ${i === 0 ? 'checked' : ''}>
+              <img src="${t.url}" alt="Page ${i + 1}">
+              <span>Page ${i + 1}</span>
+              <select class="vs-sheet-type">
+                <option value="floor">Floor plan</option>
+                <option value="elevation">Elevation</option>
+              </select>
+            </label>`).join('')}
+        </div>
+        <div class="vs-modal-foot">
+          <button class="vs-btn ghost" data-pick="cancel">Cancel</button>
+          <button class="vs-btn" data-pick="go">Import selected</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+
+    const boxes = () => [...wrap.querySelectorAll('.vs-sheet input')];
+    wrap.addEventListener('click', ev => {
+      const act = ev.target.closest('[data-pick]')?.dataset.pick;
+      if (!act) return;
+      if (act === 'all')  { boxes().forEach(b => b.checked = true);  return; }
+      if (act === 'none') { boxes().forEach(b => b.checked = false); return; }
+      if (act === 'cancel') { wrap.remove(); resolve(null); return; }
+      if (act === 'go') {
+        const chosen = [...wrap.querySelectorAll('.vs-sheet')]
+          .map((el, i) => ({
+            index: i,
+            on: el.querySelector('input').checked,
+            planType: el.querySelector('.vs-sheet-type').value,
+          }))
+          .filter(s => s.on);
+        wrap.remove();
+        resolve(chosen);
+      }
+    });
+  });
+}
+
+async function importPdf(file, baseLabel) {
+  const lib = await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const doc = await lib.getDocument({ data: buf }).promise;
+
+  const pageCount = Math.min(doc.numPages, MAX_SHEETS);
+  if (doc.numPages > MAX_SHEETS) {
+    toast(`PDF has ${doc.numPages} pages, showing the first ${MAX_SHEETS}`, true);
+  }
+
+  // Thumbnails first so the picker can be shown quickly, then only the
+  // chosen sheets get rendered at full resolution.
+  toast(`Reading ${pageCount} page${pageCount === 1 ? '' : 's'}...`);
+  const thumbs = [];
+  for (let i = 1; i <= pageCount; i++) {
+    const page = await doc.getPage(i);
+    const canvas = await renderPdfPage(page, THUMB_LONG_EDGE);
+    thumbs.push({ url: canvas.toDataURL('image/png') });
+    page.cleanup();
+  }
+
+  const chosen = await pickSheets(thumbs, baseLabel);
+  if (!chosen || !chosen.length) return 0;
+
+  let done = 0;
+  for (const sheet of chosen) {
+    const pageNo = sheet.index + 1;
+    toast(`Converting sheet ${done + 1} of ${chosen.length}...`);
+
+    const page = await doc.getPage(pageNo);
+    const canvas = await renderPdfPage(page, SHEET_LONG_EDGE);
+    const blob = await canvasToBlob(canvas);
+    page.cleanup();
+
+    const named = new File([blob], `${baseLabel || 'plan'}-p${pageNo}.png`, { type: 'image/png' });
+    const url = await uploadFile(named, 'plan');
+
+    await api('create_plan', {
+      label: chosen.length > 1 ? `${baseLabel} Sheet ${pageNo}` : baseLabel,
+      plan_type: sheet.planType,
+      source_url: '',
+      page: pageNo,
+      image_url: url,
+      image_width: canvas.width,
+      image_height: canvas.height,
+      status: 'ready',
+      sort_order: VS.plans.length + done,
+    });
+
+    // Free the bitmap before the next sheet. A full set at this
+    // resolution will exhaust memory otherwise.
+    canvas.width = canvas.height = 0;
+    done++;
+  }
+
+  await doc.destroy();
+  return done;
+}
+
 async function doUploadPlan() {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/png,image/jpeg';
+  input.accept = 'application/pdf,image/png,image/jpeg';
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
 
-    // Server side PDF conversion is parked until the deploy pipeline is
-    // confirmed. Say so plainly rather than accepting the file and
-    // leaving the plan stuck on "converting" forever.
-    if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
-      toast('PDF conversion is not enabled yet. Export the sheet as PNG or JPG for now.', true);
-      return;
-    }
-
-    const label = prompt('Plan label (for example "Main Level" or "Front Elevation")',
+    const isPdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
+    const label = prompt(
+      isPdf
+        ? 'Name for this plan set (for example "Hoops Residence")'
+        : 'Plan label (for example "Main Level" or "Front Elevation")',
       file.name.replace(/\.[^.]+$/, ''));
     if (label === null) return;
-    const isElevation = confirm('Is this an exterior elevation?\n\nOK for elevation, Cancel for floor plan.');
-    const planType = isElevation ? 'elevation' : 'floor';
 
-    toast('Uploading...');
     try {
-      const url = await uploadFile(file, 'plan');
-      const { w, h } = await imageSize(file);
-      await api('create_plan', {
-        label, plan_type: planType, image_url: url,
-        image_width: w, image_height: h,
-        status: 'ready', sort_order: VS.plans.length,
-      });
-      toast('Plan added');
+      if (isPdf) {
+        const n = await importPdf(file, label);
+        if (n) toast(`Imported ${n} sheet${n === 1 ? '' : 's'}`);
+      } else {
+        const isElevation = confirm('Is this an exterior elevation?\n\nOK for elevation, Cancel for floor plan.');
+        toast('Uploading...');
+        const url = await uploadFile(file, 'plan');
+        const { w, h } = await imageSize(file);
+        await api('create_plan', {
+          label, plan_type: isElevation ? 'elevation' : 'floor',
+          image_url: url, image_width: w, image_height: h,
+          status: 'ready', sort_order: VS.plans.length,
+        });
+        toast('Plan added');
+      }
       await loadAll();
     } catch (e) {
-      toast(e.message, true);
+      console.error(e);
+      toast(e.message || 'Upload failed', true);
     }
   };
   input.click();
