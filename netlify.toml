@@ -5,6 +5,17 @@
 [functions]
   node_bundler = "esbuild"
 
+# PDF to PNG conversion for plan uploads. mupdf ships a WASM binary that
+# esbuild will not carry into the bundle, so this one function is traced
+# with nft and the dist folder is shipped alongside it.
+#
+# The -background suffix in the filename is what gives it a 15 minute
+# budget instead of the 10 second synchronous limit. A high resolution
+# architectural sheet is not a 10 second rasterize.
+[functions."plan-convert-background"]
+  node_bundler = "nft"
+  included_files = ["node_modules/mupdf/dist/**"]
+
 # ── Scheduled update generation ───────────────────────────────────────────────
 # Monday 5:00 AM CT (10:00 UTC) — week preview
 [[scheduled_functions]]

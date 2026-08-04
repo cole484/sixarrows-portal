@@ -36,6 +36,9 @@ portal/
   documents.html, photos.html, updates.html, decisions.html
   share.html                # post-build review collection
   design-book.html          # auto-generated style book from selections
+  visual-selections.html    # staff pin editor over floor plans / elevations
+  lib/parse-selections.js   # canonical derivation of discrete selection
+                            #   records from the Wave Selections blob
   roadmap.html              # vendor-appointment checklist (read by admin too)
   guide-admin.html          # in-app admin docs (sticky TOC, mobile FAB)
   guide-client.html         # in-app client docs
@@ -63,6 +66,10 @@ netlify/functions/
   roadmap-vendors.js        # vendor defaults + per-client overrides + stop settings
   product-meta.js           # design book auto image fetch (OG/JSON-LD + Microlink fallback)
   selections-export.js      # CSV export of every selection
+  selection-items-sync.js   # projects the selections blob into
+                            #   selection_items rows so pins can FK to them
+  visual-selections.js      # plans + pins CRUD, signed storage uploads
+  plan-convert-background.js # PDF to PNG on upload (mupdf wasm, 15 min budget)
   debug-sheet.js            # one-off sheet diagnostic
 supabase/
   schema.sql                # baseline tables
@@ -85,6 +92,24 @@ supabase/
 4. **Selections storage is keyed by `client_id` + `suffix`** in the
    `selections` table. New "areas" of selections data get a new suffix
    rather than a new table.
+4b. **Wave Selections has no per-selection row.** Everything lives in
+   one jsonb blob per client under suffix `ans`, as a flat map of form
+   field ids. There is no selection entity, no uuid, no cost field, no
+   vendor field, and no approval state beyond `sav`, which is just a
+   per-category "saved" boolean. Anything that needs to reference an
+   individual selection has to go through `selection_items` (see below).
+4c. **Visual Selections is a projection, not a second system.**
+   `selection-items-sync.js` re-derives items from the blob and upserts
+   them into `selection_items` matched on `item_key`, so each selection
+   gets a stable uuid for `pins.selection_item_id` to point at. Field
+   ownership is the rule that keeps it honest: category, wave, room,
+   label, product, image_url and detail are owned by the blob and
+   refreshed on every sync; vendor, cost, product_link and notes are
+   owned by the pin UI and are never written by the sync. Keys are built
+   from ids that do not change (category + room id + fixture id), never
+   from display labels, because a renamed room would otherwise orphan
+   every pin under it. Items that vanish from the blob are archived, not
+   deleted, so existing pins still resolve.
 5. **Notion integrations must be shared per-database.** When a new client's
    Notion tracker or timeline DB is created, it has to be added to the
    portal's integration via the database's `···` → Connections menu, or
@@ -152,6 +177,20 @@ Optional, for product-meta image fetching cascade:
   `generate-updates.js` voice/tone and the cron + manual-trigger UX.
   See the systemPrompt in that file for the current voice rules.
 
+- **Visual Selections phase 1** (shipped): staff pin editor at
+  `portal/visual-selections.html`, reachable from the admin sidebar.
+  Upload a plan or elevation, drop pins, duplicate pins for repeated
+  fixtures, cluster on overlap, filter by category and wave. Pin
+  coordinates are percentages of plan width and height, never pixels.
+  One pin per physical fixture, no quantity field. Migration:
+  `supabase/add-visual-selections.sql`.
+  Deliberately out of scope, and the thing most likely to kill the
+  project if it creeps in: vendor catalogs, automatic product lookup,
+  purchase orders, procurement, shipment tracking, supplier
+  integrations. Staff type the item and paste a screenshot.
+  Phases 2 to 4 (client read-only view, approval in place with threaded
+  comments, guided wave walkthrough and room mood boards) are not built.
+
 ## When in doubt
 
 - **Bug isn't sticking across browsers / fields disappear on refresh** →
@@ -165,4 +204,12 @@ Optional, for product-meta image fetching cascade:
   via the database's `···` → Connections menu.
 - **Selections client key vs project ID** → most things use `p.id`,
   but selections persistence uses `p.selectionsClientKey || p.id`. They
-  are usually the same string.
+  are usually the same string. `selection-items-sync.js` resolves this
+  explicitly: it reads the blob by `selections_client_key` and writes
+  `selection_items.client_id` as `clients.id`.
+- **Pins show up detached, or a category has no pinnable items** → run
+  a resync from the Visual Selections top bar. If items are still
+  missing, the parser in `portal/lib/parse-selections.js` does not know
+  that answer key yet. Lighting and plumbing are driven from the `ltx`
+  and `pfx` suffixes rather than a guessed fixture list, so a new
+  fixture type needs adding to the arrays at the top of that file.

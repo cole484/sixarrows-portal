@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Visual Selections | Six Arrows</title>
+<link rel="stylesheet" href="style.css"/>
+<style>
+/* ─── Visual Selections (scoped to .vs-root) ──────────────────
+   Phase 1 is a staff tool on desktop, but the layout is built
+   responsive from the start because the client view in phase 2
+   lands on phones.
+   ------------------------------------------------------------ */
+.vs-root {
+  --charcoal: #2e2e2e;
+  --sage:     #757f69;
+  --sage-dk:  #5d6553;
+  --cream:    #ebe9de;
+  --paper:    #ffffff;
+  --ink-60:   #6b6b66;
+  --ink-30:   #b4b2a8;
+  --line:     #ddd9cc;
+  --warn:     #a8582f;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cream);
+  color: var(--charcoal);
+  font-family: 'Work Sans', system-ui, sans-serif;
+}
+
+/* Industry is the brand heading face. It is not a Google font, so it
+   only applies where it is installed or licensed; Work Sans carries
+   the fallback. */
+.vs-root h1, .vs-root h2, .vs-root h3, .vs-root .vs-head {
+  font-family: 'Industry', 'Industry Bold', 'Work Sans', sans-serif;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+
+/* ── Top bar ── */
+.vs-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 16px; background: var(--charcoal); color: var(--cream);
+  flex-wrap: wrap; flex: 0 0 auto;
+}
+.vs-bar h1 { font-size: 15px; margin: 0; text-transform: uppercase; letter-spacing: .12em; }
+.vs-bar .vs-spacer { flex: 1; }
+.vs-sel {
+  background: #3b3b3b; color: var(--cream); border: 1px solid #4d4d4d;
+  border-radius: 3px; padding: 6px 9px; font: inherit; font-size: 13px;
+}
+.vs-btn {
+  background: var(--sage); color: #fff; border: 0; border-radius: 3px;
+  padding: 7px 13px; font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.vs-btn:hover { background: var(--sage-dk); }
+.vs-btn:disabled { opacity: .45; cursor: not-allowed; }
+.vs-btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--charcoal); }
+.vs-btn.ghost:hover { background: #f4f2e9; }
+.vs-btn.danger { background: transparent; border: 1px solid var(--warn); color: var(--warn); }
+.vs-btn.danger:hover { background: #f9efe9; }
+.vs-btn.sm { padding: 4px 9px; font-size: 12px; }
+
+/* ── Body: rail, stage, panel ── */
+.vs-body { flex: 1; display: flex; min-height: 0; }
+
+.vs-rail {
+  width: 210px; flex: 0 0 210px; background: var(--paper);
+  border-right: 1px solid var(--line); overflow-y: auto; padding: 12px;
+}
+.vs-rail-hd {
+  font-size: 10px; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--ink-60); margin: 14px 0 7px; font-weight: 600;
+}
+.vs-rail-hd:first-child { margin-top: 0; }
+
+.vs-plan-item {
+  padding: 8px 9px; border-radius: 3px; cursor: pointer; font-size: 13px;
+  border: 1px solid transparent; margin-bottom: 3px; line-height: 1.3;
+}
+.vs-plan-item:hover { background: #f4f2e9; }
+.vs-plan-item.active { background: var(--sage); color: #fff; }
+.vs-plan-item .vs-plan-meta { font-size: 11px; opacity: .7; display: block; margin-top: 2px; }
+
+.vs-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; margin: 0 4px 4px 0; border-radius: 11px;
+  border: 1px solid var(--line); background: var(--paper);
+  font-size: 12px; cursor: pointer; user-select: none;
+}
+.vs-chip.on { background: var(--sage); border-color: var(--sage); color: #fff; }
+.vs-chip .vs-chip-n { font-size: 10px; opacity: .75; }
+
+/* ── Stage ── */
+.vs-stage {
+  flex: 1; position: relative; overflow: hidden; min-width: 0;
+  background: #d9d6c9;
+  /* Pins are dropped by clicking the plan, so no text selection. */
+  user-select: none;
+}
+.vs-stage.placing { cursor: crosshair; }
+.vs-canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.vs-plan-img { display: block; max-width: none; user-select: none; -webkit-user-drag: none; }
+
+.vs-pin {
+  position: absolute; width: 26px; height: 26px; margin: 0;
+  border-radius: 50%; border: 2px solid #fff;
+  background: var(--sage); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  /* Counter-scaled in JS so a pin stays the same size at any zoom. */
+  transform-origin: center center;
+}
+/* Phase 1 is desktop, but the touch target is sized for the phone
+   view that comes next. The visual dot stays 26px. */
+.vs-pin::after {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%);
+}
+.vs-pin.selected { background: var(--charcoal); border-color: #ffd479; z-index: 6; }
+.vs-pin.cluster { background: var(--charcoal); width: 32px; height: 32px; font-size: 12px; }
+.vs-pin.detached { background: var(--warn); }
+
+.vs-spider-line {
+  position: absolute; height: 1px; background: rgba(46,46,46,.5);
+  transform-origin: 0 50%; pointer-events: none;
+}
+
+.vs-zoom {
+  position: absolute; right: 12px; bottom: 12px; display: flex; flex-direction: column;
+  gap: 4px; z-index: 20;
+}
+.vs-zoom button {
+  width: 32px; height: 32px; border-radius: 3px; border: 1px solid var(--line);
+  background: var(--paper); font-size: 16px; cursor: pointer; line-height: 1;
+  color: var(--charcoal);
+}
+.vs-hint {
+  position: absolute; left: 12px; bottom: 12px; z-index: 20;
+  background: rgba(46,46,46,.9); color: var(--cream); font-size: 12px;
+  padding: 7px 11px; border-radius: 3px; max-width: 340px; line-height: 1.4;
+}
+.vs-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  text-align: center; color: var(--ink-60); font-size: 14px; padding: 30px;
+}
+
+/* ── Right panel ── */
+.vs-panel {
+  width: 340px; flex: 0 0 340px; background: var(--paper);
+  border-left: 1px solid var(--line); overflow-y: auto; padding: 14px;
+}
+.vs-panel h2 { font-size: 14px; margin: 0 0 10px; }
+.vs-field { margin-bottom: 10px; }
+.vs-field label {
+  display: block; font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--ink-60); margin-bottom: 4px; font-weight: 600;
+}
+.vs-field input, .vs-field select, .vs-field textarea {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 3px;
+  font: inherit; font-size: 13px; background: var(--paper); color: var(--charcoal);
+}
+.vs-field textarea { min-height: 56px; resize: vertical; }
+.vs-row { display: flex; gap: 8px; }
+.vs-row > * { flex: 1; min-width: 0; }
+
+.vs-item-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 3px; }
+.vs-item {
+  padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px;
+}
+.vs-item:last-child { border-bottom: 0; }
+.vs-item:hover { background: #f4f2e9; }
+.vs-item.on { background: var(--sage); color: #fff; }
+.vs-item-sub { font-size: 11px; opacity: .72; margin-top: 2px; }
+
+.vs-note {
+  font-size: 12px; color: var(--ink-60); line-height: 1.45;
+  background: #f7f5ec; border-left: 2px solid var(--sage); padding: 8px 10px;
+  border-radius: 0 3px 3px 0; margin-bottom: 12px;
+}
+.vs-note.warn { background: #faf0ea; border-left-color: var(--warn); color: #7d4526; }
+.vs-shot { width: 100%; border-radius: 3px; border: 1px solid var(--line); margin-bottom: 8px; display: block; }
+.vs-tag {
+  display: inline-block; font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+  background: var(--cream); color: var(--ink-60); padding: 2px 6px; border-radius: 2px;
+  margin-right: 4px; font-weight: 600;
+}
+.vs-divider { height: 1px; background: var(--line); margin: 14px 0; }
+
+.vs-toast {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  background: var(--charcoal); color: var(--cream); padding: 9px 16px;
+  border-radius: 3px; font-size: 13px; z-index: 200; box-shadow: 0 3px 14px rgba(0,0,0,.3);
+}
+.vs-toast.err { background: var(--warn); }
+
+.vs-login { max-width: 320px; margin: 12vh auto; background: var(--paper);
+  padding: 24px; border-radius: 4px; border: 1px solid var(--line); }
+
+/* ── Responsive: the rail and panel stack under the plan ── */
+@media (max-width: 900px) {
+  .vs-body { flex-direction: column; }
+  .vs-rail, .vs-panel {
+    width: auto; flex: 0 0 auto; max-height: 34vh;
+    border: 0; border-top: 1px solid var(--line);
+  }
+  .vs-rail { order: 3; } .vs-stage { order: 1; flex: 1 1 46vh; } .vs-panel { order: 2; }
+  .vs-pin { width: 30px; height: 30px; }
+}
+</style>
+</head>
+<body>
+<div class="vs-root" id="vs-root"></div>
+
+<script type="module">
+import { CATEGORIES, WAVES } from './lib/parse-selections.js';
+
+// ── Config ───────────────────────────────────────────────────
+const FN = '/.netlify/functions';
+const ADMIN_PASS = 'sa_admin_2026';   // matches portal/admin.html
+const CLUSTER_PX = 30;                // screen-space overlap threshold
+const MIN_ZOOM = 0.15, MAX_ZOOM = 8;
+
+const CAT_IDS = Object.keys(CATEGORIES);
+
+// ── State ────────────────────────────────────────────────────
+const VS = {
+  authed: false,
+  clients: [],
+  clientKey: '',
+  plans: [], pins: [], items: [],
+  activePlanId: null,
+  filterCats: new Set(),      // empty means show everything
+  filterWave: 'all',
+  selectedPinId: null,
+  attachItemId: null,         // item chosen in the attach panel
+  placing: null,              // { itemId, fromPinId } while dropping copies
+  spiderKey: null,            // cluster centroid key currently fanned out
+  zoom: 1, panX: 0, panY: 0,
+  loading: false,
+  pollTimer: null,
+};
+
+const $ = sel => document.querySelector(sel);
+const root = $('#vs-root');
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+function toast(msg, isErr) {
+  const t = document.createElement('div');
+  t.className = 'vs-toast' + (isErr ? ' err' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), isErr ? 5200 : 2600);
+}
+
+async function api(action, body, method) {
+  const qs = `clientKey=${encodeURIComponent(VS.clientKey)}${action ? `&action=${action}` : ''}`;
+  const res = await fetch(`${FN}/visual-selections?${qs}`, {
+    method: method || (action ? 'POST' : 'GET'),
+    headers: { 'Content-Type': 'application/json' },
+    body: action ? JSON.stringify(body || {}) : undefined,
+  });
+  const json = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  return json;
+}
+
+// ── Derived helpers ──────────────────────────────────────────
+const activePlan  = () => VS.plans.find(p => p.id === VS.activePlanId) || null;
+const itemById    = id => VS.items.find(i => i.id === id) || null;
+const pinsForPlan = () => VS.pins.filter(p => p.plan_id === VS.activePlanId);
+
+function pinVisible(pin) {
+  const item = itemById(pin.selection_item_id);
+  if (!item) return true;   // detached pin, always show so it can be fixed
+  if (VS.filterCats.size && !VS.filterCats.has(item.category)) return false;
+  if (VS.filterWave !== 'all' && String(item.wave) !== String(VS.filterWave)) return false;
+  return true;
+}
+
+const visiblePins = () => pinsForPlan().filter(pinVisible);
+
+// Group pins that overlap on screen. The threshold is a screen-space
+// pixel distance converted into percentage units, so zooming in pulls
+// clusters apart without any separate logic.
+function clusterPins(pins, plan) {
+  const w = plan.image_width || 1000;
+  const h = plan.image_height || 1000;
+  const thrX = (CLUSTER_PX / VS.zoom) / w * 100;
+  const thrY = (CLUSTER_PX / VS.zoom) / h * 100;
+
+  const clusters = [];
+  pins.forEach(p => {
+    const hit = clusters.find(c => Math.abs(c.x - p.x) < thrX && Math.abs(c.y - p.y) < thrY);
+    if (hit) {
+      hit.pins.push(p);
+      hit.x = hit.pins.reduce((s, q) => s + q.x, 0) / hit.pins.length;
+      hit.y = hit.pins.reduce((s, q) => s + q.y, 0) / hit.pins.length;
+    } else {
+      clusters.push({ x: p.x, y: p.y, pins: [p] });
+    }
+  });
+  return clusters;
+}
+
+// ── Data loading ─────────────────────────────────────────────
+async function loadClients() {
+  // admin-clients is gated on the ADMIN_PASSWORD env var, which may
+  // differ from the page password. A 401 is not fatal: the client key
+  // still arrives in the query string from admin.html.
+  const res = await fetch(`${FN}/admin-clients?all=1`, {
+    headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+  }).catch(() => null);
+
+  if (res && res.ok) {
+    const j = await res.json().catch(() => null);
+    if (j && Array.isArray(j.clients)) { VS.clients = j.clients; return; }
+  }
+  VS.clients = [];
+}
+
+async function loadAll() {
+  if (!VS.clientKey) return;
+  VS.loading = true; render();
+  try {
+    // Re-derive selection_items from the Wave Selections blob first, so
+    // anything the client filled in since last visit is pinnable.
+    await fetch(`${FN}/selection-items-sync?clientKey=${encodeURIComponent(VS.clientKey)}`,
+      { method: 'POST' }).catch(() => null);
+
+    const data = await api(null);
+    VS.plans = data.plans || [];
+    VS.pins  = data.pins  || [];
+    VS.items = data.items || [];
+    if (!VS.activePlanId || !VS.plans.some(p => p.id === VS.activePlanId)) {
+      VS.activePlanId = VS.plans[0]?.id || null;
+      resetView();
+    }
+  } catch (e) {
+    toast(e.message, true);
+  }
+  VS.loading = false;
+  render();
+  schedulePoll();
+}
+
+// A plan sits in 'converting' until the background function finishes,
+// so poll while any plan on screen is still being rasterized.
+function schedulePoll() {
+  clearTimeout(VS.pollTimer);
+  if (!VS.plans.some(p => p.status === 'converting')) return;
+  VS.pollTimer = setTimeout(async () => {
+    try {
+      const data = await api(null);
+      VS.plans = data.plans || [];
+      VS.pins  = data.pins  || [];
+      VS.items = data.items || [];
+      render();
+      schedulePoll();
+    } catch (e) { /* transient, try again on next user action */ }
+  }, 3000);
+}
+
+// ── View transform ───────────────────────────────────────────
+function resetView() {
+  const plan = activePlan();
+  const stage = $('.vs-stage');
+  if (!plan || !plan.image_width || !stage) { VS.zoom = 1; VS.panX = 0; VS.panY = 0; return; }
+  const sw = stage.clientWidth, sh = stage.clientHeight;
+  const fit = Math.min(sw / plan.image_width, sh / plan.image_height) * 0.94;
+  VS.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fit));
+  VS.panX = (sw - plan.image_width * VS.zoom) / 2;
+  VS.panY = (sh - plan.image_height * VS.zoom) / 2;
+}
+
+// Zoom about a fixed point in stage coordinates so the spot under the
+// cursor stays put.
+function zoomAt(factor, sx, sy) {
+  const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, VS.zoom * factor));
+  const k = next / VS.zoom;
+  VS.panX = sx - (sx - VS.panX) * k;
+  VS.panY = sy - (sy - VS.panY) * k;
+  VS.zoom = next;
+  VS.spiderKey = null;
+  applyTransform();
+  scheduleClusterRender();
+}
+
+// Clusters are computed from the current zoom, so a zoom change has to
+// rebuild the markers. Only the stage is redrawn, which keeps focus and
+// scroll position in the rail and the panel while zooming.
+let clusterTimer = null;
+function scheduleClusterRender() {
+  clearTimeout(clusterTimer);
+  clusterTimer = setTimeout(() => {
+    const stage = $('.vs-stage');
+    if (!stage) return;
+    stage.outerHTML = renderStage();
+    applyTransform();
+  }, 80);
+}
+
+// Transform-only update, so panning does not re-render the DOM.
+function applyTransform() {
+  const canvas = $('.vs-canvas');
+  if (!canvas) return;
+  canvas.style.transform = `translate(${VS.panX}px, ${VS.panY}px) scale(${VS.zoom})`;
+  canvas.querySelectorAll('.vs-pin').forEach(el => {
+    el.style.transform = `translate(-50%, -50%) scale(${1 / VS.zoom})`;
+  });
+  canvas.querySelectorAll('.vs-spider-line').forEach(el => {
+    el.style.transform = `rotate(${el.dataset.angle}deg) scaleY(${1 / VS.zoom})`;
+  });
+}
+
+// ── Render ───────────────────────────────────────────────────
+function render() {
+  if (!VS.authed) { root.innerHTML = renderLogin(); return; }
+  root.innerHTML = `
+    ${renderBar()}
+    <div class="vs-body">
+      ${renderRail()}
+      ${renderStage()}
+      ${renderPanel()}
+    </div>`;
+  applyTransform();
+}
+
+function renderLogin() {
+  return `<div class="vs-login">
+    <h1 style="font-size:15px;margin:0 0 4px">Visual Selections</h1>
+    <p style="font-size:13px;color:var(--ink-60);margin:0 0 14px">Staff access</p>
+    <div class="vs-field"><input type="password" id="vs-pw" placeholder="Admin password" autofocus></div>
+    <button class="vs-btn" data-action="login" style="width:100%">Sign in</button>
+  </div>`;
+}
+
+function renderBar() {
+  const opts = VS.clients.length
+    ? VS.clients.map(c => `<option value="${esc(c.id)}"${c.id === VS.clientKey ? ' selected' : ''}>${esc(c.client_name || c.id)}</option>`).join('')
+    : `<option value="${esc(VS.clientKey)}">${esc(VS.clientKey || 'No client')}</option>`;
+  return `<div class="vs-bar">
+    <h1>Visual Selections</h1>
+    <select class="vs-sel" data-action="pick-client">${opts}</select>
+    <span class="vs-spacer"></span>
+    <button class="vs-btn ghost" style="color:var(--cream);border-color:#4d4d4d" data-action="resync">Resync selections</button>
+    <button class="vs-btn" data-action="upload">Upload plan</button>
+  </div>`;
+}
+
+function renderRail() {
+  const counts = {};
+  pinsForPlan().forEach(p => {
+    const it = itemById(p.selection_item_id);
+    if (it) counts[it.category] = (counts[it.category] || 0) + 1;
+  });
+
+  const plans = VS.plans.length
+    ? VS.plans.map(p => `
+        <div class="vs-plan-item ${p.id === VS.activePlanId ? 'active' : ''}" data-action="pick-plan" data-id="${p.id}">
+          ${esc(p.label)}
+          <span class="vs-plan-meta">
+            ${p.plan_type === 'elevation' ? 'Elevation' : 'Floor plan'}
+            ${p.status === 'converting' ? ' · converting...' : ''}
+            ${p.status === 'failed' ? ' · failed' : ''}
+            · ${VS.pins.filter(x => x.plan_id === p.id).length} pins
+          </span>
+        </div>`).join('')
+    : `<div style="font-size:12px;color:var(--ink-60)">No plans yet.</div>`;
+
+  const waveChips = [`<span class="vs-chip ${VS.filterWave === 'all' ? 'on' : ''}" data-action="wave" data-w="all">All waves</span>`]
+    .concat(WAVES.map((w, i) => `<span class="vs-chip ${String(VS.filterWave) === String(i) ? 'on' : ''}" data-action="wave" data-w="${i}">${esc(w.label)}</span>`))
+    .join('');
+
+  const catChips = CAT_IDS.map(id => `
+    <span class="vs-chip ${VS.filterCats.has(id) ? 'on' : ''}" data-action="cat" data-c="${id}">
+      ${esc(CATEGORIES[id].name)}${counts[id] ? `<span class="vs-chip-n">${counts[id]}</span>` : ''}
+    </span>`).join('');
+
+  return `<div class="vs-rail">
+    <div class="vs-rail-hd">Plans</div>
+    ${plans}
+    ${activePlan() ? `<button class="vs-btn ghost sm" data-action="rename-plan" style="margin-top:6px">Rename</button>
+      <button class="vs-btn danger sm" data-action="delete-plan" style="margin-top:6px">Delete</button>` : ''}
+    <div class="vs-rail-hd">Wave</div>
+    ${waveChips}
+    <div class="vs-rail-hd">Category</div>
+    ${catChips}
+    ${VS.filterCats.size ? `<button class="vs-btn ghost sm" data-action="clear-cats" style="margin-top:6px">Clear filters</button>` : ''}
+  </div>`;
+}
+
+function renderStage() {
+  const plan = activePlan();
+  if (!plan) {
+    return `<div class="vs-stage"><div class="vs-empty">
+      ${VS.loading ? 'Loading...' : 'Upload a floor plan or elevation to start pinning.'}
+    </div></div>`;
+  }
+  if (plan.status === 'converting') {
+    return `<div class="vs-stage"><div class="vs-empty">
+      Converting ${esc(plan.label)} to an image. This runs in the background and can take a minute on a large sheet.
+    </div></div>`;
+  }
+  if (plan.status === 'failed') {
+    return `<div class="vs-stage"><div class="vs-empty">
+      Conversion failed: ${esc(plan.error || 'unknown error')}
+    </div></div>`;
+  }
+
+  const pins = visiblePins();
+  const clusters = clusterPins(pins, plan);
+
+  const markers = clusters.map(c => {
+    const spiderId = `${c.x.toFixed(3)},${c.y.toFixed(3)}`;
+
+    if (c.pins.length === 1) return pinHtml(c.pins[0], c.pins[0].x, c.pins[0].y);
+
+    // A fanned-out cluster draws each pin on a short radial arm so the
+    // individual selections can be clicked without more zooming.
+    if (VS.spiderKey === spiderId) {
+      const w = plan.image_width || 1000, h = plan.image_height || 1000;
+      const radiusPx = 46 / VS.zoom;
+      return c.pins.map((p, i) => {
+        const ang = (i / c.pins.length) * Math.PI * 2;
+        const x = c.x + (Math.cos(ang) * radiusPx / w * 100);
+        const y = c.y + (Math.sin(ang) * radiusPx / h * 100);
+        const deg = ang * 180 / Math.PI;
+        return `<div class="vs-spider-line" data-angle="${deg}"
+                  style="left:${c.x}%;top:${c.y}%;width:${radiusPx}px;transform:rotate(${deg}deg)"></div>`
+             + pinHtml(p, x, y);
+      }).join('');
+    }
+
+    return `<div class="vs-pin cluster" data-action="cluster" data-key="${esc(spiderId)}"
+              data-cx="${c.x}" data-cy="${c.y}"
+              style="left:${c.x}%;top:${c.y}%">${c.pins.length}</div>`;
+  }).join('');
+
+  const total = pinsForPlan().length;
+  const hidden = total - pins.length;
+
+  return `<div class="vs-stage ${VS.placing ? 'placing' : ''}">
+    <div class="vs-canvas">
+      <img class="vs-plan-img" src="${esc(plan.image_url)}" alt="${esc(plan.label)}"
+           width="${plan.image_width || ''}" height="${plan.image_height || ''}" draggable="false">
+      ${markers}
+    </div>
+    <div class="vs-zoom">
+      <button data-action="zoom-in">+</button>
+      <button data-action="zoom-out">&minus;</button>
+      <button data-action="zoom-fit" title="Fit to screen">&#8862;</button>
+    </div>
+    <div class="vs-hint">
+      ${VS.placing
+        ? `Placing copies of <strong>${esc(itemById(VS.placing.itemId)?.label || 'selection')}</strong>. Click the plan to drop another. Press Esc when done.`
+        : `${total} pin${total === 1 ? '' : 's'} on this plan${hidden ? `, ${hidden} hidden by filters` : ''}. Click the plan to add one.`}
+    </div>
+  </div>`;
+}
+
+function pinHtml(pin, x, y) {
+  const item = itemById(pin.selection_item_id);
+  const cls = [
+    'vs-pin',
+    pin.id === VS.selectedPinId ? 'selected' : '',
+    !item ? 'detached' : '',
+  ].filter(Boolean).join(' ');
+  const initial = item ? (CATEGORIES[item.category]?.name || item.category).charAt(0) : '?';
+  const title = item ? `${item.label}${item.product ? `: ${item.product}` : ''}` : 'Selection missing';
+  return `<div class="${cls}" data-action="pin" data-id="${pin.id}"
+            style="left:${x}%;top:${y}%" title="${esc(title)}">${esc(initial)}</div>`;
+}
+
+function renderPanel() {
+  // Placing copies of an existing selection.
+  if (VS.placing) {
+    const item = itemById(VS.placing.itemId);
+    return `<div class="vs-panel">
+      <h2>Placing copies</h2>
+      <div class="vs-note">Every copy points at the same selection record. Editing the selection updates all of them.</div>
+      ${item ? itemSummaryHtml(item) : ''}
+      <button class="vs-btn ghost" data-action="stop-placing" style="width:100%">Done placing</button>
+    </div>`;
+  }
+
+  // A pin is selected.
+  const pin = VS.selectedPinId ? pinsForPlan().find(p => p.id === VS.selectedPinId) : null;
+  if (pin) {
+    const item = itemById(pin.selection_item_id);
+    const copies = VS.pins.filter(p => p.selection_item_id === pin.selection_item_id).length;
+    if (!item) {
+      return `<div class="vs-panel">
+        <h2>Pin</h2>
+        <div class="vs-note warn">This pin points at a selection that no longer exists. Delete the pin or resync selections.</div>
+        <button class="vs-btn danger" data-action="delete-pin" data-id="${pin.id}" style="width:100%">Delete pin</button>
+      </div>`;
+    }
+    return `<div class="vs-panel">
+      <h2>${esc(item.label)}</h2>
+      ${item.archived ? `<div class="vs-note warn">This selection is no longer in the client's Wave Selections. The pin still works, but the record is archived.</div>` : ''}
+      ${copies > 1 ? `<div class="vs-note">${copies} pins share this selection. Edits below apply to all ${copies}.</div>` : ''}
+      ${itemEditorHtml(item)}
+      <div class="vs-divider"></div>
+      <button class="vs-btn" data-action="place-another" data-item="${item.id}" data-pin="${pin.id}" style="width:100%;margin-bottom:6px">Place another</button>
+      <button class="vs-btn danger" data-action="delete-pin" data-id="${pin.id}" style="width:100%">Delete this pin</button>
+    </div>`;
+  }
+
+  // Nothing selected: the attach list, ready for the next drop.
+  return `<div class="vs-panel">
+    <h2>Selections</h2>
+    <div class="vs-note">Pick a selection, then click the plan to pin it. One pin per physical fixture.</div>
+    <div class="vs-field">
+      <input type="text" id="vs-search" placeholder="Search selections..." value="${esc(VS.search || '')}" data-action="search">
+    </div>
+    ${attachListHtml()}
+    <div class="vs-divider"></div>
+    <button class="vs-btn ghost" data-action="new-item" style="width:100%">Create a new selection</button>
+  </div>`;
+}
+
+function attachListHtml() {
+  const q = (VS.search || '').toLowerCase();
+  const pinned = new Set(VS.pins.map(p => p.selection_item_id));
+
+  const list = VS.items
+    .filter(i => !i.archived)
+    .filter(i => !VS.filterCats.size || VS.filterCats.has(i.category))
+    .filter(i => VS.filterWave === 'all' || String(i.wave) === String(VS.filterWave))
+    .filter(i => !q || `${i.label} ${i.product} ${i.room} ${i.vendor}`.toLowerCase().includes(q));
+
+  if (!list.length) {
+    return `<div style="font-size:12px;color:var(--ink-60);padding:8px 0">
+      No selections match. Run a resync, loosen the filters, or create one.
+    </div>`;
+  }
+
+  return `<div class="vs-item-list">${list.map(i => {
+    const n = VS.pins.filter(p => p.selection_item_id === i.id).length;
+    return `<div class="vs-item ${VS.attachItemId === i.id ? 'on' : ''}" data-action="attach" data-id="${i.id}">
+      <div>${esc(i.label)}</div>
+      <div class="vs-item-sub">
+        <span class="vs-tag">${esc(CATEGORIES[i.category]?.name || i.category)}</span>
+        ${esc(i.product || 'No product yet')}${n ? ` · ${n} pinned` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function itemSummaryHtml(item) {
+  return `<div style="margin-bottom:10px">
+    ${item.image_url ? `<img class="vs-shot" src="${esc(item.image_url)}" alt="">` : ''}
+    <div style="font-weight:600;font-size:13px">${esc(item.label)}</div>
+    <div style="font-size:12px;color:var(--ink-60)">${esc(item.product || 'No product yet')}</div>
+  </div>`;
+}
+
+function itemEditorHtml(item) {
+  const catOpts = CAT_IDS.map(id =>
+    `<option value="${id}"${id === item.category ? ' selected' : ''}>${esc(CATEGORIES[id].name)}</option>`).join('');
+  const waveOpts = WAVES.map((w, i) =>
+    `<option value="${i}"${String(i) === String(item.wave) ? ' selected' : ''}>${esc(w.label)}: ${esc(w.name)}</option>`).join('');
+
+  return `<div data-item-form="${item.id}">
+    ${item.image_url ? `<img class="vs-shot" src="${esc(item.image_url)}" alt="">` : ''}
+    <div class="vs-field"><label>Item name</label><input type="text" name="label" value="${esc(item.label)}"></div>
+    <div class="vs-row">
+      <div class="vs-field"><label>Category</label><select name="category">${catOpts}</select></div>
+      <div class="vs-field"><label>Wave</label><select name="wave">${waveOpts}</select></div>
+    </div>
+    <div class="vs-field"><label>Room</label><input type="text" name="room" value="${esc(item.room)}"></div>
+    <div class="vs-field"><label>Product</label><input type="text" name="product" value="${esc(item.product)}"></div>
+    <div class="vs-row">
+      <div class="vs-field"><label>Vendor</label><input type="text" name="vendor" value="${esc(item.vendor)}"></div>
+      <div class="vs-field"><label>Cost</label><input type="number" name="cost" step="0.01" value="${item.cost == null ? '' : esc(item.cost)}"></div>
+    </div>
+    <div class="vs-field"><label>Product link</label><input type="url" name="product_link" value="${esc(item.product_link)}" placeholder="https://"></div>
+    <div class="vs-field"><label>Screenshot URL</label><input type="url" name="image_url" value="${esc(item.image_url)}" placeholder="https://"></div>
+    <div class="vs-field">
+      <label>Or upload a screenshot</label>
+      <input type="file" accept="image/*" data-action="upload-shot" data-id="${item.id}">
+    </div>
+    <div class="vs-field"><label>Notes</label><textarea name="notes">${esc(item.notes)}</textarea></div>
+    ${item.source === 'wave'
+      ? `<div class="vs-note">Item name, product, room and screenshot come from Wave Selections and are refreshed on every resync. Vendor, cost, link and notes are owned here.</div>`
+      : ''}
+    <button class="vs-btn" data-action="save-item" data-id="${item.id}" style="width:100%">Save selection</button>
+  </div>`;
+}
+
+// ── Uploads ──────────────────────────────────────────────────
+async function uploadFile(file, kind) {
+  const signed = await api('sign_upload', { filename: file.name, kind });
+  const put = await fetch(signed.putUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  if (!put.ok) throw new Error(`Upload failed: ${put.status}`);
+  return signed.publicUrl;
+}
+
+function imageSize(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
+    img.onerror = () => { resolve({ w: null, h: null }); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+}
+
+async function doUploadPlan() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/pdf,image/png,image/jpeg';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const label = prompt('Plan label (for example "Main Level" or "Front Elevation")',
+      file.name.replace(/\.[^.]+$/, ''));
+    if (label === null) return;
+    const isElevation = confirm('Is this an exterior elevation?\n\nOK for elevation, Cancel for floor plan.');
+    const planType = isElevation ? 'elevation' : 'floor';
+
+    toast('Uploading...');
+    try {
+      const url = await uploadFile(file, 'plan');
+      const isPdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
+
+      if (isPdf) {
+        // The row lands first so the poll has something to watch, then
+        // the background function fills in the rendered image.
+        const { plan } = await api('create_plan', {
+          label, plan_type: planType, source_url: url,
+          status: 'converting', sort_order: VS.plans.length,
+        });
+        await fetch(`${FN}/plan-convert-background`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientKey: VS.clientKey, planId: plan.id,
+            sourceUrl: url, label, planType,
+          }),
+        });
+        toast('Converting in the background');
+      } else {
+        const { w, h } = await imageSize(file);
+        await api('create_plan', {
+          label, plan_type: planType, image_url: url,
+          image_width: w, image_height: h,
+          status: 'ready', sort_order: VS.plans.length,
+        });
+        toast('Plan added');
+      }
+      await loadAll();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  input.click();
+}
+
+// ── Actions ──────────────────────────────────────────────────
+async function dropPin(xPct, yPct) {
+  const plan = activePlan();
+  if (!plan) return;
+
+  const itemId = VS.placing ? VS.placing.itemId : VS.attachItemId;
+  if (!itemId) { toast('Pick a selection on the right first', true); return; }
+  const item = itemById(itemId);
+
+  try {
+    const { pin } = await api('create_pin', {
+      plan_id: plan.id,
+      selection_item_id: itemId,
+      x: xPct, y: yPct,
+      room: item?.room || '',
+      created_from: VS.placing ? VS.placing.fromPinId : null,
+    });
+    VS.pins.push(pin);
+    if (!VS.placing) VS.selectedPinId = pin.id;
+    render();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function saveItem(id) {
+  const form = document.querySelector(`[data-item-form="${id}"]`);
+  if (!form) return;
+  const val = n => form.querySelector(`[name="${n}"]`)?.value ?? '';
+  const costRaw = val('cost');
+  try {
+    const { item } = await api('update_item', {
+      id,
+      label: val('label'),
+      category: val('category'),
+      wave: parseInt(val('wave'), 10) || 0,
+      room: val('room'),
+      product: val('product'),
+      vendor: val('vendor'),
+      cost: costRaw === '' ? null : Number(costRaw),
+      product_link: val('product_link'),
+      image_url: val('image_url'),
+      notes: val('notes'),
+    });
+    const idx = VS.items.findIndex(i => i.id === id);
+    if (idx >= 0) VS.items[idx] = item;
+    toast('Saved');
+    render();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function createItem() {
+  const label = prompt('Item name (for example "Powder Bath Sconce")');
+  if (!label) return;
+  try {
+    const { item } = await api('create_item', {
+      label,
+      category: CAT_IDS[0],
+      wave: CATEGORIES[CAT_IDS[0]].wave,
+      room: '',
+    });
+    VS.items.push(item);
+    VS.attachItemId = item.id;
+    toast('Selection created. Click the plan to pin it.');
+    render();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Events ───────────────────────────────────────────────────
+root.addEventListener('click', async (ev) => {
+  const el = ev.target.closest('[data-action]');
+  const action = el?.dataset.action;
+
+  // Clicking bare plan space drops a pin.
+  if (!action) {
+    const canvas = ev.target.closest('.vs-canvas');
+    if (canvas && (VS.placing || VS.attachItemId) && !VS.dragged) {
+      const img = canvas.querySelector('.vs-plan-img');
+      const r = img.getBoundingClientRect();
+      const x = ((ev.clientX - r.left) / r.width) * 100;
+      const y = ((ev.clientY - r.top) / r.height) * 100;
+      if (x >= 0 && x <= 100 && y >= 0 && y <= 100) await dropPin(x, y);
+      return;
+    }
+    if (ev.target.closest('.vs-stage') && !VS.dragged) {
+      VS.selectedPinId = null; VS.spiderKey = null; render();
+    }
+    return;
+  }
+
+  switch (action) {
+    case 'login': {
+      const pw = $('#vs-pw')?.value || '';
+      if (pw !== ADMIN_PASS) { toast('Wrong password', true); return; }
+      sessionStorage.setItem('sa_admin_auth', ADMIN_PASS);
+      VS.authed = true;
+      await boot();
+      break;
+    }
+    case 'pick-client': break;   // handled on change
+    case 'pick-plan':
+      VS.activePlanId = el.dataset.id;
+      VS.selectedPinId = null; VS.spiderKey = null; VS.placing = null;
+      render(); resetView(); applyTransform();
+      break;
+    case 'rename-plan': {
+      const plan = activePlan();
+      const label = prompt('Plan label', plan.label);
+      if (!label) return;
+      try { await api('update_plan', { id: plan.id, label }); await loadAll(); }
+      catch (e) { toast(e.message, true); }
+      break;
+    }
+    case 'delete-plan': {
+      const plan = activePlan();
+      const n = VS.pins.filter(p => p.plan_id === plan.id).length;
+      if (!confirm(`Delete "${plan.label}"?${n ? ` This also removes ${n} pin${n === 1 ? '' : 's'} on it.` : ''}\n\nThe selections themselves are not deleted.`)) return;
+      try { await api('delete_plan', { id: plan.id }); VS.activePlanId = null; await loadAll(); }
+      catch (e) { toast(e.message, true); }
+      break;
+    }
+    case 'upload': await doUploadPlan(); break;
+    case 'resync':
+      toast('Resyncing...');
+      await loadAll();
+      toast('Selections resynced');
+      break;
+    case 'wave':
+      VS.filterWave = el.dataset.w;
+      render();
+      break;
+    case 'cat': {
+      const c = el.dataset.c;
+      if (VS.filterCats.has(c)) VS.filterCats.delete(c); else VS.filterCats.add(c);
+      render();
+      break;
+    }
+    case 'clear-cats': VS.filterCats.clear(); render(); break;
+    case 'pin':
+      VS.selectedPinId = el.dataset.id;
+      VS.placing = null;
+      render();
+      break;
+    case 'cluster': {
+      const cx = parseFloat(el.dataset.cx), cy = parseFloat(el.dataset.cy);
+      if (VS.zoom < MAX_ZOOM) {
+        // Zoom toward the cluster centre so the pins separate.
+        const plan = activePlan();
+        const stage = $('.vs-stage').getBoundingClientRect();
+        const sx = (cx / 100) * plan.image_width * VS.zoom + VS.panX;
+        const sy = (cy / 100) * plan.image_height * VS.zoom + VS.panY;
+        VS.panX += stage.width / 2 - sx;
+        VS.panY += stage.height / 2 - sy;
+        zoomAt(2, stage.width / 2, stage.height / 2);
+        render();
+      } else {
+        VS.spiderKey = VS.spiderKey === el.dataset.key ? null : el.dataset.key;
+        render();
+      }
+      break;
+    }
+    case 'attach':
+      VS.attachItemId = VS.attachItemId === el.dataset.id ? null : el.dataset.id;
+      render();
+      break;
+    case 'place-another':
+      VS.placing = { itemId: el.dataset.item, fromPinId: el.dataset.pin };
+      VS.selectedPinId = null;
+      render();
+      break;
+    case 'stop-placing': VS.placing = null; render(); break;
+    case 'save-item': await saveItem(el.dataset.id); break;
+    case 'new-item': await createItem(); break;
+    case 'delete-pin': {
+      if (!confirm('Delete this pin? The selection record stays.')) return;
+      try {
+        await api('delete_pin', { id: el.dataset.id });
+        VS.pins = VS.pins.filter(p => p.id !== el.dataset.id);
+        VS.selectedPinId = null;
+        render();
+      } catch (e) { toast(e.message, true); }
+      break;
+    }
+    case 'zoom-in':  zoomAt(1.35, $('.vs-stage').clientWidth / 2, $('.vs-stage').clientHeight / 2); break;
+    case 'zoom-out': zoomAt(1 / 1.35, $('.vs-stage').clientWidth / 2, $('.vs-stage').clientHeight / 2); break;
+    case 'zoom-fit': resetView(); applyTransform(); scheduleClusterRender(); break;
+  }
+});
+
+root.addEventListener('change', async (ev) => {
+  const el = ev.target.closest('[data-action]');
+  if (!el) return;
+  if (el.dataset.action === 'pick-client') {
+    VS.clientKey = el.value;
+    localStorage.setItem('vs_client', VS.clientKey);
+    VS.activePlanId = null;
+    await loadAll();
+  }
+  if (el.dataset.action === 'upload-shot') {
+    const file = el.files?.[0];
+    if (!file) return;
+    toast('Uploading screenshot...');
+    try {
+      const url = await uploadFile(file, 'shot');
+      const { item } = await api('update_item', { id: el.dataset.id, image_url: url });
+      const idx = VS.items.findIndex(i => i.id === item.id);
+      if (idx >= 0) VS.items[idx] = item;
+      toast('Screenshot added');
+      render();
+    } catch (e) { toast(e.message, true); }
+  }
+});
+
+root.addEventListener('input', (ev) => {
+  if (ev.target.id === 'vs-search') {
+    VS.search = ev.target.value;
+    const list = document.querySelector('.vs-item-list');
+    // Patch the list in place so the search box keeps focus.
+    if (list) list.outerHTML = attachListHtml();
+  }
+});
+
+root.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && ev.target.id === 'vs-pw') {
+    root.querySelector('[data-action="login"]').click();
+  }
+});
+
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') {
+    if (VS.placing) { VS.placing = null; render(); }
+    else if (VS.selectedPinId) { VS.selectedPinId = null; render(); }
+  }
+});
+
+// Pan with drag, zoom with the wheel. The dragged flag stops a pan
+// from being read as a pin drop when the mouse comes back up.
+let dragging = false, dragStart = null;
+root.addEventListener('mousedown', (ev) => {
+  if (!ev.target.closest('.vs-stage')) return;
+  if (ev.target.closest('[data-action="pin"], [data-action="cluster"], .vs-zoom')) return;
+  dragging = true; VS.dragged = false;
+  dragStart = { x: ev.clientX, y: ev.clientY, panX: VS.panX, panY: VS.panY };
+});
+window.addEventListener('mousemove', (ev) => {
+  if (!dragging) return;
+  const dx = ev.clientX - dragStart.x, dy = ev.clientY - dragStart.y;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) VS.dragged = true;
+  VS.panX = dragStart.panX + dx;
+  VS.panY = dragStart.panY + dy;
+  applyTransform();
+});
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  setTimeout(() => { VS.dragged = false; }, 0);
+});
+
+root.addEventListener('wheel', (ev) => {
+  const stage = ev.target.closest('.vs-stage');
+  if (!stage) return;
+  ev.preventDefault();
+  const r = stage.getBoundingClientRect();
+  zoomAt(ev.deltaY < 0 ? 1.12 : 1 / 1.12, ev.clientX - r.left, ev.clientY - r.top);
+}, { passive: false });
+
+window.addEventListener('resize', () => applyTransform());
+
+// ── Boot ─────────────────────────────────────────────────────
+async function boot() {
+  const params = new URLSearchParams(location.search);
+  VS.clientKey = params.get('clientKey')
+    || localStorage.getItem('vs_client')
+    || '';
+  await loadClients();
+  if (!VS.clientKey && VS.clients.length) VS.clientKey = VS.clients[0].id;
+  if (VS.clientKey) localStorage.setItem('vs_client', VS.clientKey);
+  render();
+  if (VS.clientKey) await loadAll();
+  // The fit transform needs the stage to exist and have a size.
+  requestAnimationFrame(() => { resetView(); applyTransform(); });
+}
+
+VS.authed = sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS;
+if (VS.authed) boot(); else render();
+</script>
+</body>
+</html>
