@@ -463,14 +463,20 @@ async function loadSelections(clientKey) {
     if (!res.ok) return { answers: {}, saved: {}, rooms: [] };
     const data = await res.json();
     const all  = data.data || {};
+    const parse = (v, fb) => {
+      if (v == null) return fb;
+      if (typeof v === 'string') { try { return JSON.parse(v); } catch { return fb; } }
+      return v;
+    };
     return {
       answers: all.ans || {},
       saved:   all.sav || {},
-      rooms:   all.rms ? (typeof all.rms === 'string' ? JSON.parse(all.rms) : all.rms) : [],
+      rooms:   parse(all.rms, []),
+      fpUnits: parse(all.fpu, []),   // per-fireplace hearth/surround/mantle live here
     };
   } catch(e) {
     console.error('loadSelections error:', e);
-    return { answers: {}, saved: {}, rooms: [] };
+    return { answers: {}, saved: {}, rooms: [], fpUnits: [] };
   }
 }
 
@@ -483,8 +489,9 @@ function a(answers, ...keys) {
   return '';
 }
 
-function parseSelections(answers, saved, rooms) {
+function parseSelections(answers, saved, rooms, fpUnits) {
   const items = [];
+  fpUnits = Array.isArray(fpUnits) ? fpUnits : [];
 
   // ── Countertops ──
   const ctProduct = a(answers, 'countertops_ct_product', 'ct_product');
@@ -811,17 +818,60 @@ function parseSelections(answers, saved, rooms) {
     });
   }
 
-  // ── Fireplace ──
+  // ── Fireplace — one card per unit ──
   if (answers.fireplace_fp_want && answers.fireplace_fp_want !== 'No — no fireplace') {
-    items.push({
-      cat: 'fireplace', room: 'Great Room',
-      label: 'Fireplace',
-      fuel: answers.fireplace_fp_fuel || '',
-      style: answers.fireplace_fp_style || '',
-      count: answers.fireplace_fp_count || '1',
-      product: answers.fireplace_fp_product || '',
-      image: answers.fireplace_fp_photo || '',
-    });
+    if (fpUnits.length) {
+      fpUnits.forEach((u, i) => {
+        if (!u) return;
+        const roomLbl = u.location || (i === 0 ? 'Great Room' : `Fireplace ${i+1}`);
+        // Combine hearth + surround + mantle into a readable notes line
+        const noteBits = [];
+        if (u.hearth   && u.hearth   !== 'Undecided') noteBits.push('Hearth: ' + u.hearth + (u.hearth_material ? ` (${u.hearth_material})` : ''));
+        if (u.surround && u.surround !== 'Undecided') noteBits.push('Surround: ' + u.surround + (u.surround_detail ? ` — ${u.surround_detail}` : ''));
+        if (u.mantle   && u.mantle   !== 'Undecided') noteBits.push('Mantle: '   + u.mantle   + (u.mantle_style   ? ` — ${u.mantle_style}`   : ''));
+        items.push({
+          cat: 'fireplace', room: roomLbl,
+          label: `Fireplace — ${roomLbl}`,
+          fuel:     u.type || '',
+          style:    u.size || '',
+          material: u.surround || '',
+          product:  u.type || 'Fireplace',
+          notes:    [answers.fireplace_fp_notes, noteBits.join(' · ')].filter(Boolean).join(' — '),
+          image:    '',
+        });
+      });
+    } else {
+      // Legacy fallback — pre-fpUnits data
+      items.push({
+        cat: 'fireplace', room: 'Great Room',
+        label: 'Fireplace',
+        fuel:    answers.fireplace_fp_fuel  || '',
+        style:   answers.fireplace_fp_style || '',
+        count:   answers.fireplace_fp_count || '1',
+        product: answers.fireplace_fp_product || '',
+        image:   answers.fireplace_fp_photo   || '',
+      });
+    }
+  }
+
+  // ── Stairs (from Flooring section) ──
+  if (answers.stairs_present === 'Yes') {
+    const treadMat = answers.stairs_tread_mat === 'Other'
+      ? (answers.stairs_tread_other || 'Other')
+      : (answers.stairs_tread_mat   || '');
+    if (treadMat) {
+      items.push({
+        cat: 'flooring', room: 'Stairs',
+        label: 'Stair Treads',
+        material: treadMat,
+        color:    answers.stairs_tread_color || '',
+        style:    answers.stairs_riser ? `Risers: ${answers.stairs_riser}` : '',
+        finish:   answers.stairs_riser_color || '',
+        product:  [treadMat, answers.stairs_handrail_mat && `handrail: ${answers.stairs_handrail_mat}`].filter(Boolean).join(' · '),
+        notes:    [answers.stairs_handrail_detail, answers.stairs_flights, answers.stairs_notes].filter(Boolean).join(' · '),
+        image:    '',
+      });
+    }
   }
 
   return tagItemsWithKeys(items);
@@ -1189,7 +1239,7 @@ async function renderBook() {
   }
 
   const clientKey = p.selectionsClientKey || p.id;
-  const [{ answers, saved, rooms }, overrides] = await Promise.all([
+  const [{ answers, saved, rooms, fpUnits }, overrides] = await Promise.all([
     loadSelections(clientKey),
     loadImageOverrides(clientKey),
   ]);
@@ -1197,7 +1247,7 @@ async function renderBook() {
   // mutate + persist without re-fetching.
   DBI_OVERRIDES = overrides;
 
-  let items = parseSelections(answers, saved, rooms);
+  let items = parseSelections(answers, saved, rooms, fpUnits);
 
   // Manual overrides win over everything. Apply BEFORE enrich so the auto
   // fetcher knows it doesn't need to bother with these URLs (saves on

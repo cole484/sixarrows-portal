@@ -760,6 +760,21 @@ function validate(){
     }
     // Sync per-room keys one more time so downstream reads are fresh
     syncFlooringPerRoomKeys();
+
+    // Stair treads — only enforce if client said Yes to stairs. No / Undecided
+    // skip validation entirely so people without stairs aren't blocked.
+    var stPres = (ST.answers['stairs_present']||'').trim();
+    if (!stPres) return {ok:false, msg:'Confirm whether the home has interior stairs (Stairs & Treads section).'};
+    if (stPres === 'Yes') {
+      var stMat = (ST.answers['stairs_tread_mat']||'').trim();
+      if (!stMat) return {ok:false, msg:'Pick a tread material for the stairs.'};
+      if (stMat === 'Other' && !(ST.answers['stairs_tread_other']||'').trim()){
+        return {ok:false, msg:'Describe the "Other" stair tread material.'};
+      }
+      if (!(ST.answers['stairs_riser']||'').trim()){
+        return {ok:false, msg:'Pick a riser treatment for the stairs.'};
+      }
+    }
     return{ok:true};
   }
   // ── TILE ───────────────────────────────────────────────────────────────────
@@ -967,12 +982,57 @@ function pickFD(rid,fid,field,val,el){val=decVal(val);const cur=getFA(rid,fid,fi
 function renderFpUnits(){
   const c=document.getElementById("fp-unit-wrap");if(!c)return;
   const ords=["First","Second","Third","Fourth"];
-  c.innerHTML=ST.fpUnits.map((u,i)=>`<div class="fp-unit"><div class="fp-uhd">${ords[i]||`Fireplace ${i+1}`} Fireplace</div>
+  const HEARTH_OPTS   = ["None (flush to floor)","Flush hearth (level with floor)","Raised hearth","Undecided"];
+  const SURROUND_OPTS = ["Stone veneer","Real stone","Brick","Tile","Wood","Shiplap","Painted drywall","Other","Undecided"];
+  const MANTLE_OPTS   = ["Yes","No","Undecided"];
+
+  // Helper — writes to a per-unit key, re-renders so conditional fields show/hide
+  function pillHtml(i, key, opts, sel){
+    return opts.map(o=>{
+      const isSel = sel===o;
+      const esc = String(o).replace(/'/g,"\\'");
+      return '<label class="ro'+(isSel?' sel':'')+'" '
+        +'onclick="setFpField('+i+',\''+key+'\',\''+esc+'\')">'
+        +'<input type="radio" name="fp_'+key+'_'+i+'" '+(isSel?'checked':'')+'>'+o+'</label>';
+    }).join('');
+  }
+
+  c.innerHTML=ST.fpUnits.map((u,i)=>{
+    const hearth = u.hearth || '';
+    const showHearthDetail = hearth && hearth !== 'None (flush to floor)' && hearth !== 'Undecided';
+    const surround = u.surround || '';
+    const showSurroundDetail = surround && surround !== 'Undecided';
+    const mantle = u.mantle || '';
+    const showMantleDetail = mantle === 'Yes';
+
+    return `<div class="fp-unit"><div class="fp-uhd">${ords[i]||`Fireplace ${i+1}`} Fireplace</div>
     <div class="fp-ufields">
       <div class="fg"><label>Fuel type <span class="req">*</span></label><div class="rg">${TYPE_OPTS.map((o,ti)=>`<label class="ro${u.type===o?" sel":""}" onclick="pickUnitType(${i},${ti},this)"><input type="radio" name="fpt_${i}" ${u.type===o?"checked":""}>${o}</label>`).join("")}</div></div>
       <div class="fg"><label>Size <span class="req">*</span></label><div class="rg">${SIZE_OPTS.map((o,si)=>`<label class="ro${u.size===o?" sel":""}" onclick="pickUnitByIdx(${i},'size',${si},this)"><input type="radio" name="fps_${i}" ${u.size===o?"checked":""}>${o}</label>`).join("")}</div></div>
-      <div class="fg"><label>Location <span class="req">*</span></label><input type="text" value="${u.location}" placeholder="Great room, master bedroom, outdoor patio..." onchange="ST.fpUnits[${i}].location=this.value" onkeyup="ST.fpUnits[${i}].location=this.value"></div>
-    </div></div>`).join("");
+      <div class="fg"><label>Location <span class="req">*</span></label><input type="text" value="${(u.location||'').replace(/"/g,'&quot;')}" placeholder="Great room, master bedroom, outdoor patio..." onchange="ST.fpUnits[${i}].location=this.value" onkeyup="ST.fpUnits[${i}].location=this.value"></div>
+
+      <div class="fg"><label>Hearth</label><div class="rg">${pillHtml(i,'hearth',HEARTH_OPTS,hearth)}</div></div>
+      ${showHearthDetail ? `<div class="fg"><label>Hearth material / stone</label><input type="text" value="${(u.hearth_material||'').replace(/"/g,'&quot;')}" placeholder="e.g. Bluestone slab, matching stone veneer, poured concrete..." onchange="ST.fpUnits[${i}].hearth_material=this.value" onkeyup="ST.fpUnits[${i}].hearth_material=this.value"></div>` : ''}
+
+      <div class="fg"><label>Surround material</label><div class="rg">${pillHtml(i,'surround',SURROUND_OPTS,surround)}</div></div>
+      ${showSurroundDetail ? `<div class="fg"><label>Surround detail (brand / color / spec)</label><input type="text" value="${(u.surround_detail||'').replace(/"/g,'&quot;')}" placeholder="e.g. Boral Cultured Stone Southern Ledgestone, ivory grout..." onchange="ST.fpUnits[${i}].surround_detail=this.value" onkeyup="ST.fpUnits[${i}].surround_detail=this.value"></div>` : ''}
+
+      <div class="fg"><label>Mantle</label><div class="rg">${pillHtml(i,'mantle',MANTLE_OPTS,mantle)}</div><div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Mantle style + finish live in Wave 2 → Specialty Trim → Fireplace Mantle. Flag "Yes" here so Six Arrows knows to expect one.</div></div>
+      ${showMantleDetail ? `<div class="fg"><label>Mantle quick spec (optional)</label><input type="text" value="${(u.mantle_style||'').replace(/"/g,'&quot;')}" placeholder="e.g. Reclaimed oak floating shelf, 60&quot; wide..." onchange="ST.fpUnits[${i}].mantle_style=this.value" onkeyup="ST.fpUnits[${i}].mantle_style=this.value"></div>` : ''}
+    </div></div>`;
+  }).join("");
+}
+
+// Handler for the new per-unit radio-pill fields. Persists to ST.fpUnits[i][key]
+// then re-renders so conditional detail inputs appear/disappear.
+function setFpField(i, key, val){
+  if (!ST.fpUnits[i]) return;
+  ST.fpUnits[i][key] = val;
+  // Clear related detail when the parent choice hides it
+  if (key === 'hearth'   && (val === 'None (flush to floor)' || val === 'Undecided')) ST.fpUnits[i].hearth_material = '';
+  if (key === 'surround' && val === 'Undecided')                                       ST.fpUnits[i].surround_detail = '';
+  if (key === 'mantle'   && val !== 'Yes')                                             ST.fpUnits[i].mantle_style    = '';
+  renderFpUnits();
 }
 
 // ── Form renderers ────────────────────────────────────────
@@ -1131,7 +1191,64 @@ function rfFlooring(){
 
   var addBtn='<button class="floor-add-btn" onclick="addFloorGroup()">+ Add another flooring type</button>';
 
-  return tallyHtml + groupsHtml + addBtn;
+  // ── Stairs (separate block since treads aren't a "room") ─────────────────
+  // Everything gated behind stairs_present = Yes. When No/Undecided, we
+  // don't force the client to fill the follow-ups.
+  var stPresent = ST.answers['stairs_present'] || '';
+  var STAIR_MAT_OPTS = ['Oak (site-finished)','Oak (pre-finished)','Poplar','Pine','Match main-floor material','Carpet runner over painted treads','Painted treads','Other','Undecided'];
+  var STAIR_RISER_OPTS = ['Painted white','Painted contrasting dark','Stained to match tread','Contrasting stain','Undecided'];
+  var STAIR_HANDRAIL_OPTS = ['Wood — stained','Wood — painted','Metal — black','Metal — brass / champagne','Cable rail','Glass panel','Other','Undecided'];
+  var stMatSel   = ST.answers['stairs_tread_mat']    || '';
+  var stRiserSel = ST.answers['stairs_riser']        || '';
+  var stHandSel  = ST.answers['stairs_handrail_mat']|| '';
+
+  function stairPill(key, opts, sel){
+    return opts.map(function(o){
+      var isSel = sel===o;
+      var esc = String(o).replace(/'/g,"\\'");
+      return '<label class="ro'+(isSel?' sel':'')+'" '
+        +'onclick="ST.answers[\''+key+'\']=\''+esc+'\';render()">'
+        +'<input type="radio" name="'+key+'" '+(isSel?'checked':'')+'>'+o+'</label>';
+    }).join('');
+  }
+  function stairText(key, label, ph){
+    var val = (ST.answers[key]||'').replace(/"/g,'&quot;');
+    return '<div class="fg"><label>'+label+'</label>'
+      +'<input type="text" value="'+val+'" placeholder="'+ph+'" '
+      +'onchange="ST.answers[\''+key+'\']=this.value" onkeyup="ST.answers[\''+key+'\']=this.value"></div>';
+  }
+
+  var stairsSection = '<div class="room-section" style="margin-top:18px">'
+    +'<div class="rs-hd" style="cursor:default"><div class="rs-nm">Stairs &amp; Treads</div>'
+    +'<div style="font-size:11px;color:var(--text-secondary)">Tread material is often different from the surrounding floor — usually stained oak or match-to-floor.</div></div>'
+    +'<div class="rs-body">'
+    +'<div class="fg"><label>Do you have interior stairs? <span class="req">*</span></label>'
+      +'<div class="rg">'+['Yes','No','Undecided'].map(function(o){
+        var s = stPresent===o;
+        return '<label class="ro'+(s?' sel':'')+'" onclick="ST.answers[\'stairs_present\']=\''+o+'\';render()">'
+          +'<input type="radio" name="stairs_present" '+(s?'checked':'')+'>'+o+'</label>';
+      }).join('')+'</div>'
+    +'</div>'
+    +(stPresent==='Yes' ? (
+      '<div class="fg"><label>Tread material <span class="req">*</span></label><div class="rg">'+stairPill('stairs_tread_mat', STAIR_MAT_OPTS, stMatSel)+'</div></div>'
+      + (stMatSel==='Other' ? stairText('stairs_tread_other','Describe tread material','e.g. Reclaimed heart pine, walnut...') : '')
+      + stairText('stairs_tread_color','Tread stain / color / finish','e.g. Special Walnut stain + satin poly, natural white oak with matte finish...')
+      + '<div class="fg"><label>Riser treatment <span class="req">*</span></label><div class="rg">'+stairPill('stairs_riser', STAIR_RISER_OPTS, stRiserSel)+'</div></div>'
+      + stairText('stairs_riser_color','Riser color spec','e.g. SW Alabaster, matte black, match tread stain...')
+      + '<div class="fg"><label>Handrail material</label><div class="rg">'+stairPill('stairs_handrail_mat', STAIR_HANDRAIL_OPTS, stHandSel)+'</div></div>'
+      + stairText('stairs_handrail_detail','Handrail detail','e.g. 2" oak profile stained to match, matte-black spindles, custom cable rail...')
+      + '<div class="fg"><label>Number of flights <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>'
+        +'<input type="text" value="'+(ST.answers['stairs_flights']||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 1 to second floor, 1 to basement" '
+        +'onchange="ST.answers[\'stairs_flights\']=this.value" onkeyup="ST.answers[\'stairs_flights\']=this.value"></div>'
+      + '<div class="fg"><label>Notes <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>'
+        +'<textarea style="width:100%;min-height:60px;padding:9px 11px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-primary);resize:vertical;line-height:1.5" '
+        +'placeholder="Nosing style, skirt board treatment, newel post detail, open riser design..." '
+        +'onchange="ST.answers[\'stairs_notes\']=this.value" onkeyup="ST.answers[\'stairs_notes\']=this.value">'+(ST.answers['stairs_notes']||'').replace(/</g,'&lt;')+'</textarea>'
+      +'</div>'
+    ) : '')
+    +'</div></div>';
+
+  return tallyHtml + groupsHtml + addBtn + stairsSection;
 }
 
 function addFloorGroup(){
