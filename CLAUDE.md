@@ -57,7 +57,15 @@ netlify/functions/
   notion-tracker.js         # remodel-mode dynamic tracker pulled from Notion
   notion-timeline.js        # construction-mode timeline → Command Center card
   notion-clients.js         # batch client metadata sync from a Notion clients DB
-  generate-updates.js       # Claude-API drafted client updates (Mon/Fri cron + admin manual)
+  generate-updates.js       # LEGACY Claude-authored drafts. Kept for reference,
+                            #   cron disabled — replaced by notion-weekly-update.
+  notion-weekly-update.js   # PRIMARY weekly update generator (Version C).
+                            #   Deterministic — no LLM, no invention. Pulls
+                            #   from per-client Notion timeline DB, buckets
+                            #   per spec §4, formats per §6, drops draft into
+                            #   updates table with approved=false. Cron: Sun
+                            #   11 UTC (~6am CT). Also exposes GET manual
+                            #   trigger + dryRun preview for the admin UI.
   notion-updates.js         # related; reads recent Notion task changes
   sheet-budget-sync.js      # construction-phase live billing feed from Google Sheets
   sheet-sab-budget-sync.js  # SAB-phase budget category import from sheets
@@ -116,14 +124,22 @@ supabase/
    the Notion API returns 404/empty. The `notion-timeline` function now
    surfaces a clear message when it detects this.
 6. **Cron schedule lives in `netlify.toml`.** Currently:
-   - Mon 5:00 AM CT (10:00 UTC) — `generate-updates` for week preview
-   - Fri 1:00 PM CT (18:00 UTC) — `generate-updates` for weekly recap
-   - Midweek update is admin-manual-trigger only.
-7. **Voice/tone for client updates** is hardcoded in
-   `netlify/functions/generate-updates.js` — see the `systemPrompt` and
-   `typeInstructions` objects. Calls Claude (`claude-sonnet-4-5`).
-   Drafts land in `updates` table with `approved=false` until admin
-   approves.
+   - **Sun 11 UTC (~6am CT)** — `notion-weekly-update` drops a draft for
+     every active construction client, keyed off T = next Monday.
+   - Legacy Mon/Fri crons for `generate-updates` are commented out.
+7. **Weekly updates are deterministic and Notion-driven.** No LLM in the
+   default path. `notion-weekly-update.js` reads each client's timeline
+   DB, buckets tasks (recently completed / this week / in progress /
+   coming up / decisions / potential blockers), pulls a Mon–Fri weather
+   forecast (Open-Meteo, free, no key), and formats sections per the
+   spec, omitting empty ones. Drafts land in the `updates` table with
+   `approved=false`. Field names vary per client — the per-project
+   field map is at the top of the function file. To onboard a new
+   construction client for weekly updates: (a) set their Notion
+   timeline DB ID in admin Project Info, (b) share the DB with the
+   Six Arrows Notion integration, (c) optionally add their address to
+   the Projects Notion DB (`222b7d0a-...`) so the weather line
+   populates — else it falls back to the first task's Job Site Location.
 
 ## Common commands
 

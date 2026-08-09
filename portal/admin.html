@@ -793,18 +793,27 @@ function renderUpdatesView(p) {
   return `
     <div class="card" style="margin-bottom:1rem;border-left:3px solid var(--green)">
       <div class="sh">
-        <div class="sh-title">Generate AI Draft</div>
-        <span class="tag ok" style="font-size:9px">Powered by Claude</span>
+        <div class="sh-title">Weekly Update — Notion-driven</div>
+        <span class="tag ok" style="font-size:9px">Sunday 6 AM auto</span>
       </div>
       <p style="font-size:12px;color:var(--charcoal-4);line-height:1.55;margin-bottom:12px">
-        Reads live Notion schedule data and drafts an update in your voice. You review and approve before it goes live.
+        Runs every Sunday morning: pulls scheduled + in-progress + upcoming tasks straight from ${p.clientName}'s Notion timeline, plus a Mon–Fri weather forecast, and drops a draft for you to review and approve. Click below to preview or regenerate on demand.
       </p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="adm-btn adm-btn-green" onclick="generateDraft('${p.id}','monday')" style="flex:1;min-width:100px">Monday Preview</button>
-        <button class="adm-btn adm-btn-green" onclick="generateDraft('${p.id}','friday')" style="flex:1;min-width:100px">Friday Recap</button>
-        <button class="adm-btn" onclick="generateDraft('${p.id}','midweek')" style="flex:1;min-width:100px">Midweek Update</button>
+        <button class="adm-btn adm-btn-green" onclick="generateWeeklyNow('${p.id}', false)" style="flex:1;min-width:140px">Generate Now (saves draft)</button>
+        <button class="adm-btn" onclick="generateWeeklyNow('${p.id}', true)" style="flex:1;min-width:140px">Dry Run (preview only)</button>
       </div>
-      <span id="gen-msg" class="adm-msg" style="margin:0;display:none"></span>
+      <details style="margin-top:6px">
+        <summary style="font-size:11px;color:var(--charcoal-4);cursor:pointer">Legacy Claude drafts (Monday/Friday/Midweek)</summary>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="adm-btn" onclick="generateDraft('${p.id}','monday')" style="flex:1;min-width:100px;font-size:11px">Monday Preview</button>
+          <button class="adm-btn" onclick="generateDraft('${p.id}','friday')" style="flex:1;min-width:100px;font-size:11px">Friday Recap</button>
+          <button class="adm-btn" onclick="generateDraft('${p.id}','midweek')" style="flex:1;min-width:100px;font-size:11px">Midweek</button>
+        </div>
+        <p style="font-size:11px;color:var(--charcoal-4);margin-top:6px">Old Claude-authored drafts. Kept for reference — the new Notion-driven flow above is the primary path.</p>
+      </details>
+      <span id="gen-msg" class="adm-msg" style="margin:8px 0 0;display:none"></span>
+      <pre id="weekly-preview" style="display:none;margin-top:10px;padding:12px;background:var(--cream-pale);border:0.5px solid var(--border);border-radius:6px;font-size:12px;line-height:1.55;white-space:pre-wrap;color:var(--charcoal);max-height:400px;overflow:auto"></pre>
     </div>
 
     <div class="card" id="drafts-card" style="margin-bottom:1rem">
@@ -882,6 +891,64 @@ async function loadPendingDrafts(projectId) {
       </div>`).join('<div style="border-top:0.5px solid var(--border);margin:8px 0"></div>');
   } catch(e) {
     if (listEl) listEl.innerHTML = `<div style="font-size:12px;color:var(--charcoal-4)">Could not load drafts.</div>`;
+  }
+}
+
+// Version C generator: pulls straight from Notion and writes an unapproved
+// draft into the updates table. dryRun=true skips the save so admin can
+// preview the exact text that would land without polluting the drafts list.
+async function generateWeeklyNow(projectId, dryRun) {
+  const msgEl     = document.getElementById('gen-msg');
+  const previewEl = document.getElementById('weekly-preview');
+  if (msgEl) {
+    msgEl.style.display = 'block';
+    msgEl.className     = 'adm-msg neutral';
+    msgEl.textContent   = dryRun ? 'Pulling from Notion + weather (preview, no save)…' : 'Generating draft from Notion (5–15 seconds)…';
+  }
+  if (previewEl) { previewEl.style.display = 'none'; previewEl.textContent = ''; }
+  try {
+    const qs = new URLSearchParams({ clientId: projectId });
+    if (dryRun) qs.set('dryRun', '1');
+    const res  = await fetch('/.netlify/functions/notion-weekly-update?' + qs.toString());
+    const data = res.ok ? await res.json() : null;
+
+    if (!data) throw new Error('HTTP ' + res.status);
+    const r = (data.results || [])[0];
+
+    if (!r) {
+      if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'No result returned. Check that this client is in construction phase and has a Notion timeline DB set.'; }
+      return;
+    }
+    if (r.error) {
+      if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'Failed: ' + r.error; }
+      return;
+    }
+    if (r.skipped) {
+      if (msgEl) { msgEl.className = 'adm-msg neutral'; msgEl.textContent = 'Skipped — ' + (r.reason || 'no active tasks in window'); }
+      return;
+    }
+
+    if (previewEl && r.body) {
+      previewEl.style.display = 'block';
+      previewEl.textContent   = r.body;
+    }
+    if (msgEl) {
+      msgEl.className   = 'adm-msg success';
+      const stats       = r.stats || {};
+      const bits        = [];
+      if (stats.thisWeek)          bits.push(stats.thisWeek + ' this week');
+      if (stats.inProgress)        bits.push(stats.inProgress + ' in progress');
+      if (stats.recentlyCompleted) bits.push(stats.recentlyCompleted + ' recently completed');
+      if (stats.comingUp)          bits.push(stats.comingUp + ' coming up');
+      if (stats.decisions)         bits.push(stats.decisions + ' decisions');
+      const summary = bits.join(' · ') || 'draft ready';
+      msgEl.textContent = dryRun
+        ? 'Preview ready — ' + summary + '. Nothing saved.'
+        : 'Draft saved — ' + summary + '. Scroll up to Pending Drafts to approve.';
+    }
+    if (!dryRun) setTimeout(() => loadPendingDrafts(projectId), 600);
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'adm-msg error'; msgEl.textContent = 'Error: ' + e.message; }
   }
 }
 

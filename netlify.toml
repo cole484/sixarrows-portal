@@ -17,15 +17,29 @@
 #     included_files = ["node_modules/mupdf/dist/**"]
 
 # ── Scheduled update generation ───────────────────────────────────────────────
-# Monday 5:00 AM CT (10:00 UTC) — week preview
+# Version C: portal-native, Notion-driven, deterministic.
+# Runs every Sunday morning and drops a draft weekly update into the `updates`
+# table for every active construction client whose Notion timeline DB is set.
+# Admin approves in the portal; approval publishes to the client's Updates page.
+#
+# Sunday 11 UTC = 6am CDT (summer) / 5am CST (winter). Netlify cron is UTC-only
+# so the local hour drifts by 1 across DST — accept the drift or pin to whatever
+# season matters most (CDT covers most of the U.S. build calendar).
 [[scheduled_functions]]
-  name = "generate-updates"
-  cron = "0 10 * * 1"
+  name = "notion-weekly-update"
+  cron = "0 11 * * 0"
 
-# Friday 1:00 PM CT (18:00 UTC) — weekly recap
-[[scheduled_functions]]
-  name = "generate-updates"
-  cron = "0 18 * * 5"
+# ── LEGACY: the old generate-updates.js was a Claude-drafted-from-scratch
+# generator (Mon week-preview / Fri weekly-recap). Version C above replaces
+# both. The old function is still on disk in netlify/functions/ for
+# reference; safe to delete once the new flow is proven on real clients.
+#
+# [[scheduled_functions]]
+#   name = "generate-updates"
+#   cron = "0 10 * * 1"
+# [[scheduled_functions]]
+#   name = "generate-updates"
+#   cron = "0 18 * * 5"
 # ─────────────────────────────────────────────────────────────────────────────
 
 [[headers]]
