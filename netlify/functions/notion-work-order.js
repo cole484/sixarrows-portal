@@ -11,6 +11,8 @@
 // Query: GET ?taskId=<notion-page-id>
 // Returns a merged work order object the admin UI can render to HTML.
 
+import { templateTitleForTrade, TRADES_WITHOUT_TEMPLATE } from './lib/trade-aliases.js';
+
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 
@@ -155,11 +157,18 @@ export const handler = async (event) => {
                            && (prop(task, 'Sub Contractor') || []).length > 0;
 
     // ── 2. Find the matching Trade Template ───────────────────────────────
-    const templateQuery = await notionPost(`/databases/${TRADE_TEMPLATES_DB_ID}/query`, token, {
-      filter: { property: 'Trade', title: { equals: trade } },
-      page_size: 1,
-    });
-    const template = templateQuery.results?.[0] || null;
+    // Timeline trade names and Trade Templates titles are different
+    // vocabularies. templateTitleForTrade bridges them, and returns null for
+    // trades that have no template row at all. See lib/trade-aliases.js.
+    const templateTitle = templateTitleForTrade(trade);
+    let template = null;
+    if (templateTitle) {
+      const templateQuery = await notionPost(`/databases/${TRADE_TEMPLATES_DB_ID}/query`, token, {
+        filter: { property: 'Trade', title: { equals: templateTitle } },
+        page_size: 1,
+      });
+      template = templateQuery.results?.[0] || null;
+    }
 
     // ── 3. Fetch the subcontractor (if assigned) ──────────────────────────
     let sub = null;
@@ -235,7 +244,13 @@ export const handler = async (event) => {
       longLead:               firstNonEmpty(prop(task, 'Long lead'),        template && prop(template, 'Default Long Lead'), false),
       leadTimeDays:           firstNonEmpty(prop(task, 'Lead time (days)'), template && prop(template, 'Default Lead Time (days)')),
       plansNeeded:            firstNonEmpty(prop(task, 'Plans or Blueprints Needed?'), template && prop(template, 'Plans/Blueprints Required'), false),
-      contractValue:          prop(task, 'Contract Value'),
+      // "Estimated Cost" is the current field; "Contract Value" is the older
+      // name still present on some timelines. A number here is NOT
+      // automatically a contract value — see costSource below.
+      contractValue:          firstNonEmpty(prop(task, 'Estimated Cost'), prop(task, 'Contract Value')),
+      // Estimate | Bid Received | To Be Quoted. Only "Bid Received" means the
+      // sub actually gave us this number.
+      costSource:             prop(task, 'Cost Source'),
       holdbackPct:            prop(task, 'Holdback %'),
     };
 
@@ -317,7 +332,13 @@ export const handler = async (event) => {
 
     // ── 8. Warnings worth surfacing to the admin UI ───────────────────────
     const warnings = [];
-    if (!template)        warnings.push(`No Trade Template found for "${trade}" — using task values only.`);
+    if (!template) {
+      if (TRADES_WITHOUT_TEMPLATE.has(String(trade).trim())) {
+        warnings.push(`Trade "${trade}" has no Trade Template row, so there is no default scope. Write a Scope of Work on the task before sending this to a sub.`);
+      } else {
+        warnings.push(`No Trade Template found for "${trade}" (looked up "${templateTitle}") — using task values only. Check that a Trade Templates row exists with exactly that title.`);
+      }
+    }
     if (!sub)             warnings.push('No subcontractor assigned yet.');
     if (bothSubFieldsUsed) warnings.push('Both "Subcontractor" and "Sub Contractor" relations are populated — used "Subcontractor". Clean up the duplicate column in Notion.');
     if (!project.address) {
@@ -333,7 +354,15 @@ export const handler = async (event) => {
         );
       }
     }
-    if (!merged.contractValue) warnings.push('No Contract Value set on this task — fill it in on the timeline row before sending to the sub.');
+    if (!merged.contractValue) {
+      warnings.push('No Estimated Cost set on this task — fill it in on the timeline row before sending to the sub.');
+    } else if (merged.costSource !== 'Bid Received') {
+      // Guardrail: the work order has a signature block and a payment schedule
+      // with a locked holdback, both computed off this number. An estimate or
+      // an allowance is not a number the sub agreed to, and must not be
+      // presented for signature as though it were.
+      warnings.push(`Estimated Cost is $${merged.contractValue} but Cost Source is "${merged.costSource || 'not set'}". Only "Bid Received" is a number the sub gave us. Send a quote request instead of a signable work order, or record the bid first.`);
+    }
     if (!schedule.duration) {
       warnings.push('Cannot determine the requested window. Either: (a) set the Start field as a date range (start + end) in Notion — easiest, or (b) fill in the Duration (days) field.');
     }
