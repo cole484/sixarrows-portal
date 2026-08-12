@@ -22,6 +22,8 @@
 
 import { templateTitleForTrade, TRADES_WITHOUT_TEMPLATE } from './lib/trade-aliases.js';
 import { sendSlack, slackConfigured } from './lib/slack.js';
+import { sendGmail, gmailConfigured } from './lib/gmail.js';
+import { FROM_EMAIL } from './lib/compliance-email.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -464,15 +466,34 @@ export const handler = async (event) => {
     // still returned, so a broken Slack token shows up as a visible error
     // rather than a silent morning with no digest.
     if (notify) {
-      if (!slackConfigured()) {
-        report.notify = { sent: false, error: 'SLACK_BOT_TOKEN not set' };
-      } else {
+      // Slack is the intended home for this. Until it is wired up, the digest
+      // goes to Cole by email rather than nowhere, because a digest that is
+      // computed correctly and delivered to no one is the same as no digest.
+      if (slackConfigured()) {
         try {
-          report.notify = { sent: true, ...(await sendSlack(renderSlack(report))) };
+          report.notify = { channel: 'slack', sent: true, ...(await sendSlack(renderSlack(report))) };
         } catch (err) {
-          report.notify = { sent: false, error: err.message };
+          report.notify = { channel: 'slack', sent: false, error: err.message };
           console.error('scheduling-gate: Slack delivery failed:', err);
         }
+      } else if (gmailConfigured()) {
+        try {
+          const day = new Date(report.generatedAt).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', timeZone: 'America/Chicago',
+          });
+          const blocked = report.projects.reduce((n, p) => n + p.blockedCount, 0);
+          const res = await sendGmail({
+            to: FROM_EMAIL,
+            subject: `Scheduling gate ${day}: ${blocked} not ready`,
+            body: `${renderText(report)}\n\nThis is going to email because Slack is not connected yet. Once SLACK_BOT_TOKEN is set it will arrive there instead.`,
+          });
+          report.notify = { channel: 'email', sent: true, ...res };
+        } catch (err) {
+          report.notify = { channel: 'email', sent: false, error: err.message };
+          console.error('scheduling-gate: email delivery failed:', err);
+        }
+      } else {
+        report.notify = { sent: false, error: 'no delivery configured (need SLACK_BOT_TOKEN or Gmail)' };
       }
     }
 

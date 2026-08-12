@@ -36,6 +36,11 @@ const NOTION_VERSION = '2022-06-28';
 // that does not exist. These are database ids.
 const SUBS_DB_ID     = '1944737b-ea6f-8086-8f45-f6b479ed36bb';
 
+// Six Arrows has a row in the Subcontractors DB. It is not a subcontractor of
+// itself, and leaving it in means the sweep reports the company as having no
+// insurance and would eventually email Cole asking Cole for a certificate.
+const OWN_COMPANY = /^six arrows/i;
+
 const DEFAULT_LOOKAHEAD_DAYS = 45;
 
 const TIMELINE_DBS = [
@@ -163,7 +168,7 @@ export const handler = async (event) => {
       insured: prop(p, 'Insurance on File'),
       coiOn:   prop(p, 'COI Expiration')?.start || null,
       w9On:    prop(p, 'W9 on File'),
-    })).filter(s => s.name);
+    })).filter(s => s.name && !OWN_COMPANY.test(s.name));
 
     // Newest file wins when a sub has several certificates on file.
     const bySub = new Map();          // subId -> { coiFile, w9File }

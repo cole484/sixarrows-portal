@@ -75,12 +75,15 @@
 # Expiration / W9 on File in Notion, then emails subs whose documents are
 # missing or expired ahead of work they are scheduled for.
 #
-# Weekly rather than daily: insurance certificates change on the order of
-# months, and the escalation cadence inside the sweep (3 days, 7 days, then
-# stop) does the chasing. A daily run would only re-check the same PDFs.
+# Daily, because the follow-up cadence lives inside the sweep (3 days, then
+# 7, then stop) and can only act on days it actually runs. On a weekly cron a
+# follow-up due at day 3 would go at day 7 and the day-10 escalation at day 14,
+# which defeats the point of chasing harder as a start date closes in. The
+# sweep sends nothing unless something is genuinely due, so a daily run is
+# cheap.
 #
-# Mondays 13 UTC = 8am CDT / 7am CST. A cron run sends; manual runs need
-# send=1, so poking the endpoint never emails a subcontractor.
+# 13 UTC = 8am CDT / 7am CST. A cron run sends; manual runs need send=1, so
+# poking the endpoint never emails a subcontractor.
 [[scheduled_functions]]
   name = "compliance-sweep"
-  cron = "0 13 * * 1"
+  cron = "0 13 * * *"

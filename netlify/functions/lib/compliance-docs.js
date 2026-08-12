@@ -118,10 +118,16 @@ function scorePair(fileName, subName) {
   for (const t of nTok) if (fTok.has(t)) shared++;
   if (!shared) return 0;
 
-  // Denominator is the LARGER token set, so a single shared word against a
-  // one-token name cannot produce a perfect score. This is the specific bug
-  // that credited Likens Plumbing with C&A Plumbing's certificate.
-  return shared / Math.max(fTok.size, nTok.size);
+  // Denominator is the smaller set, so "Marcous Jones.pdf" still matches
+  // "Jones construction clean up & demolition" on the one word that actually
+  // identifies them. The Likens / C&A crossing is prevented upstream by the
+  // generic list: "C&A Plumbing" has no distinctive token at all once the
+  // trade word is excluded, so it never reaches this branch. Using the larger
+  // set here as well was overcorrection, and it broke real matches.
+  //
+  // Capped below an exact or compact match so a name that genuinely is the
+  // same always outranks one that merely shares a word.
+  return 0.88 * (shared / Math.min(fTok.size, nTok.size));
 }
 
 // Returns the best matching sub, or null. Deliberately conservative in two
@@ -212,8 +218,23 @@ export async function readCoiExpiry(fileId, apiKey, file = {}) {
     const bytes = await downloadFile(fileId, apiKey);
     const { extractText } = await import('unpdf');
     const { text } = await extractText(bytes, { mergePages: true });
-    const result = extractCoiExpiry(String(text || ''));
-    if (!result.expiry) return { ...result, error: 'no policy term found in the document text' };
+    const raw = String(text || '');
+
+    // A scanned certificate is a picture of a document: pdfjs finds almost no
+    // text because there is no text layer to find. That is a different problem
+    // from a readable document with no dates in it, and it has a different
+    // fix, so do not report them the same way.
+    if (raw.replace(/\s/g, '').length < 200) {
+      return {
+        expiry: null, confidence: 'none', found: 0, scanned: true,
+        error: 'this certificate appears to be a scan or photo with no selectable text, so the expiry cannot be read automatically. Enter COI Expiration by hand, or ask the agent for a text PDF.',
+      };
+    }
+
+    const result = extractCoiExpiry(raw);
+    if (!result.expiry) {
+      return { ...result, error: `the document text was readable (${raw.length} characters) but no policy term was found in it. Worth opening by hand.` };
+    }
     return result;
   } catch (err) {
     return { expiry: null, confidence: 'none', found: 0, error: err.message };
