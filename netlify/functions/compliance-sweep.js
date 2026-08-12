@@ -11,6 +11,9 @@
 //   GET /?test=1             send one sample email to Cole, nothing to any sub
 //   GET /?days=45            how far ahead to look for scheduled work
 //   GET /?syncOnly=1         refresh Notion from Drive, skip all email logic
+//   GET /?sub=artisan        narrow the report to subs whose name matches,
+//                            and show which file was used and why. 78 subs of
+//                            JSON is unreadable when you are checking two.
 //
 // Sending is opt-in for manual runs and automatic on the cron, matching
 // scheduling-gate.js. Nothing reaches a subcontractor from a casual curl.
@@ -111,6 +114,7 @@ export const handler = async (event) => {
   const q        = event.queryStringParameters || {};
   const days     = Number(q.days) > 0 ? Number(q.days) : DEFAULT_LOOKAHEAD_DAYS;
   const syncOnly = q.syncOnly === '1';
+  const only     = (q.sub || '').trim().toLowerCase();   // narrow the report
   const isCron   = event.httpMethod === 'POST' && String(event.body || '').includes('next_run');
   const doSend   = isCron || q.send === '1';
   const today    = new Date().toISOString().slice(0, 10);
@@ -212,10 +216,29 @@ export const handler = async (event) => {
         }
       }
 
-      report.subs.push({
-        name: sub.name, coiState: cs, coiExpiry: expiry, confidence,
-        hasW9, email: sub.email || null, updated: changed,
-      });
+      if (!only || sub.name.toLowerCase().includes(only)) {
+        report.subs.push({
+          name: sub.name,
+          coiState: cs,
+          coiExpiry: expiry,
+          confidence,
+          // The two questions worth answering when a state looks wrong: did a
+          // file get matched at all, and if so could its expiry be read?
+          coiFile: docs.coiFile ? docs.coiFile.name : null,
+          coiParseError: parseError,
+          w9File: docs.w9File ? docs.w9File.name : null,
+          hasW9,
+          email: sub.email || null,
+          updated: changed,
+        });
+      }
+    }
+
+    if (only) {
+      // Keep unmatched files that plausibly relate to what is being asked
+      // about, and drop the rest so the answer is readable.
+      report.documents.unmatched = report.documents.unmatched.filter(u => u.file.toLowerCase().includes(only));
+      report.errors = report.errors.filter(e => JSON.stringify(e).toLowerCase().includes(only));
     }
 
     if (syncOnly) {
