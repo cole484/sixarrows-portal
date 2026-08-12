@@ -241,8 +241,19 @@ export async function readCoiExpiry(fileId, apiKey, file = {}) {
   }
 }
 
-// Given an expiry and a date the work starts, say where the certificate stands.
-export function coiState(expiry, asOf = new Date().toISOString().slice(0, 10)) {
-  if (!expiry) return 'missing';
-  return expiry < asOf.slice(0, 10) ? 'expired' : 'ok';
+// Where the certificate stands. Four states, not three, because "we have no
+// certificate for you" and "we have your certificate but our parser choked on
+// it" must never produce the same outcome.
+//
+// Telling a sub who sent a certificate that we do not have one is the single
+// most damaging thing this system could say, so 'unreadable' exists and never
+// results in an email to the sub. It goes to a person to open by hand.
+//
+//   missing     no file matched this sub at all
+//   unreadable  a file matched, but no expiry could be extracted from it
+//   expired     parsed, and the policy term has passed
+//   ok          parsed, and still in force
+export function coiState(expiry, asOf = new Date().toISOString().slice(0, 10), hasFile = false) {
+  if (expiry) return expiry < asOf.slice(0, 10) ? 'expired' : 'ok';
+  return hasFile ? 'unreadable' : 'missing';
 }

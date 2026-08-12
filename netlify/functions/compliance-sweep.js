@@ -196,13 +196,16 @@ export const handler = async (event) => {
         if (parseError) report.errors.push({ sub: sub.name, file: docs.coiFile.name, error: parseError });
       }
 
-      const cs     = coiState(expiry, today);
+      const cs     = coiState(expiry, today, !!docs.coiFile);
       const hasW9  = !!docs.w9File;
       state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9 });
 
       // Only write when something actually changed, to keep Notion's edit
       // history meaningful rather than a wall of no-op touches.
-      const wantInsured = cs === 'ok';
+      // We hold a certificate in the 'unreadable' case, so the checkbox stays
+      // true. It is the expiry we do not know, and that is what the report
+      // surfaces for a human to fill in.
+      const wantInsured = cs === 'ok' || cs === 'unreadable';
       const changed =
         sub.insured !== wantInsured ||
         (sub.coiOn || null) !== (expiry || null) ||
@@ -277,6 +280,25 @@ export const handler = async (event) => {
       const sub = subs.find(s => s.id === subId);
       if (!sub) continue;
       const st = state.get(subId) || { coiState: 'missing', coiExpiry: null, hasW9: false };
+
+      // 'unreadable' means we hold their certificate and could not read the
+      // expiry. Emailing "we need a certificate of insurance" to someone who
+      // sent one is the worst thing this system could do, so it never does.
+      // It becomes a job for a person instead.
+      if (st.coiState === 'unreadable') {
+        report.actions.push({
+          sub: sub.name, action: 'review',
+          reason: 'a certificate is on file but its expiry could not be read automatically. Open it and set COI Expiration by hand.',
+          task: job.taskName, start: job.start,
+        });
+        if (!st.hasW9) {
+          report.actions.push({
+            sub: sub.name, action: 'skipped',
+            reason: 'W9 is also missing, but holding the email until the certificate above is resolved so the sub gets one message rather than two.',
+          });
+        }
+        continue;
+      }
 
       const needsCoi = st.coiState !== 'ok';
       const needsW9  = !st.hasW9;
