@@ -25,12 +25,18 @@ import {
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
-const SUBS_DB_ID     = '1944737b-ea6f-804c-bc63-000b34b30516';
+// Notion exposes two different ids per database, and they are easy to confuse:
+// a "data source" / collection id (what the MCP tooling and collection:// URLs
+// hand you) and the database id (what the REST API wants). Passing a data
+// source id to /databases/{id}/query returns 404 object_not_found with a
+// message about sharing, which sends you hunting for a permissions problem
+// that does not exist. These are database ids.
+const SUBS_DB_ID     = '1944737b-ea6f-8086-8f45-f6b479ed36bb';
 
 const DEFAULT_LOOKAHEAD_DAYS = 45;
 
 const TIMELINE_DBS = [
-  { dbId: 'ba72f6c6-7b93-450c-b5bc-b89f9d162ede', project: 'Johnson' },
+  { dbId: '437bb594-ae27-437b-9014-48c5e6739e8c', project: 'Johnson' },
 ];
 
 // ── Notion ────────────────────────────────────────────────────────────────
@@ -47,7 +53,15 @@ async function nQueryAll(dbId, token, body = {}) {
     const res = await fetch(`${NOTION_API}/databases/${dbId}/query`, {
       method: 'POST', headers: nHeaders(token), body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error(`Notion query ${dbId}: ${res.status} ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) {
+      const txt = (await res.text()).slice(0, 300);
+      // A 404 here is far more often the wrong id than a sharing problem,
+      // because Notion's message says 'share with your integration' either way.
+      const why = res.status === 404
+        ? ' (check this is the database id, not the data source / collection id, before chasing sharing)'
+        : '';
+      throw new Error(`Notion query ${dbId}: ${res.status}${why} ${txt}`);
+    }
     const data = await res.json();
     out.push(...(data.results || []));
     if (!data.has_more) break;
