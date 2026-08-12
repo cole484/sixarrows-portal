@@ -29,6 +29,21 @@
   name = "notion-weekly-update"
   cron = "0 11 * * 0"
 
+# ── Subcontractor scheduling gate ─────────────────────────────────────────────
+# Tier 1: look ahead at tasks entering the scheduling window, recompute
+# readiness, and DM the digest. Weekdays only, since nobody is scheduling subs
+# on a Saturday.
+#
+# 12 UTC = 7am CDT (summer) / 6am CST (winter). Same one-hour DST drift as the
+# weekly update above; accepted for the same reason.
+#
+# A cron run notifies. It does NOT write to Notion: apply=1 is manual only, and
+# stays that way until the gate has been read for a couple of weeks and is
+# calling things correctly.
+[[scheduled_functions]]
+  name = "scheduling-gate"
+  cron = "0 12 * * 1-5"
+
 # ── LEGACY: the old generate-updates.js was a Claude-drafted-from-scratch
 # generator (Mon week-preview / Fri weekly-recap). Version C above replaces
 # both. The old function is still on disk in netlify/functions/ for

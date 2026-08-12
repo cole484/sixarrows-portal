@@ -21,6 +21,7 @@
 // nothing changes a task until someone passes apply=1.
 
 import { templateTitleForTrade, TRADES_WITHOUT_TEMPLATE } from './lib/trade-aliases.js';
+import { sendSlack, slackConfigured } from './lib/slack.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -272,6 +273,62 @@ export function renderText(report) {
   return lines.join('\n');
 }
 
+// Slack mrkdwn. Deliberately not a code block: alignment looks tidy on a
+// desktop and unreadable on a phone, and this gets read on a phone.
+export function renderSlack(report) {
+  const L = [];
+  const day = new Date(report.generatedAt).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', timeZone: 'America/Chicago',
+  });
+
+  const totalBlocked = report.projects.reduce((n, p) => n + p.blockedCount, 0);
+  const totalReady   = report.projects.reduce((n, p) => n + p.readyCount, 0);
+
+  L.push(`*Scheduling gate · ${day}*`);
+  L.push(`_Next ${report.lookaheadDays} days · ${totalReady} ready · ${totalBlocked} not ready_`);
+
+  for (const p of report.projects) {
+    L.push('');
+    L.push(`*${p.project}*`);
+
+    if (p.error) {
+      L.push(`Could not read this project: ${p.error}`);
+      continue;
+    }
+    if (!p.tasks.length) {
+      L.push('_Nothing entering the window._');
+      continue;
+    }
+
+    const byDate  = (a, b) => (a.daysOut ?? 1e9) - (b.daysOut ?? 1e9);
+    const blocked = p.tasks.filter(t => !t.ready).sort(byDate);
+    const ready   = p.tasks.filter(t => t.ready).sort(byDate);
+
+    for (const t of blocked) {
+      L.push('');
+      L.push(`*${t.daysOut}d* · ${t.name}${t.trade ? ` _(${t.trade})_` : ''}`);
+      for (const b of t.blockers) L.push(`  • ${b}`);
+      for (const f of t.flags)    L.push(`  :warning: ${f.detail}`);
+    }
+
+    if (ready.length) {
+      L.push('');
+      L.push('*Ready to send*');
+      for (const t of ready) {
+        L.push(`  ✓ *${t.daysOut}d* · ${t.name} · ${t.subName || 'sub not named'}`);
+        for (const f of t.flags) L.push(`    :warning: ${f.detail}`);
+      }
+    }
+  }
+
+  L.push('');
+  L.push(report.applied
+    ? `_Set Status to "Needs Info" on ${report.applied} task(s)._`
+    : '_Report only. Nothing was changed in Notion._');
+
+  return L.join('\n');
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────
 export const handler = async (event) => {
   const corsH = {
@@ -288,6 +345,12 @@ export const handler = async (event) => {
   const days  = Number(q.days) > 0 ? Number(q.days) : DEFAULT_LOOKAHEAD_DAYS;
   const apply = q.apply === '1';
   const asText = q.format === 'text';
+
+  // Netlify invokes scheduled functions with a POST whose body carries
+  // next_run. A cron run always notifies; a manual run only notifies when
+  // asked, so poking the endpoint to look at output does not DM anyone.
+  const isScheduledRun = event.httpMethod === 'POST' && String(event.body || '').includes('next_run');
+  const notify = isScheduledRun || q.notify === '1';
 
   const targets = q.dbId
     ? [{ dbId: q.dbId, project: q.project || q.dbId.slice(0, 8) }]
@@ -366,6 +429,22 @@ export const handler = async (event) => {
       }
 
       report.projects.push(entry);
+    }
+
+    // Delivery is last, and a failure here never fails the run. The report is
+    // still returned, so a broken Slack token shows up as a visible error
+    // rather than a silent morning with no digest.
+    if (notify) {
+      if (!slackConfigured()) {
+        report.notify = { sent: false, error: 'SLACK_BOT_TOKEN not set' };
+      } else {
+        try {
+          report.notify = { sent: true, ...(await sendSlack(renderSlack(report))) };
+        } catch (err) {
+          report.notify = { sent: false, error: err.message };
+          console.error('scheduling-gate: Slack delivery failed:', err);
+        }
+      }
     }
 
     if (asText) {
