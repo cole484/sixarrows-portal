@@ -12,8 +12,8 @@
 // indistinguishable from "this trade has no template row".
 //
 // Two separate cases, kept separate on purpose:
-//   TRADE_TEMPLATE_ALIASES  — a template exists, under a different name.
-//   TRADES_WITHOUT_TEMPLATE — no template row exists at all. The work order
+//   TRADE_TEMPLATE_ALIASES  = a template exists, under a different name.
+//   TRADES_WITHOUT_TEMPLATE = no template row exists at all. The work order
 //                             needs a per-task Scope of Work, or someone needs
 //                             to add a Trade Templates row for that trade.
 

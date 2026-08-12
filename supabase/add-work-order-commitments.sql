@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────
---  Work order commitments — append-only
+--  Work order commitments, append-only
 -- ─────────────────────────────────────────────────────────────
 -- One row per subcontractor submission. Never updated, never
 -- deleted. A sub who resubmits creates a second row; the newest

@@ -246,7 +246,7 @@ export const handler = async (event) => {
       plansNeeded:            firstNonEmpty(prop(task, 'Plans or Blueprints Needed?'), template && prop(template, 'Plans/Blueprints Required'), false),
       // "Estimated Cost" is the current field; "Contract Value" is the older
       // name still present on some timelines. A number here is NOT
-      // automatically a contract value — see costSource below.
+      // automatically a contract value. See costSource below.
       contractValue:          firstNonEmpty(prop(task, 'Estimated Cost'), prop(task, 'Contract Value')),
       // Estimate | Bid Received | To Be Quoted. Only "Bid Received" means the
       // sub actually gave us this number.
@@ -336,7 +336,7 @@ export const handler = async (event) => {
       if (TRADES_WITHOUT_TEMPLATE.has(String(trade).trim())) {
         warnings.push(`Trade "${trade}" has no Trade Template row, so there is no default scope. Write a Scope of Work on the task before sending this to a sub.`);
       } else {
-        warnings.push(`No Trade Template found for "${trade}" (looked up "${templateTitle}") — using task values only. Check that a Trade Templates row exists with exactly that title.`);
+        warnings.push(`No Trade Template found for "${trade}" (looked up "${templateTitle}"). Using task values only. Check that a Trade Templates row exists with exactly that title.`);
       }
     }
     if (!sub)             warnings.push('No subcontractor assigned yet.');
