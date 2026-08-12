@@ -14,6 +14,16 @@
 //   GET /?sub=artisan        narrow the report to subs whose name matches,
 //                            and show which file was used and why. 78 subs of
 //                            JSON is unreadable when you are checking two.
+//   GET /?force=1            re-read documents instead of using cached reads
+//   GET /?rematch=1          open the files that no filename matched and match
+//                            them on the name printed inside instead. Slower
+//                            and costs a little, so it is opt-in rather than
+//                            part of every run.
+//
+// Documents are read by the layered reader in lib/compliance-docs.js: a cached
+// result, then a local PDF text pass, then Claude for the scans and phone
+// photos that have no text to extract. Reads are cached per file and
+// modification time, so a daily run costs nothing until a document changes.
 //
 // Sending is opt-in for manual runs and automatic on the cron, matching
 // scheduling-gate.js. Nothing reaches a subcontractor from a casual curl.
@@ -22,9 +32,10 @@ import { supabase } from './lib/supabase-client.js';
 import { sendGmail, gmailConfigured, senderAddress } from './lib/gmail.js';
 import { buildSubject, buildBody, nextAction, FROM_EMAIL } from './lib/compliance-email.js';
 import {
-  listFolder, matchSub, readCoiExpiry, coiState,
+  listFolder, matchSub, readCoiExpiry, readW9Identity, coiState,
   COI_FOLDER_ID, W9_FOLDER_ID,
 } from './lib/compliance-docs.js';
+import { anthropicConfigured, setReadBudget, readsUsed, readsLeft } from './lib/doc-ai.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -119,15 +130,23 @@ export const handler = async (event) => {
   const q        = event.queryStringParameters || {};
   const days     = Number(q.days) > 0 ? Number(q.days) : DEFAULT_LOOKAHEAD_DAYS;
   const syncOnly = q.syncOnly === '1';
+  const force    = q.force === '1';
+  const rematch  = q.rematch === '1';
   const only     = (q.sub || '').trim().toLowerCase();   // narrow the report
   const isCron   = event.httpMethod === 'POST' && String(event.body || '').includes('next_run');
   const doSend   = isCron || q.send === '1';
   const today    = new Date().toISOString().slice(0, 10);
 
+  // How many documents this run may open with Claude. Cached reads are free
+  // and do not count. Six is enough to keep a warm system current; raise it on
+  // a manual run to clear a backlog in one go.
+  setReadBudget(Number(q.aiLimit) > 0 ? Number(q.aiLimit) : 6);
+
   const report = {
     generatedAt: new Date().toISOString(),
     sent: doSend, syncOnly,
-    documents: { coiFiles: 0, w9Files: 0, matched: 0, unmatched: [] },
+    reader: anthropicConfigured() ? 'cache, then PDF text, then Claude' : 'cache, then PDF text (ANTHROPIC_API_KEY not set, so scans cannot be read)',
+    documents: { coiFiles: 0, w9Files: 0, matched: 0, rematched: [], unmatched: [] },
     subs: [], actions: [], errors: [],
   };
 
@@ -171,34 +190,121 @@ export const handler = async (event) => {
     })).filter(s => s.name && !OWN_COMPANY.test(s.name));
 
     // Newest file wins when a sub has several certificates on file.
-    const bySub = new Map();          // subId -> { coiFile, w9File }
-    const claim = (file, kind) => {
-      const m = matchSub(file.name, subs);
-      if (!m) { report.documents.unmatched.push({ kind, file: file.name }); return; }
-      const cur = bySub.get(m.sub.id) || {};
+    const bySub   = new Map();        // subId -> { coiFile, w9File }
+    const orphans = [];               // files no name matched
+
+    const assign = (file, kind, subId) => {
+      const cur = bySub.get(subId) || {};
       const key = kind === 'coi' ? 'coiFile' : 'w9File';
       if (!cur[key] || file.modifiedTime > cur[key].modifiedTime) cur[key] = file;
-      bySub.set(m.sub.id, cur);
+      bySub.set(subId, cur);
+    };
+
+    const claim = (file, kind) => {
+      const m = matchSub(file.name, subs);
+      if (!m) { orphans.push({ kind, file }); return; }
+      assign(file, kind, m.sub.id);
     };
     coiFiles.forEach(f => claim(f, 'coi'));
     w9Files.forEach(f  => claim(f, 'w9'));
+
+    // ── 2b. Match the leftovers on the name printed inside the document ────
+    // A filename is whoever typed it. The insured name on a certificate, or
+    // line 1 and line 2 of a W9, is who the firm actually is, and it matches
+    // the Notion row far more often. Reads are cached, so a rerun costs
+    // nothing; opening files that were never read is the part that is opt-in.
+    for (const o of orphans) {
+      let names = [];
+      try {
+        const opts = { cacheOnly: !rematch, force: force && rematch };
+        if (o.kind === 'coi') {
+          const r = await readCoiExpiry(o.file.id, gKey, o.file, { ...opts, ai: true });
+          names = [r.insuredName];
+        } else {
+          const r = await readW9Identity(o.file.id, gKey, o.file, opts);
+          names = [r.name, r.businessName];
+        }
+      } catch (err) {
+        report.errors.push({ file: o.file.name, error: `could not read for rematch: ${err.message}` });
+      }
+
+      // Six Arrows is the certificate holder on most of these, so its own name
+      // turns up inside documents that belong to somebody else entirely.
+      names = names.filter(n => n && !OWN_COMPANY.test(n));
+
+      let hit = null;
+      for (const n of names) {
+        const m = matchSub(n, subs);
+        if (m) { hit = { sub: m.sub, via: n, score: m.score }; break; }
+      }
+
+      if (hit) {
+        assign(o.file, o.kind, hit.sub.id);
+        report.documents.rematched.push({ kind: o.kind, file: o.file.name, matchedTo: hit.sub.name, onName: hit.via });
+      } else {
+        report.documents.unmatched.push({
+          kind: o.kind, file: o.file.name,
+          readAs: names[0] || null,
+          hint: names.length ? 'the name inside the document does not match any subcontractor row either' : 'not read yet, add rematch=1 to open it',
+        });
+      }
+    }
+
     report.documents.matched = bySub.size;
 
-    // ── 3. Read expiry from each matched certificate, write back to Notion ─
+    // ── 3. Which subs have work coming up? ────────────────────────────────
+    // Computed before the documents are read, not after, because it decides
+    // how hard to read them. A sub with a crew arriving in three weeks gets
+    // the full read; the other seventy get whatever is cheap.
+    const horizon  = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+    const upcoming = new Map();       // subId -> soonest { project, taskId, taskName, start }
+
+    if (!syncOnly) {
+      for (const t of TIMELINE_DBS) {
+        const pages = await nQueryAll(t.dbId, token, {
+          filter: { and: [
+            { property: 'Start', date: { on_or_after:  today   } },
+            { property: 'Start', date: { on_or_before: horizon } },
+          ] },
+        });
+        for (const page of pages) {
+          if (prop(page, 'Status') === 'Completed') continue;
+          const ids = prop(page, 'Subcontractor') || [];
+          if (!ids.length) continue;
+          const start = prop(page, 'Start')?.start || null;
+          const entry = { project: t.project, taskId: page.id, taskName: prop(page, 'Task'), start };
+          const cur   = upcoming.get(ids[0]);
+          if (!cur || (start && start < cur.start)) upcoming.set(ids[0], entry);
+        }
+      }
+    }
+
+    // ── 4. Read each matched certificate, write the truth back to Notion ──
     const state = new Map();          // subId -> { coiState, coiExpiry, hasW9 }
     for (const sub of subs) {
       const docs = bySub.get(sub.id) || {};
       let expiry = null, confidence = 'none', parseError = null;
+      let readVia = null, additionalInsured = null, insuredName = null, readNotes = null;
 
       if (docs.coiFile) {
-        const r = await readCoiExpiry(docs.coiFile.id, gKey, docs.coiFile);
+        // Work coming up means the additional insured answer matters as much
+        // as the date, and only the AI reader can see the ADDL INSD column.
+        // Everyone else gets the cheap pass, which escalates on its own if it
+        // cannot read the document.
+        const r = await readCoiExpiry(docs.coiFile.id, gKey, docs.coiFile, {
+          ai: upcoming.has(sub.id), force,
+        });
         expiry = r.expiry; confidence = r.confidence; parseError = r.error || null;
+        readVia = r.method || null;
+        additionalInsured = r.additionalInsured || null;
+        insuredName = r.insuredName || null;
+        readNotes = r.notes || null;
         if (parseError) report.errors.push({ sub: sub.name, file: docs.coiFile.name, error: parseError });
       }
 
       const cs     = coiState(expiry, today, !!docs.coiFile);
       const hasW9  = !!docs.w9File;
-      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9 });
+      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, readError: parseError });
 
       // Only write when something actually changed, to keep Notion's edit
       // history meaningful rather than a wall of no-op touches.
@@ -230,6 +336,13 @@ export const handler = async (event) => {
           coiState: cs,
           coiExpiry: expiry,
           confidence,
+          // Which layer produced the answer. 'text' is the local PDF pass,
+          // 'ai' is Claude, 'none' means nothing could read it.
+          readVia,
+          // Only the AI reader fills these in.
+          insuredName,
+          additionalInsured,
+          readNotes,
           // The two questions worth answering when a state looks wrong: did a
           // file get matched at all, and if so could its expiry be read?
           coiFile: docs.coiFile ? docs.coiFile.name : null,
@@ -249,30 +362,10 @@ export const handler = async (event) => {
       report.errors = report.errors.filter(e => JSON.stringify(e).toLowerCase().includes(only));
     }
 
+    report.documents.read = { withClaude: readsUsed(), budgetLeft: readsLeft() };
+
     if (syncOnly) {
       return { statusCode: 200, headers: corsH, body: JSON.stringify(report, null, 2) };
-    }
-
-    // ── 4. Which subs have work coming up? ────────────────────────────────
-    const horizon = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-    const upcoming = new Map();       // subId -> soonest { project, taskId, taskName, start }
-
-    for (const t of TIMELINE_DBS) {
-      const pages = await nQueryAll(t.dbId, token, {
-        filter: { and: [
-          { property: 'Start', date: { on_or_after:  today   } },
-          { property: 'Start', date: { on_or_before: horizon } },
-        ] },
-      });
-      for (const page of pages) {
-        if (prop(page, 'Status') === 'Completed') continue;
-        const ids = prop(page, 'Subcontractor') || [];
-        if (!ids.length) continue;
-        const start = prop(page, 'Start')?.start || null;
-        const entry = { project: t.project, taskId: page.id, taskName: prop(page, 'Task'), start };
-        const cur   = upcoming.get(ids[0]);
-        if (!cur || (start && start < cur.start)) upcoming.set(ids[0], entry);
-      }
     }
 
     // ── 5. Decide and act, per sub with a problem on upcoming work ────────
@@ -288,7 +381,11 @@ export const handler = async (event) => {
       if (st.coiState === 'unreadable') {
         report.actions.push({
           sub: sub.name, action: 'review',
-          reason: 'a certificate is on file but its expiry could not be read automatically. Open it and set COI Expiration by hand.',
+          // The reason the reader gave is the useful part. A run that simply
+          // ran out of budget is not a document anybody needs to open.
+          reason: st.readError
+            ? `a certificate is on file but the expiry could not be read: ${st.readError}`
+            : 'a certificate is on file but its expiry could not be read automatically. Open it and set COI Expiration by hand.',
           task: job.taskName, start: job.start,
         });
         if (!st.hasW9) {
@@ -298,6 +395,19 @@ export const handler = async (event) => {
           });
         }
         continue;
+      }
+
+      // A current certificate that does not name Six Arrows as additionally
+      // insured is a real exposure, and it is the one thing only the AI reader
+      // can see. It does not send an email yet: the approved wording covers
+      // missing and expired certificates, and telling a sub their certificate
+      // is wrong on the strength of one read deserves a person's eyes first.
+      if (st.coiState === 'ok' && st.additionalInsured === 'no') {
+        report.actions.push({
+          sub: sub.name, action: 'review',
+          reason: 'the certificate is current but the reader could not find Six Arrows listed as additionally insured. Confirm, then ask their agent for a corrected certificate.',
+          task: job.taskName, start: job.start,
+        });
       }
 
       const needsCoi = st.coiState !== 'ok';

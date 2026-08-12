@@ -79,6 +79,26 @@ netlify/functions/
   visual-selections.js      # plans + pins CRUD, signed storage uploads
   plan-convert-background.js # PDF to PNG on upload (mupdf wasm, 15 min budget)
   debug-sheet.js            # one-off sheet diagnostic
+  scheduling-gate.js        # Tier 1 of the sub scheduling agent. Looks ahead at
+                            #   tasks entering the window, checks the readiness
+                            #   gate, notifies. Cron: weekdays 12 UTC. Never
+                            #   writes to Notion unless apply=1 is passed.
+  compliance-sweep.js       # matches Drive COI/W9 files to Notion sub rows,
+                            #   reads each certificate, refreshes Notion, and
+                            #   emails subs whose documents are missing or
+                            #   expired ahead of scheduled work. Cron: daily
+                            #   13 UTC. Manual runs send nothing without send=1.
+  lib/doc-ai.js             # reads a COI or W9 with Claude: expiry, insured
+                            #   name, and whether Six Arrows is actually listed
+                            #   as additionally insured. Per-run read budget.
+  lib/doc-cache.js          # append-only cache of document reads, keyed on
+                            #   Drive file id + modifiedTime
+  lib/compliance-docs.js    # Drive listing, name matching, and the three-layer
+                            #   read: cache, then PDF text, then Claude
+  lib/compliance-email.js   # the approved wording for compliance emails
+  lib/gmail.js              # OAuth2 refresh-token send, returns threadId
+  lib/slack.js              # digest delivery (not wired up yet)
+  lib/trade-aliases.js      # timeline trade names to Trade Template titles
 supabase/
   schema.sql                # baseline tables
   add-*.sql                 # individual migrations, run in order in Supabase SQL editor
@@ -162,8 +182,14 @@ Required for core function:
 - `GOOGLE_API_KEY` — sheet-budget-sync, sheet-billing-sync, sheet-sab-budget-sync
 - `NOTION_TOKEN` — notion-tracker, notion-timeline, notion-clients,
   notion-updates, generate-updates
-- `ANTHROPIC_API_KEY` — generate-updates (and product-meta query polish,
-  optional)
+- `ANTHROPIC_API_KEY` — generate-updates, and the compliance document reader
+  (`lib/doc-ai.js`). Without it the sweep still runs, but scanned and
+  photographed certificates come back `unreadable` instead of being read.
+  `COI_READER_MODEL` overrides the model; it defaults to `claude-opus-5`.
+- `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` — outbound
+  compliance email. Setup walkthrough is in `docs/gmail-setup.md`.
+- `COI_FOLDER_ID`, `W9_FOLDER_ID` — the two Drive folders, which must be
+  shared as "anyone with the link" because these authenticate with an API key.
 
 Optional, for product-meta image fetching cascade:
 - `MICROLINK_API_KEY` — Microlink Pro for antibot retailer bypass.
@@ -206,6 +232,39 @@ Optional, for product-meta image fetching cascade:
   integrations. Staff type the item and paste a screenshot.
   Phases 2 to 4 (client read-only view, approval in place with threaded
   comments, guided wave walkthrough and room mood boards) are not built.
+
+## Subcontractor compliance documents
+
+Certificates arrive as clean PDFs, scans, phone photos, and re-prints from
+whatever template the agency uses. Reading is three layers deep, cheapest
+first:
+
+1. **Cache** (`document_reads`, keyed on Drive file id + `modifiedTime`).
+   Replacing a file in Drive changes the modification time and misses the
+   cache, so a fresh read happens on its own. Nothing to invalidate by hand.
+2. **PDF text pass** (`unpdf` + a date-pair heuristic). Free and instant.
+   Works on a PDF with a real text layer, fails on everything else.
+3. **Claude** (`lib/doc-ai.js`). Opens the document the way a person would.
+   Also answers the one question the other layers cannot: whether Six Arrows
+   is listed as **additionally insured** or is merely the certificate holder.
+   Those look identical in extracted text and mean very different things.
+
+Rules that matter:
+
+- **Four COI states, not three.** `missing` / `unreadable` / `expired` / `ok`.
+  `unreadable` means we hold a certificate and could not read it, and it
+  **never** emails the sub. Telling a sub who sent a certificate that we do
+  not have one is the most damaging thing this system could say.
+- **The controlling expiry is the earliest of general liability and workers
+  comp**, not the latest date on the page. Auto and umbrella are ignored.
+- **`?aiLimit=N`** caps how many documents one run may open with Claude
+  (default 6). Budget exhaustion is never cached: it is a fact about the run,
+  not the document.
+- **`?rematch=1`** opens files that no filename matched and matches them on
+  the name printed inside instead. That is what fixes the unmatched pile.
+- A **new email variant needs Cole's approval** before it sends. A certificate
+  that is current but does not name Six Arrows as additionally insured is
+  reported as `review`, not emailed, for exactly that reason.
 
 ## When in doubt
 

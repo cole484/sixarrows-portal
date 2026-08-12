@@ -10,10 +10,17 @@
 // Two jobs that fail independently on purpose:
 //   listing + matching  cheap, reliable, and enough to answer "do we have
 //                       anything at all for this sub?"
-//   expiry extraction   downloads and parses a PDF, so it can fail for one
-//                       document without taking the sweep down. A failure
-//                       yields confidence 'none' and gets flagged for a human
-//                       rather than guessed at.
+//   reading             opens the document, so it can fail for one file
+//                       without taking the sweep down. A failure yields
+//                       confidence 'none' and gets flagged for a human rather
+//                       than guessed at.
+//
+// Reading is three layers deep, cheapest first: a cached result, then a local
+// PDF text pass, then Claude. Most certificates never reach Claude. The ones
+// that do are the scans and phone photos that used to land on somebody's desk.
+
+import { readCertificate, readW9, anthropicConfigured } from './doc-ai.js';
+import { getRead, putRead, toCertificate, certificateRow, w9Row } from './doc-cache.js';
 
 const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files';
 
@@ -199,46 +206,160 @@ export function extractCoiExpiry(text) {
   };
 }
 
-// Downloads and parses one certificate. Never throws: a document this cannot
-// read becomes confidence 'none' with the reason attached, so the sweep keeps
-// going and a person gets told which file needs eyes on it.
-export async function readCoiExpiry(fileId, apiKey, file = {}) {
-  // Plenty of certificates are phone photos. There is no expiry to read out of
-  // a HEIC, and "Invalid PDF structure" describes the symptom rather than the
-  // situation, which sends people looking for a corrupt file.
-  const isPdf = file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name || '');
-  if (file.name && !isPdf) {
+// The local pass. Free, instant, and right about two thirds of the time: it
+// works on a PDF with a real text layer and fails on everything else.
+async function textPass(bytes) {
+  const { extractText } = await import('unpdf');
+  const { text } = await extractText(bytes, { mergePages: true });
+  const raw = String(text || '');
+
+  // A scanned certificate is a picture of a document: pdfjs finds almost no
+  // text because there is no text layer to find. That is a different problem
+  // from a readable document with no dates in it, and it has a different fix,
+  // so do not report them the same way.
+  if (raw.replace(/\s/g, '').length < 200) {
     return {
-      expiry: null, confidence: 'none', found: 0,
-      error: `this certificate is an image (${file.name}), not a PDF, so the expiry cannot be read automatically. Enter COI Expiration by hand or replace it with a PDF.`,
+      expiry: null, confidence: 'none', method: 'text', scanned: true,
+      error: 'no selectable text in this PDF, so it is a scan or a photo.',
     };
   }
 
-  try {
-    const bytes = await downloadFile(fileId, apiKey);
-    const { extractText } = await import('unpdf');
-    const { text } = await extractText(bytes, { mergePages: true });
-    const raw = String(text || '');
+  const result = extractCoiExpiry(raw);
+  return {
+    ...result,
+    method: 'text',
+    error: result.expiry ? null : `the text was readable (${raw.length} characters) but no policy term appeared in it.`,
+  };
+}
 
-    // A scanned certificate is a picture of a document: pdfjs finds almost no
-    // text because there is no text layer to find. That is a different problem
-    // from a readable document with no dates in it, and it has a different
-    // fix, so do not report them the same way.
-    if (raw.replace(/\s/g, '').length < 200) {
-      return {
-        expiry: null, confidence: 'none', found: 0, scanned: true,
-        error: 'this certificate appears to be a scan or photo with no selectable text, so the expiry cannot be read automatically. Enter COI Expiration by hand, or ask the agent for a text PDF.',
-      };
-    }
+// Reads one certificate and says what is on it. Never throws: a document this
+// cannot read comes back as confidence 'none' with the reason attached, so the
+// sweep keeps going and a person gets told which file needs eyes on it.
+//
+// Three layers, cheapest first:
+//   1. the cache, keyed on the Drive file and its modification time
+//   2. the local text pass, for PDFs that carry a text layer
+//   3. Claude, which opens the document the way a person would
+//
+// Layer 3 also answers the question the other two cannot: whether Six Arrows
+// is actually listed as additionally insured, or is merely the holder.
+//
+// opts.ai      read with Claude first rather than as a fallback. Used for subs
+//              with work coming up, where the additional insured answer matters
+//              as much as the date.
+// opts.force   ignore the cache and read again.
+// opts.cacheOnly
+//              answer from the cache or not at all. For callers sweeping a
+//              pile of documents they only need an answer about if one is
+//              already known, where opening every one of them would blow the
+//              time budget of the request they are serving.
+export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
+  const useAi  = opts.ai === true;
+  const canAi  = anthropicConfigured();
+  const cacheK = { ...file, id: fileId };
 
-    const result = extractCoiExpiry(raw);
-    if (!result.expiry) {
-      return { ...result, error: `the document text was readable (${raw.length} characters) but no policy term was found in it. Worth opening by hand.` };
-    }
-    return result;
-  } catch (err) {
-    return { expiry: null, confidence: 'none', found: 0, error: err.message };
+  if (!opts.force) {
+    const hit = toCertificate(await getRead(fileId, file.modifiedTime));
+    // A cached failure is only worth reusing when the reader that produced it
+    // is the best one available. If the text pass gave up yesterday and Claude
+    // is configured today, that document deserves another look.
+    if (hit && (hit.expiry || hit.method === 'ai')) return hit;
   }
+
+  if (opts.cacheOnly) {
+    return {
+      expiry: null, confidence: 'none', method: 'none', insuredName: null,
+      error: 'this document has not been read yet.',
+    };
+  }
+
+  let bytes;
+  try {
+    bytes = await downloadFile(fileId, apiKey);
+  } catch (err) {
+    return { expiry: null, confidence: 'none', method: 'none', error: err.message };
+  }
+
+  const isPdf = file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  const order = (useAi || !isPdf) ? ['ai', 'text'] : ['text', 'ai'];
+
+  let best = null;
+  let exhausted = false;
+  for (const step of order) {
+    if (step === 'text' && !isPdf) continue;
+    if (step === 'ai'   && !canAi) continue;
+
+    let result;
+    try {
+      result = step === 'ai'
+        ? await readCertificate({ bytes, file })
+        : await textPass(bytes);
+    } catch (err) {
+      result = { expiry: null, confidence: 'none', method: step, error: err.message };
+    }
+
+    if (result.budgetExhausted) { exhausted = true; continue; }
+
+    // Keep the first attempt's reason if the second one also fails, since the
+    // first is usually the more informative of the two.
+    if (!best) best = result;
+    if (result.expiry) { best = result; break; }
+  }
+
+  // The AI reader never got its turn, so nothing here has established that the
+  // document is unreadable. Say so, and leave it for the next run.
+  if (exhausted && !best?.expiry) {
+    best = {
+      ...(best || { expiry: null, confidence: 'none', method: 'none' }),
+      budgetExhausted: true,
+      error: `this run's document reading budget is used up, so ${file.name || 'this file'} has not been read yet. The next run will pick it up.`,
+    };
+  }
+
+  if (!best) {
+    best = {
+      expiry: null, confidence: 'none', method: 'none',
+      error: canAi
+        ? `${file.name || 'this file'} is not a format the reader can open.`
+        : `${file.name || 'this file'} needs the AI reader, and ANTHROPIC_API_KEY is not set.`,
+    };
+  }
+
+  // Running out of read budget is a fact about this run, not about the
+  // document. Caching it would teach the system that a perfectly readable
+  // certificate is unreadable, and it would never look again.
+  if (!best.budgetExhausted) await putRead(certificateRow(cacheK, best));
+  return best;
+}
+
+// Reads the identifying names off a W9. Cached the same way certificates are.
+//
+// This exists for matching rather than for compliance: a W9 states who a firm
+// actually is, which beats guessing from whatever somebody typed into the
+// filename. Line 1 and line 2 both matter, because half of these subs trade
+// under a DBA that appears nowhere on their tax return.
+export async function readW9Identity(fileId, apiKey, file = {}, opts = {}) {
+  if (!opts.force) {
+    const row = await getRead(fileId, file.modifiedTime);
+    if (row) return { name: row.insured_name || null, businessName: row.business_name || null, cached: row.created_at, error: row.error || null };
+  }
+  if (opts.cacheOnly) {
+    return { name: null, businessName: null, error: 'this document has not been read yet.' };
+  }
+  if (!anthropicConfigured()) {
+    return { name: null, businessName: null, error: 'ANTHROPIC_API_KEY is not set, so W9s cannot be read.' };
+  }
+
+  let bytes;
+  try {
+    bytes = await downloadFile(fileId, apiKey);
+  } catch (err) {
+    return { name: null, businessName: null, error: err.message };
+  }
+
+  const result = await readW9({ bytes, file });
+  if (!result.budgetExhausted) await putRead(w9Row({ ...file, id: fileId }, result));
+  return { name: result.name, businessName: result.businessName, error: result.error || null };
 }
 
 // Where the certificate stands. Four states, not three, because "we have no
