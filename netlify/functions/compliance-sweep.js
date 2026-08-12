@@ -182,7 +182,7 @@ export const handler = async (event) => {
       let expiry = null, confidence = 'none', parseError = null;
 
       if (docs.coiFile) {
-        const r = await readCoiExpiry(docs.coiFile.id, gKey);
+        const r = await readCoiExpiry(docs.coiFile.id, gKey, docs.coiFile);
         expiry = r.expiry; confidence = r.confidence; parseError = r.error || null;
         if (parseError) report.errors.push({ sub: sub.name, file: docs.coiFile.name, error: parseError });
       }

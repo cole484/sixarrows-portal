@@ -55,48 +55,99 @@ async function downloadFile(fileId, apiKey) {
 // Normalize hard, then match on containment in either direction.
 const NOISE = /\b(llc|inc|incorporated|co|company|dba|the|and|of|coi|w9|w-9|certificate|insurance|workers|comp|form)\b/g;
 
+// Certificates are frequently named for the certificate holder rather than the
+// insured party, e.g. "Dan Kuhns COI for Six Arrows.pdf". Left in, that phrase
+// matches Six Arrows itself and credits the wrong party with the policy.
+const HOLDER = /\bfor six arrows( construction)?\b|\bsix arrows construction\b/g;
+
+// Trade words appear in a third of these names. They are useful corroboration
+// but must never carry a match alone: "plumbing" is shared by four different
+// plumbers, and matching on it credits one sub with another's certificate.
+const GENERIC = new Set([
+  'plumbing', 'electric', 'electrical', 'construction', 'painting', 'paint',
+  'drywall', 'insulation', 'insulators', 'concrete', 'roofing', 'masonry',
+  'landscape', 'landscaping', 'tile', 'flooring', 'hardwood', 'cleaning',
+  'cleanup', 'clean', 'demolition', 'services', 'service', 'contractors',
+  'contractor', 'builds', 'building', 'builders', 'custom', 'home', 'homes',
+  'heating', 'cooling', 'granite', 'guttering', 'gutters', 'interiors',
+  'surveying', 'moving', 'carpets', 'tree', 'repair',
+]);
+
 export function normalizeName(s) {
   return String(s || '')
     .toLowerCase()
     .replace(/\.[a-z0-9]{2,5}$/i, '')     // strip file extension
     .replace(/[^a-z0-9\s]/g, ' ')          // punctuation, apostrophes, ampersands
+    .replace(HOLDER, ' ')
     .replace(NOISE, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-// Returns the best matching sub, or null. Deliberately conservative: a wrong
-// match writes "insured" onto a sub who is not, which is worse than no match.
-export function matchSub(fileName, subs) {
+// Spaces are unreliable in these names: "Vanmeter Slavey" versus "Van Meter &
+// Slavey, LLC" are the same firm. Comparing a space-stripped form catches that
+// without loosening anything else.
+function compact(s) {
+  return normalizeName(s).replace(/\s/g, '');
+}
+
+function distinctive(name) {
+  return new Set(normalizeName(name).split(' ').filter(t => t.length >= 3 && !GENERIC.has(t)));
+}
+
+function scorePair(fileName, subName) {
   const f = normalizeName(fileName);
-  if (!f) return null;
+  const n = normalizeName(subName);
+  if (!f || !n) return 0;
 
-  const fTokens = new Set(f.split(' ').filter(t => t.length > 2));
-  let best = null;
-  let bestScore = 0;
+  if (f === n) return 1.0;
 
-  for (const sub of subs) {
-    const n = normalizeName(sub.name);
-    if (!n) continue;
+  const fc = compact(fileName);
+  const nc = compact(subName);
+  if (fc && nc && fc === nc) return 0.97;
 
-    let score = 0;
-    if (f === n)                          score = 1.0;
-    else if (f.includes(n) || n.includes(f)) score = 0.9;
-    else {
-      // Token overlap, scaled by the shorter name so a long DBA string does
-      // not dilute a genuine match.
-      const nTokens = new Set(n.split(' ').filter(t => t.length > 2));
-      if (!nTokens.size || !fTokens.size) continue;
-      let shared = 0;
-      for (const t of nTokens) if (fTokens.has(t)) shared++;
-      score = shared / Math.min(nTokens.size, fTokens.size);
-    }
+  // Containment only counts on a substantial string. Requiring 8 characters
+  // stops a short generic name being "contained" in everything.
+  if (fc.length >= 8 && nc.length >= 8 && (fc.includes(nc) || nc.includes(fc))) return 0.9;
 
-    if (score > bestScore) { bestScore = score; best = sub; }
+  const fTok = distinctive(fileName);
+  const nTok = distinctive(subName);
+  if (!fTok.size || !nTok.size) return 0;     // nothing distinctive to go on
+
+  let shared = 0;
+  for (const t of nTok) if (fTok.has(t)) shared++;
+  if (!shared) return 0;
+
+  // Denominator is the LARGER token set, so a single shared word against a
+  // one-token name cannot produce a perfect score. This is the specific bug
+  // that credited Likens Plumbing with C&A Plumbing's certificate.
+  return shared / Math.max(fTok.size, nTok.size);
+}
+
+// Returns the best matching sub, or null. Deliberately conservative in two
+// ways: a minimum score, and a required margin over the runner-up. A wrong
+// match writes "insured" onto a sub who is not, which is worse than no match
+// at all, and an ambiguous result is a wrong match waiting to happen.
+export function matchSub(fileName, subs) {
+  if (!normalizeName(fileName)) return null;
+
+  const scored = subs
+    .map(sub => ({ sub, score: scorePair(fileName, sub.name) }))
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) return null;
+
+  const [best, runnerUp] = scored;
+  if (best.score < 0.75) return null;
+
+  // Two subs scoring within a hair of each other means the name does not
+  // actually identify one of them. Refuse, and let a person look.
+  if (runnerUp && best.score - runnerUp.score < 0.08) {
+    return null;
   }
 
-  // Below this, the match is a coin flip and should be reviewed by a person.
-  return bestScore >= 0.75 ? { sub: best, score: bestScore } : null;
+  return { sub: best.sub, score: best.score };
 }
 
 // ── COI expiry ────────────────────────────────────────────────────────────
@@ -145,7 +196,18 @@ export function extractCoiExpiry(text) {
 // Downloads and parses one certificate. Never throws: a document this cannot
 // read becomes confidence 'none' with the reason attached, so the sweep keeps
 // going and a person gets told which file needs eyes on it.
-export async function readCoiExpiry(fileId, apiKey) {
+export async function readCoiExpiry(fileId, apiKey, file = {}) {
+  // Plenty of certificates are phone photos. There is no expiry to read out of
+  // a HEIC, and "Invalid PDF structure" describes the symptom rather than the
+  // situation, which sends people looking for a corrupt file.
+  const isPdf = file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  if (file.name && !isPdf) {
+    return {
+      expiry: null, confidence: 'none', found: 0,
+      error: `this certificate is an image (${file.name}), not a PDF, so the expiry cannot be read automatically. Enter COI Expiration by hand or replace it with a PDF.`,
+    };
+  }
+
   try {
     const bytes = await downloadFile(fileId, apiKey);
     const { extractText } = await import('unpdf');
