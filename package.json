@@ -1,13 +1,14 @@
 {
   "name": "sixarrows-portal-backend",
   "version": "1.0.0",
-  "description": "Six Arrows Construction Client Portal — Netlify Functions",
+  "description": "Six Arrows Construction Client Portal \u2014 Netlify Functions",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@netlify/blobs": "^8.2.0"
+    "@netlify/blobs": "^8.2.0",
+    "unpdf": "^0.12.1"
   },
   "scripts": {
     "dev": "netlify dev"
