@@ -1,12 +1,26 @@
 // netlify/functions/submit-work-order.js
 //
-// POST endpoint that records a subcontractor's commitment back to Notion.
+// POST endpoint that records a subcontractor's commitment.
 // Called when a sub clicks "Submit Work Order" on the work-order page.
 //
-// PATCHes the timeline task with:
+// The record of what was agreed lives in the append-only Supabase table
+// `work_order_commitments` (see supabase/add-work-order-commitments.sql).
+// Resubmitting writes a new row rather than overwriting the last one, so the
+// history of what changed and when is preserved.
+//
+// Notion gets a mirror so the schedule stays live where people work:
 //   - Start          (date range, overwritten with sub's committed dates)
-//   - Sub Commitment (rich_text, structured human-readable summary)
 //   - Status         (set to "Scheduled")
+//   - Sub Commitment (rich_text summary, only on timelines that have the field)
+//
+// Per-project timeline DBs have drifted, so the page's properties are read
+// first and only fields that actually exist are sent. Notion rejects an entire
+// PATCH with a 400 if any single property name is unknown, which is what used
+// to make every submission fail on projects without a `Sub Commitment` field.
+//
+// A failed Notion mirror does not fail the submission. The sub has signed, that
+// is recorded, and notion_synced/notion_error on the row make a broken mirror
+// visible in the data rather than only in the function logs.
 //
 // Body (JSON):
 //   {
@@ -25,6 +39,8 @@
 //     projectName:       string
 //     pmName:            string
 //   }
+
+import { supabase } from './lib/supabase-client.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -70,31 +86,43 @@ export const handler = async (event) => {
 
   const commitmentText = buildCommitmentText(payload);
 
-  // ── PATCH the Notion task ─────────────────────────────────────────────
-  const updateBody = {
-    properties: {
-      // Overwrite Start with sub's committed window (Notion date range).
-      'Start': {
-        date: {
-          start: payload.committedStart,
-          end:   payload.committedEnd,
-        },
-      },
-      // Human-readable commitment record. Truncated to Notion's 2000-char limit.
-      'Sub Commitment': {
-        rich_text: [{
-          type: 'text',
-          text: { content: commitmentText.slice(0, 2000) },
-        }],
-      },
-      // Flip status — sub has confirmed, treat as Scheduled.
-      'Status': {
-        status: { name: 'Scheduled' },
-      },
-    },
-  };
+  // ── 1. Mirror onto the Notion task ────────────────────────────────────
+  // Per-project timeline DBs have drifted apart, so a property that exists on
+  // one project is absent on the next, and Notion rejects the whole PATCH with
+  // a 400 for any unknown property. Read the page first and send only the
+  // properties it actually has.
+  let notionSynced = false;
+  let notionError  = null;
 
   try {
+    const pageRes = await fetch(`${NOTION_API}/pages/${payload.taskId}`, {
+      headers: {
+        'Authorization':  `Bearer ${token}`,
+        'Notion-Version': NOTION_VERSION,
+      },
+    });
+    if (!pageRes.ok) throw new Error(`read page ${pageRes.status}: ${(await pageRes.text()).slice(0, 300)}`);
+    const page    = await pageRes.json();
+    const present = new Set(Object.keys(page.properties || {}));
+
+    const candidates = {
+      // The sub's committed window replaces the planned one.
+      'Start': {
+        date: { start: payload.committedStart, end: payload.committedEnd },
+      },
+      'Status': { status: { name: 'Scheduled' } },
+      // Short human-readable mirror, only where the field exists. Supabase is
+      // the record; this is for people reading the task in Notion.
+      'Sub Commitment': {
+        rich_text: [{ type: 'text', text: { content: commitmentText.slice(0, 2000) } }],
+      },
+    };
+
+    const properties = {};
+    for (const [name, value] of Object.entries(candidates)) {
+      if (present.has(name)) properties[name] = value;
+    }
+
     const res = await fetch(`${NOTION_API}/pages/${payload.taskId}`, {
       method: 'PATCH',
       headers: {
@@ -102,33 +130,70 @@ export const handler = async (event) => {
         'Notion-Version': NOTION_VERSION,
         'Content-Type':   'application/json',
       },
-      body: JSON.stringify(updateBody),
+      body: JSON.stringify({ properties }),
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      // Surface Notion's actual error so misconfig (missing column, status name
-      // mismatch, etc.) is visible to the caller.
-      return reply(502, {
-        error: 'Notion update failed',
-        notionStatus: res.status,
-        notionError:  errText.slice(0, 800),
-      });
-    }
-
-    return reply(200, {
-      success:    true,
-      taskId:     payload.taskId,
-      submittedAt: new Date().toISOString(),
-      commitmentPreview: commitmentText,
-    });
+    if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 500)}`);
+    notionSynced = true;
   } catch (err) {
-    console.error('submit-work-order error:', err);
-    return reply(500, { error: err.message });
+    // Swallow it. The commitment row below is what matters, and a failed
+    // mirror is our problem to fix, not a reason to tell the sub they failed.
+    // The outcome is recorded on that row rather than lost here.
+    notionError = err.message;
+    console.error('submit-work-order: Notion sync failed:', err);
   }
+
+  // ── 2. Record the commitment, once, including how the sync went ───────
+  // The table is append-only by RLS: insert and select only, no update policy.
+  // So the sync outcome has to be known before the write, which is why Notion
+  // goes first. A resubmission writes a new row; the newest row per task_id is
+  // the current commitment and the older rows are the history.
+  let commitmentId = null;
+  try {
+    const inserted = await supabase('work_order_commitments', {
+      method: 'POST',
+      body: {
+        task_id:            payload.taskId,
+        work_order_number:  payload.workOrderNumber || null,
+        project_name:       payload.projectName     || null,
+        trade:              payload.trade           || null,
+        committed_start:    payload.committedStart,
+        committed_end:      payload.committedEnd,
+        working_days:       payload.workingDays ?? null,
+        contract_value:     payload.contractValue ?? null,
+        cost_source:        payload.costSource || null,
+        holdback_pct:       payload.holdbackPct ?? 0,
+        payment_type:       payload.paymentType,
+        payment_milestones: payload.paymentMilestones || [],
+        pre_start_blockers: payload.preStartBlockers || '',
+        notes:              payload.notes || '',
+        signature_name:     payload.signatureName.trim(),
+        commitment_text:    commitmentText,
+        notion_synced:      notionSynced,
+        notion_error:       notionError,
+      },
+    });
+    commitmentId = Array.isArray(inserted) ? inserted[0]?.id : inserted?.id;
+  } catch (err) {
+    // Notion may already show Scheduled at this point, but nothing durable
+    // recorded what the sub agreed to. Tell them it did not go through so they
+    // resubmit; the Notion write is idempotent, so a retry is harmless.
+    console.error('submit-work-order: commitment insert failed:', err);
+    return reply(500, { error: 'Could not record your submission. Please try again.' });
+  }
+
+  return reply(200, {
+    success:           true,
+    taskId:            payload.taskId,
+    commitmentId,
+    notionSynced,
+    notionError,
+    submittedAt:       new Date().toISOString(),
+    commitmentPreview: commitmentText,
+  });
 };
 
-// ── Build a human-readable commitment record for the Sub Commitment field ──
+// ── Build a human-readable commitment record stored on the commitment row ──
 function buildCommitmentText(d) {
   const tsCT = new Date().toLocaleString('en-US', {
     timeZone: 'America/Chicago',
