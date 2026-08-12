@@ -48,19 +48,24 @@ function needsClause({ coiState, coiExpiry, needsW9 }, terse = false) {
       ? 'an updated certificate of insurance'
       : `an updated certificate of insurance (the one we have expired ${on})`);
   } else if (coiState === 'missing') {
-    parts.push(terse
-      ? 'a certificate of insurance'
-      : 'a certificate of insurance (we do not have one on file for you)');
+    parts.push('a certificate of insurance');
   }
   if (needsW9) parts.push('a current W9');
   return parts;
 }
 
 export function buildSubject({ coiState, needsW9, taskName }) {
-  const both = coiState !== 'ok' && needsW9;
-  const what = both
-    ? 'Insurance certificate and W9 needed'
-    : (needsW9 ? 'W9 needed' : 'Updated insurance certificate needed');
+  // Per Cole: an expired certificate gets the bare subject, no task suffix.
+  // It is the case a sub recognizes instantly and the extra clause adds
+  // nothing.
+  if (coiState === 'expired' && !needsW9) return 'Updated insurance certificate needed';
+
+  // "Updated" is wrong when there was never one to update.
+  const what = (coiState !== 'ok' && needsW9) ? 'Insurance certificate and W9 needed'
+             : needsW9                        ? 'W9 needed'
+             : coiState === 'expired'         ? 'Updated insurance certificate needed'
+             :                                  'Insurance certificate needed';
+
   return taskName ? `${what} before ${taskName.toLowerCase()}` : what;
 }
 
@@ -83,10 +88,11 @@ export function buildBody({
   L.push('');
 
   if (attempt === 1) {
-    const opener = where
-      ? `Before we get started on ${where}, we need ${joinList(needs)} on file.`
-      : `Before this work starts, we need ${joinList(needs)} on file.`;
-    L.push(opener);
+    const lead = where ? `Before we get started on ${where}, ` : 'Before this work starts, ';
+    // Deliberately does not add "we do not have one on record" for the missing
+    // case: the opener already says we need it on file, and saying it twice
+    // reads like a form letter.
+    L.push(`${lead}we need ${joinList(needs)} on file.`);
     L.push('');
 
     if (coiState !== 'ok') {
@@ -108,7 +114,9 @@ export function buildBody({
       L.push(`Work is scheduled to start ${startNice}, so we need this back before then.`);
     }
     L.push('');
-    L.push('Let me know if you need anything from us to get it issued.');
+    L.push(coiState !== 'ok'
+      ? 'Let me know if you need anything from us to get it issued.'
+      : 'Let me know if you need anything from us.');
   } else {
     // Follow-up. Assume they read the first one; do not re-explain.
     L.push(`Following up on ${joinList(needs)}. We still do not have ${needs.length > 1 ? 'them' : 'it'}.`);
