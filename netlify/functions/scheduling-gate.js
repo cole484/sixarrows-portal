@@ -49,6 +49,13 @@ const OUT_OF_SCOPE_STATUSES = new Set(['Completed', 'On Hold']);
 // the status is lying and that is worth saying out loud.
 const CLAIMS_HANDLED = new Set(['Scheduled', 'In Progress', 'Awaiting Confirmation']);
 
+// Trades whose tasks are reminders to Six Arrows, not work sent to a sub.
+// "Order cabinets" is a note to place an order, so demanding a subcontractor,
+// a contract value and a signable work order for it is noise. What actually
+// matters on these is whether the lead time still fits before the install
+// date, which the lead-time check already covers.
+const REMINDER_TRADES = new Set(['Material Ordering']);
+
 // ── Notion helpers ────────────────────────────────────────────────────────
 function notionHeaders(token) {
   return {
@@ -155,16 +162,23 @@ export function evaluateTask(task, ctx) {
     );
   }
 
+  // A reminder task produces no work order, so most of the gate does not apply
+  // to it. It still needs to say what done looks like and when it happens.
+  const isReminder = REMINDER_TRADES.has(trade);
+
   if (!dod)                       blockers.push('no Definition of done');
-  if (duration == null && !dateVal.end) blockers.push('no Duration and Start is not a date range');
   if (!start)                     blockers.push('no Start date');
-  if (!subIds.length)             blockers.push('no Subcontractor assigned');
-  if (cost == null)               blockers.push('no Estimated Cost');
+
+  if (!isReminder) {
+    if (duration == null && !dateVal.end) blockers.push('no Duration and Start is not a date range');
+    if (!subIds.length)                   blockers.push('no Subcontractor assigned');
+    if (cost == null)                     blockers.push('no Estimated Cost');
+  }
 
   // Money provenance. The work order carries a signature block and a payment
   // schedule computed off this number, so an estimate must not go out as
   // though the sub had agreed to it.
-  if (cost != null && source !== 'Bid Received') {
+  if (!isReminder && cost != null && source !== 'Bid Received') {
     flags.push({
       kind: 'needs_quote',
       detail: source
@@ -221,6 +235,7 @@ export function evaluateTask(task, ctx) {
     costSource: source,
     subName: sub ? prop(sub, 'Subcontractor Name') : null,
     scopeFrom: scope ? 'task' : (templateScope ? 'trade template' : null),
+    isReminder,
     blockers,
     flags,
     ready: blockers.length === 0,
@@ -260,7 +275,7 @@ export function renderText(report) {
     if (ready.length) {
       lines.push('  READY TO SEND');
       for (const t of ready) {
-        lines.push(`  ${String(t.daysOut).padStart(4)}d  ${t.name}${t.trade ? ` (${t.trade})` : ''}  sub: ${t.subName || '?'}`);
+        lines.push(`  ${String(t.daysOut).padStart(4)}d  ${t.name}${t.trade ? ` (${t.trade})` : ''}${t.isReminder ? '  [reminder, no work order]' : `  sub: ${t.subName || '?'}`}`);
         for (const f of t.flags)        lines.push(`          flag: ${f.detail}`);
       }
       lines.push('');
@@ -315,7 +330,7 @@ export function renderSlack(report) {
       L.push('');
       L.push('*Ready to send*');
       for (const t of ready) {
-        L.push(`  ✓ *${t.daysOut}d* · ${t.name} · ${t.subName || 'sub not named'}`);
+        L.push(`  ✓ *${t.daysOut}d* · ${t.name} · ${t.isReminder ? '_reminder, no work order_' : (t.subName || 'sub not named')}`);
         for (const f of t.flags) L.push(`    :warning: ${f.detail}`);
       }
     }
