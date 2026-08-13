@@ -262,6 +262,14 @@ Rules that matter:
   not the document.
 - **`?rematch=1`** opens files that no filename matched and matches them on
   the name printed inside instead. That is what fixes the unmatched pile.
+- **`?sub=` narrows the work, not the printout.** No document outside the
+  filter is opened, no Notion row outside it is written, and nobody outside
+  it is emailed. It used to narrow only what got rendered, so checking one
+  sub quietly read documents for the other seventy.
+- **A backlog is drained by `read-compliance-docs-background.js`, not by the
+  sweep.** The sweep answers an HTTP request and has seconds; `aiLimit` above
+  about six will time out. The background function has minutes and only
+  fills the read cache: no Notion writes, no email, no decisions.
 - A **new email variant needs Cole's approval** before it sends. A certificate
   that is current but does not name Six Arrows as additionally insured is
   reported as `review`, not emailed, for exactly that reason.

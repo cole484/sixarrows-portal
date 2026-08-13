@@ -11,19 +11,27 @@
 //   GET /?test=1             send one sample email to Cole, nothing to any sub
 //   GET /?days=45            how far ahead to look for scheduled work
 //   GET /?syncOnly=1         refresh Notion from Drive, skip all email logic
-//   GET /?sub=artisan        narrow the report to subs whose name matches,
-//                            and show which file was used and why. 78 subs of
-//                            JSON is unreadable when you are checking two.
+//   GET /?sub=artisan        narrow the run to subs whose name matches. This
+//                            narrows the work and not just the printout: no
+//                            document outside the filter is opened, no Notion
+//                            row outside it is written, and nobody outside it
+//                            is emailed.
 //   GET /?force=1            re-read documents instead of using cached reads
 //   GET /?rematch=1          open the files that no filename matched and match
 //                            them on the name printed inside instead. Slower
 //                            and costs a little, so it is opt-in rather than
 //                            part of every run.
+//   GET /?aiLimit=6          how many documents this run may open with Claude
 //
 // Documents are read by the layered reader in lib/compliance-docs.js: a cached
 // result, then a local PDF text pass, then Claude for the scans and phone
 // photos that have no text to extract. Reads are cached per file and
 // modification time, so a daily run costs nothing until a document changes.
+//
+// aiLimit exists because this function answers an HTTP request and therefore
+// has seconds, while opening a document takes several of them. Six fits.
+// Twenty-five times out having cached nothing. To read a whole backlog at
+// once, use read-compliance-docs-background.js, which has minutes.
 //
 // Sending is opt-in for manual runs and automatic on the cron, matching
 // scheduling-gate.js. Nothing reaches a subcontractor from a casual curl.
@@ -189,6 +197,15 @@ export const handler = async (event) => {
       w9On:    prop(p, 'W9 on File'),
     })).filter(s => s.name && !OWN_COMPANY.test(s.name));
 
+    // ?sub= narrows the work, not just the printout. It used to narrow only
+    // what got rendered, which meant checking one subcontractor quietly opened
+    // documents for the other seventy and spent the run's read budget doing it.
+    // Matching still runs against every sub, because a file has to be allowed
+    // to belong to somebody outside the filter before it can be called
+    // unmatched.
+    const focus = only ? subs.filter(s => s.name.toLowerCase().includes(only)) : subs;
+    const focusIds = new Set(focus.map(s => s.id));
+
     // Newest file wins when a sub has several certificates on file.
     const bySub   = new Map();        // subId -> { coiFile, w9File }
     const orphans = [];               // files no name matched
@@ -214,6 +231,9 @@ export const handler = async (event) => {
     // the Notion row far more often. Reads are cached, so a rerun costs
     // nothing; opening files that were never read is the part that is opt-in.
     for (const o of orphans) {
+      // Same rule as above: a narrowed run reads only what it was asked about.
+      if (only && !o.file.name.toLowerCase().includes(only)) continue;
+
       let names = [];
       try {
         const opts = { cacheOnly: !rematch, force: force && rematch };
@@ -281,7 +301,7 @@ export const handler = async (event) => {
 
     // ── 4. Read each matched certificate, write the truth back to Notion ──
     const state = new Map();          // subId -> { coiState, coiExpiry, hasW9 }
-    for (const sub of subs) {
+    for (const sub of focus) {
       const docs = bySub.get(sub.id) || {};
       let expiry = null, confidence = 'none', parseError = null;
       let readVia = null, additionalInsured = null, insuredName = null, readNotes = null;
@@ -304,7 +324,7 @@ export const handler = async (event) => {
 
       const cs     = coiState(expiry, today, !!docs.coiFile);
       const hasW9  = !!docs.w9File;
-      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, readError: parseError });
+      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, confidence, readError: parseError });
 
       // Only write when something actually changed, to keep Notion's edit
       // history meaningful rather than a wall of no-op touches.
@@ -330,29 +350,27 @@ export const handler = async (event) => {
         }
       }
 
-      if (!only || sub.name.toLowerCase().includes(only)) {
-        report.subs.push({
-          name: sub.name,
-          coiState: cs,
-          coiExpiry: expiry,
-          confidence,
-          // Which layer produced the answer. 'text' is the local PDF pass,
-          // 'ai' is Claude, 'none' means nothing could read it.
-          readVia,
-          // Only the AI reader fills these in.
-          insuredName,
-          additionalInsured,
-          readNotes,
-          // The two questions worth answering when a state looks wrong: did a
-          // file get matched at all, and if so could its expiry be read?
-          coiFile: docs.coiFile ? docs.coiFile.name : null,
-          coiParseError: parseError,
-          w9File: docs.w9File ? docs.w9File.name : null,
-          hasW9,
-          email: sub.email || null,
-          updated: changed,
-        });
-      }
+      report.subs.push({
+        name: sub.name,
+        coiState: cs,
+        coiExpiry: expiry,
+        confidence,
+        // Which layer produced the answer. 'text' is the local PDF pass,
+        // 'ai' is Claude, 'none' means nothing could read it.
+        readVia,
+        // Only the AI reader fills these in.
+        insuredName,
+        additionalInsured,
+        readNotes,
+        // The two questions worth answering when a state looks wrong: did a
+        // file get matched at all, and if so could its expiry be read?
+        coiFile: docs.coiFile ? docs.coiFile.name : null,
+        coiParseError: parseError,
+        w9File: docs.w9File ? docs.w9File.name : null,
+        hasW9,
+        email: sub.email || null,
+        updated: changed,
+      });
     }
 
     if (only) {
@@ -372,6 +390,13 @@ export const handler = async (event) => {
     for (const [subId, job] of upcoming) {
       const sub = subs.find(s => s.id === subId);
       if (!sub) continue;
+
+      // A narrowed run did not read this sub's documents, so it knows nothing
+      // about them. Without this guard the default state below would read as
+      // 'missing' and a diagnostic run on one subcontractor could email
+      // seventy others to say we have no certificate for them.
+      if (!focusIds.has(subId)) continue;
+
       const st = state.get(subId) || { coiState: 'missing', coiExpiry: null, hasW9: false };
 
       // 'unreadable' means we hold their certificate and could not read the
@@ -408,6 +433,20 @@ export const handler = async (event) => {
           reason: 'the certificate is current but the reader could not find Six Arrows listed as additionally insured. Confirm, then ask their agent for a corrected certificate.',
           task: job.taskName, start: job.start,
         });
+      }
+
+      // Every sub with work coming up gets the full AI read, so a low
+      // confidence here is Claude saying it had to squint at the date. Calling
+      // a certificate expired on a date nobody is sure of, and emailing the
+      // sub about it, is the wrong way to be wrong. The W9 half of the ask is
+      // held with it so they get one message rather than two.
+      if (st.coiState === 'expired' && st.confidence === 'low') {
+        report.actions.push({
+          sub: sub.name, action: 'review',
+          reason: `read as expiring ${st.coiExpiry}, but the reader was not confident of that date. Confirm it before this goes out.`,
+          task: job.taskName, start: job.start,
+        });
+        continue;
       }
 
       const needsCoi = st.coiState !== 'ok';
