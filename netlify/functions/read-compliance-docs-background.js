@@ -37,6 +37,27 @@ import { anthropicConfigured, setReadBudget, readsUsed } from './lib/doc-ai.js';
 // dangerous, which is still worth a ceiling.
 const DEFAULT_LIMIT = 200;
 
+// Reading a certificate takes ten to twenty seconds. A hundred documents one
+// after another is half an hour, and this function has fifteen minutes, which
+// is why the first attempt got partway through and stopped. Six at a time
+// brings it under five.
+const CONCURRENCY = 6;
+
+// Stop with time to spare rather than being killed mid-document. Whatever is
+// left is picked up by the next run, since finished reads are cached.
+const SOFT_DEADLINE_MS = 12 * 60 * 1000;
+
+async function eachInParallel(items, workers, fn) {
+  const iter = items[Symbol.iterator]();
+  await Promise.all(Array.from({ length: workers }, async () => {
+    for (;;) {
+      const { value, done } = iter.next();
+      if (done) return;
+      await fn(value);
+    }
+  }));
+}
+
 // Every read already in the cache, in one query rather than one per file.
 // The two folders hold about a hundred documents between them, so a single
 // page covers it many times over. If that ever stops being true the reader
@@ -85,21 +106,19 @@ export const handler = async (event) => {
       ...w9Files.map(f  => ({ f, kind: 'w9'  })),
     ];
 
-    console.log(`read-compliance-docs: ${queue.length} documents, ${seen.size} already read, ceiling ${limit}`);
+    console.log(`read-compliance-docs: ${queue.length} documents, ${seen.size} already read, ceiling ${limit}, ${CONCURRENCY} at a time`);
 
-    for (const { f, kind: k } of queue) {
-      if (readsUsed() >= limit) { tally.skipped++; continue; }
-      if (!force && seen.has(`${f.id}|${f.modifiedTime || ''}`)) { tally.cached++; continue; }
+    await eachInParallel(queue, CONCURRENCY, async ({ f, kind: k }) => {
+      if (readsUsed() >= limit)                { tally.skipped++; return; }
+      if (Date.now() - started > SOFT_DEADLINE_MS) { tally.skipped++; return; }
+      if (!force && seen.has(`${f.id}|${f.modifiedTime || ''}`)) { tally.cached++; return; }
 
       // One document failing is not a reason to stop reading the rest. The
       // reader already swallows its own errors; this is for the unexpected.
       try {
-        const before = readsUsed();
         const r = k === 'coi'
           ? await readCoiExpiry(f.id, gKey, f, { ai: true, force })
           : await readW9Identity(f.id, gKey, f, { force });
-
-        if (readsUsed() === before) { tally.cached++; continue; }
 
         const ok = k === 'coi' ? !!r.expiry : !!(r.name || r.businessName);
         if (ok) tally.read++; else tally.failed++;
@@ -109,7 +128,7 @@ export const handler = async (event) => {
         tally.failed++;
         console.error(`  ERROR  ${k}  ${f.name}: ${err.message}`);
       }
-    }
+    });
 
     console.log(
       `read-compliance-docs: done in ${Math.round((Date.now() - started) / 1000)}s. ` +

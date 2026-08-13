@@ -22,8 +22,9 @@
 //                            and costs a little, so it is opt-in rather than
 //                            part of every run.
 //   GET /?aiLimit=6          how many documents this run may open with Claude.
-//                            0 means read nothing new and report from cache,
-//                            which is fast and free.
+//                            0 means read nothing new at all: no downloads, no
+//                            parsing, cached answers only. That is the fast
+//                            and free report.
 //   GET /?maxWrites=20       ceiling on Notion writebacks in one run
 //   GET /?budgetMs=18000     give up and return a partial report after this
 //
@@ -156,6 +157,13 @@ export const handler = async (event) => {
   const aiLimit = (q.aiLimit ?? '') === '' ? 6 : Math.max(0, Number(q.aiLimit) || 0);
   setReadBudget(aiLimit);
 
+  // aiLimit=0 means read nothing new, and that has to mean nothing at all.
+  // Blocking only the Claude call still left every uncached document being
+  // downloaded from Drive and parsed locally, which is where a supposedly free
+  // report spent twenty-two seconds. With this, a cache miss is simply
+  // reported as not read yet.
+  const cacheOnly = aiLimit === 0;
+
   // This function answers an HTTP request, so it has a fixed and fairly short
   // life. Everything below is written to give up gracefully and return what it
   // has rather than be killed mid-flight: a truncated report tells you what is
@@ -169,7 +177,7 @@ export const handler = async (event) => {
   // so the run finishes; the rest go on the next one, and the daily cron means
   // there always is a next one.
   const maxWrites = Number(q.maxWrites) > 0 ? Number(q.maxWrites) : 20;
-  let   writes    = 0, writesDeferred = 0;
+  let   writes    = 0, writesDeferred = 0, notRead = 0;
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -264,7 +272,7 @@ export const handler = async (event) => {
 
       let names = [];
       try {
-        const opts = { cacheOnly: !rematch, force: force && rematch, cache };
+        const opts = { cacheOnly: cacheOnly || !rematch, force: force && rematch, cache };
         if (o.kind === 'coi') {
           const r = await readCoiExpiry(o.file.id, gKey, o.file, { ...opts, ai: true });
           names = [r.insuredName];
@@ -341,8 +349,9 @@ export const handler = async (event) => {
         // Everyone else gets the cheap pass, which escalates on its own if it
         // cannot read the document.
         const r = await readCoiExpiry(docs.coiFile.id, gKey, docs.coiFile, {
-          ai: upcoming.has(sub.id), force, cache,
+          ai: upcoming.has(sub.id), force, cache, cacheOnly,
         });
+        if (r.method === 'none' && !r.expiry) notRead++;
         expiry = r.expiry; confidence = r.confidence; parseError = r.error || null;
         readVia = r.method || null;
         additionalInsured = r.additionalInsured || null;
@@ -415,7 +424,13 @@ export const handler = async (event) => {
       report.errors = report.errors.filter(e => JSON.stringify(e).toLowerCase().includes(only));
     }
 
-    report.documents.read = { withClaude: readsUsed(), budgetLeft: readsLeft() };
+    report.documents.read = {
+      withClaude: readsUsed(), budgetLeft: readsLeft(),
+      // The number that says whether the background reader still has work to
+      // do. Anything above zero means those certificates are sitting in Drive
+      // unread, which is why they show as unreadable here.
+      certificatesNotReadYet: notRead,
+    };
     report.notionWrites = { written: writes, deferredToNextRun: writesDeferred, ceiling: maxWrites };
     report.elapsedMs = Date.now() - startedAt;
 
