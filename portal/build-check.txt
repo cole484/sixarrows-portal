@@ -1,0 +1,5 @@
+deploy probe
+commit: d9c1b0b
+written: 2026-08-13
+If this file is reachable but /.netlify/functions/version is not, the site
+builds and publishes but the function bundling step is failing.
