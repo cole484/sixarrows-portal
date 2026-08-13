@@ -31,7 +31,7 @@ import {
   listFolder, readCoiExpiry, readW9Identity,
   COI_FOLDER_ID, W9_FOLDER_ID,
 } from './lib/compliance-docs.js';
-import { anthropicConfigured, setReadBudget, readsUsed } from './lib/doc-ai.js';
+import { anthropicConfigured, setReadBudget, readsUsed, errorLooksTransient } from './lib/doc-ai.js';
 
 // Generous but not unbounded. A runaway here would be expensive rather than
 // dangerous, which is still worth a ceiling.
@@ -62,13 +62,33 @@ async function eachInParallel(items, workers, fn) {
 // The two folders hold about a hundred documents between them, so a single
 // page covers it many times over. If that ever stops being true the reader
 // still works, it just re-reads a few documents it did not need to.
+// Which documents genuinely have an answer already.
+//
+// A row exists for every attempt, including the ones that failed for reasons
+// that had nothing to do with the document: out of credit, rate limited, API
+// down. Those must not count as read, or this function skips exactly the
+// files it exists to fix and reports them as already cached.
+//
+// The reader in compliance-docs.js already refuses to trust those rows. This
+// is the second place that decision has to be made, because this function
+// short-circuits before ever calling it.
 async function cachedKeys() {
   const rows = await supabase('document_reads', {
-    select: 'file_id,modified_time',
+    select: 'file_id,modified_time,error',
     order: 'created_at.desc',
     limit: 2000,
   });
-  return new Set(rows.map(r => `${r.file_id}|${r.modified_time || ''}`));
+
+  const done = new Set();
+  const decided = new Set();
+  // Newest first, so the first row seen for a file is the one that counts.
+  for (const r of rows) {
+    const k = `${r.file_id}|${r.modified_time || ''}`;
+    if (decided.has(k)) continue;
+    decided.add(k);
+    if (!errorLooksTransient(r.error)) done.add(k);
+  }
+  return done;
 }
 
 export const handler = async (event) => {
