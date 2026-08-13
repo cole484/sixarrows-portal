@@ -467,6 +467,11 @@ export const handler = async (event) => {
         // Only the AI reader fills these in.
         insuredName,
         additionalInsured,
+        // Six Arrows requires 1,000,000 each occurrence and 2,000,000
+        // aggregate. 'unknown' means the numbers could not be read, which is
+        // a different problem from a policy that is genuinely short.
+        limitsOk,
+        limits,
         readNotes,
         // The two questions worth answering when a state looks wrong: did a
         // file get matched at all, and if so could its expiry be read?
