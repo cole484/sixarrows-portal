@@ -32,6 +32,12 @@ export const READER_MODEL = process.env.COI_READER_MODEL || 'claude-opus-5';
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const MAX_BYTES   = 20 * 1024 * 1024;
 
+// What Six Arrows requires on a general liability policy. A certificate that
+// is current and names Six Arrows correctly is still not acceptable if the
+// limits are short, and that is invisible unless somebody reads the numbers.
+export const REQUIRED_EACH_OCCURRENCE = 1_000_000;
+export const REQUIRED_AGGREGATE       = 2_000_000;
+
 export function anthropicConfigured() {
   return !!process.env.ANTHROPIC_API_KEY;
 }
@@ -97,6 +103,9 @@ Answer with a JSON object and nothing else. No preamble, no code fence.
   "six_arrows_is_holder": true or false,
   "additional_insured": "yes" or "no" or "unclear",
   "additional_insured_evidence": string or null,
+  "general_liability_each_occurrence": number or null,
+  "general_liability_aggregate": number or null,
+  "products_completed_ops_aggregate": number or null,
   "general_liability_expiry": "YYYY-MM-DD" or null,
   "workers_comp_expiry": "YYYY-MM-DD" or null,
   "auto_liability_expiry": "YYYY-MM-DD" or null,
@@ -108,6 +117,8 @@ Answer with a JSON object and nothing else. No preamble, no code fence.
 }
 
 insured_name is the NAMED INSURED box, meaning the subcontractor. It is not the agency or broker at the top left, and it is not the holder.
+
+The limit fields come from the LIMITS column on the general liability row. Report them as plain numbers with no commas or dollar sign, so $1,000,000 is 1000000. EACH OCCURRENCE and GENERAL AGGREGATE are separate lines and must not be swapped. If a line is blank or unreadable, use null rather than guessing.
 
 controlling_expiry is the EARLIEST expiration among the general liability and workers compensation policies that are actually listed. Those are the two coverages that matter here. Ignore auto and umbrella when choosing it. If only one of the two is listed, use that one. If neither is listed, use null.
 
@@ -272,12 +283,30 @@ export async function readCertificate({ bytes, file = {} }) {
   if (!r.ok) return { ...blank, error: r.error, budgetExhausted: !!r.budgetExhausted, transient: !!r.transient };
 
   const d = r.data;
+  const money = v => {
+    const n = Number(String(v ?? '').replace(/[^0-9.]/g, ''));
+    // A limit under ten thousand is a misread of the deductible column, not a
+    // policy limit, and reporting it would fail a compliant subcontractor.
+    return Number.isFinite(n) && n >= 10_000 ? Math.round(n) : null;
+  };
+
   const policies = {
     generalLiability: cleanDate(d.general_liability_expiry),
     workersComp:      cleanDate(d.workers_comp_expiry),
     autoLiability:    cleanDate(d.auto_liability_expiry),
     umbrella:         cleanDate(d.umbrella_expiry),
+    eachOccurrence:   money(d.general_liability_each_occurrence),
+    aggregate:        money(d.general_liability_aggregate),
+    productsCompletedOps: money(d.products_completed_ops_aggregate),
   };
+
+  // Three states, not two. A limit that could not be read is not a limit that
+  // is too low, and only one of those is the subcontractor's problem.
+  const limitsOk =
+    policies.eachOccurrence == null || policies.aggregate == null
+      ? 'unknown'
+      : (policies.eachOccurrence >= REQUIRED_EACH_OCCURRENCE &&
+         policies.aggregate     >= REQUIRED_AGGREGATE) ? 'yes' : 'no';
 
   // Trust the model's controlling date only if it is one of the dates it also
   // reported. Recomputing it here from general liability and workers comp is
@@ -309,6 +338,7 @@ export async function readCertificate({ bytes, file = {} }) {
     sixArrowsIsHolder: !!d.six_arrows_is_holder,
     certificateHolder: cleanStr(d.certificate_holder),
     policies,
+    limitsOk,
     issueDate: cleanDate(d.issue_date),
     notes,
     error: expiry ? null : 'the reader opened the document but found no policy expiration on it.',

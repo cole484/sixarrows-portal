@@ -400,6 +400,7 @@ export const handler = async (event) => {
       const docs = bySub.get(sub.id) || {};
       let expiry = null, confidence = 'none', parseError = null;
       let readVia = null, additionalInsured = null, insuredName = null, readNotes = null;
+      let limitsOk = null, limits = null;
 
       if (docs.coiFile) {
         // Work coming up means the additional insured answer matters as much
@@ -415,12 +416,16 @@ export const handler = async (event) => {
         additionalInsured = r.additionalInsured || null;
         insuredName = r.insuredName || null;
         readNotes = r.notes || null;
+        limitsOk = r.limitsOk || null;
+        limits = r.policies
+          ? { eachOccurrence: r.policies.eachOccurrence ?? null, aggregate: r.policies.aggregate ?? null }
+          : null;
         if (parseError) report.errors.push({ sub: sub.name, file: docs.coiFile.name, error: parseError });
       }
 
       const cs     = coiState(expiry, today, !!docs.coiFile);
       const hasW9  = !!docs.w9File;
-      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, confidence, readError: parseError });
+      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, confidence, limitsOk, limits, readError: parseError });
 
       // Only write when something actually changed, to keep Notion's edit
       // history meaningful rather than a wall of no-op touches.
@@ -537,6 +542,18 @@ export const handler = async (event) => {
       // can see. It does not send an email yet: the approved wording covers
       // missing and expired certificates, and telling a sub their certificate
       // is wrong on the strength of one read deserves a person's eyes first.
+      // Current, correctly named, and still not acceptable: the limits are
+      // short of what Six Arrows requires. Reported rather than emailed, for
+      // the same reason as the additional insured case below.
+      if (st.coiState === 'ok' && st.limitsOk === 'no') {
+        const l = st.limits || {};
+        report.actions.push({
+          sub: sub.name, action: 'review',
+          reason: `the certificate is current but the limits are short of the 1,000,000 each occurrence and 2,000,000 aggregate Six Arrows requires. It reads ${l.eachOccurrence ?? 'unknown'} each occurrence and ${l.aggregate ?? 'unknown'} aggregate.`,
+          task: job.taskName, start: job.start,
+        });
+      }
+
       if (st.coiState === 'ok' && st.additionalInsured === 'no') {
         report.actions.push({
           sub: sub.name, action: 'review',
