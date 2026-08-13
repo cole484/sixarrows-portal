@@ -42,6 +42,7 @@ portal/
   roadmap.html              # vendor-appointment checklist (read by admin too)
   guide-admin.html          # in-app admin docs (sticky TOC, mobile FAB)
   guide-client.html         # in-app client docs
+  quote-request.html        # sub-facing quote form, opened by token link
   admin.html                # the admin SPA — every other page hangs off this
 netlify/functions/
   client-auth.js            # email/password login → session cookie
@@ -79,6 +80,13 @@ netlify/functions/
   visual-selections.js      # plans + pins CRUD, signed storage uploads
   plan-convert-background.js # PDF to PNG on upload (mupdf wasm, 15 min budget)
   debug-sheet.js            # one-off sheet diagnostic
+  notion-quote-request.js   # builds a Quote Request for one task: scope,
+                            #   completion standard, window, how to price it.
+                            #   Asks for a number, states none. No signature.
+  submit-quote.js           # records a sub's price, append-only. Writes
+                            #   Estimated Cost + Cost Source only when the
+                            #   field is empty, so a later quote never
+                            #   overwrites an earlier one.
   scheduling-gate.js        # Tier 1 of the sub scheduling agent. Looks ahead at
                             #   tasks entering the window, checks the readiness
                             #   gate, notifies. Cron: weekdays 12 UTC. Never
