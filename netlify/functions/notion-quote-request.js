@@ -141,34 +141,63 @@ export const handler = async (event) => {
     if (trade) {
       templateTitle = templateTitleForTrade(trade);
       if (templateTitle) {
+        // The title property on Trade Templates is called "Trade", not "Name".
+        // Notion rejects the whole query with a 400 for an unknown property,
+        // so this is not a silent miss, it is the endpoint failing outright.
         const found = await notionQuery(TRADE_TEMPLATES_DB_ID, token, {
-          filter: { property: 'Name', title: { equals: templateTitle } },
+          filter: { property: 'Trade', title: { equals: templateTitle } },
+          page_size: 1,
         });
         template = found.results?.[0] || null;
       }
     }
 
     // Task values win over the template. The template is the default for the
-    // trade; the task is what is true about this instance.
+    // trade; the task is what is true about this instance. Field names match
+    // notion-work-order.js exactly, because those are the ones proven against
+    // the real databases: the template's scope column is "Scope", not "Scope
+    // of Work", and its standard is "Completion Standard".
     const scope = prop(task, 'Scope of Work')
-      || (template ? prop(template, 'Scope of Work') : null);
+      || (template ? prop(template, 'Scope') : null);
     const standard = prop(task, 'Definition of done')
-      || (template ? (prop(template, 'Completion Standard') || prop(template, 'Definition of done')) : null);
+      || (template ? prop(template, 'Completion Standard') : null);
 
     // ── Schedule ──────────────────────────────────────────────────────────
     const dateVal  = prop(task, 'Start');
     const start    = dateVal?.start || null;
     const end      = dateVal?.end || null;
-    const duration = prop(task, 'Duration (days)') ?? prop(task, 'Duration') ?? null;
-    const leadTime = prop(task, 'Lead Time (days)') ?? prop(task, 'Lead Time') ?? null;
+    const duration = prop(task, 'Duration (days)') ?? null;
+    const leadTime = prop(task, 'Lead time (days)')
+      ?? (template ? prop(template, 'Default Lead Time (days)') : null);
 
     // ── Project ───────────────────────────────────────────────────────────
+    // Read the linked Project page directly and fall back to the rollups on
+    // the task, same as the work order. Rollups are brittle: Notion silently
+    // returns empty for a relation whose target database the integration
+    // cannot see, which looks identical to a field nobody filled in.
+    const projectRel = prop(task, 'Project') || [];
+    let projectPage = null;
+    if (projectRel.length) {
+      try { projectPage = await notionGet(`/pages/${projectRel[0]}`, token); }
+      catch (err) { console.error('notion-quote-request: project not readable:', err.message); }
+    }
+    const pick = (...vals) => vals.find(v => v !== null && v !== undefined && v !== '') ?? null;
     const project = {
-      name:    prop(task, 'Project Name') || prop(task, 'Project') || null,
-      address: prop(task, 'Job Site Location') || prop(task, 'Address') || null,
-      pmName:  prop(task, 'PM Name')  || null,
-      pmPhone: prop(task, 'PM Phone') || null,
-      pmEmail: prop(task, 'PM Email') || null,
+      name: pick(
+        projectPage && (prop(projectPage, 'Name') || prop(projectPage, 'Project Name')),
+        prop(task, 'Project Name')),
+      address: pick(
+        projectPage && (prop(projectPage, 'Address') || prop(projectPage, 'Project Address') || prop(projectPage, 'Site Address')),
+        prop(task, 'Project Address (rollup)'), prop(task, 'Project Address'), prop(task, 'Job Site Location')),
+      pmName: pick(
+        projectPage && (prop(projectPage, 'Project Manager') || prop(projectPage, 'PM')),
+        prop(task, 'Project Manager (rollup)'), prop(task, 'Project Manager')),
+      pmEmail: pick(
+        projectPage && (prop(projectPage, 'PM Email') || prop(projectPage, 'Email')),
+        prop(task, 'PM Email (rollup)'), prop(task, 'PM Email')),
+      pmPhone: pick(
+        projectPage && (prop(projectPage, 'PM Phone') || prop(projectPage, 'Phone')),
+        prop(task, 'PM Phone (rollup)'), prop(task, 'PM Phone')),
     };
 
     // ── Who we are asking, if anyone is named yet ─────────────────────────
@@ -211,7 +240,7 @@ export const handler = async (event) => {
       respondBy: quoteDueBy(start, leadTime),
       project,
       sub,
-      scopeFrom: prop(task, 'Scope of Work') ? 'task' : (template ? 'trade template' : null),
+      scopeFrom: prop(task, 'Scope of Work') ? 'task' : (scope ? 'trade template' : null),
     };
 
     // ── Warnings, for the person about to send this ───────────────────────
