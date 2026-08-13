@@ -266,15 +266,25 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
   const canAi  = anthropicConfigured();
   const cacheK = { ...file, id: fileId };
 
+  let cached = null;
   if (!opts.force) {
-    const hit = toCertificate(await lookupRead(fileId, file, opts));
+    cached = toCertificate(await lookupRead(fileId, file, opts));
     // A cached failure is only worth reusing when the reader that produced it
     // is the best one available. If the text pass gave up yesterday and Claude
     // is configured today, that document deserves another look.
-    if (hit && (hit.expiry || hit.method === 'ai')) return hit;
+    if (cached && (cached.expiry || cached.method === 'ai')) return cached;
   }
 
   if (opts.cacheOnly) {
+    // "Never opened" and "opened and could not be read" are different
+    // problems with different fixes, and reporting both as never opened sends
+    // somebody to re-run a reader that has already tried.
+    if (cached) {
+      return {
+        ...cached,
+        error: cached.error || `read on ${String(cached.cached).slice(0, 10)} but no expiry came out of it.`,
+      };
+    }
     return {
       expiry: null, confidence: 'none', method: 'none', insuredName: null,
       error: 'this document has not been read yet.',

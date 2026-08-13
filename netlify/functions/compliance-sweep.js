@@ -25,6 +25,10 @@
 //                            0 means read nothing new at all: no downloads, no
 //                            parsing, cached answers only. That is the fast
 //                            and free report.
+//   GET /?diag=1             per file: never opened, opened and failed, or
+//                            read cleanly. Opens nothing. This is the call to
+//                            make when certificates report as unreadable and
+//                            it is not obvious why.
 //   GET /?maxWrites=20       ceiling on Notion writebacks in one run
 //   GET /?budgetMs=18000     give up and return a partial report after this
 //
@@ -49,7 +53,7 @@ import {
   COI_FOLDER_ID, W9_FOLDER_ID,
 } from './lib/compliance-docs.js';
 import { anthropicConfigured, setReadBudget, readsUsed, readsLeft } from './lib/doc-ai.js';
-import { loadCacheIndex } from './lib/doc-cache.js';
+import { loadCacheIndex, cacheKey } from './lib/doc-cache.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -217,6 +221,37 @@ export const handler = async (event) => {
       loadCacheIndex(),
     ]);
     report.documents.cachedReads = cache ? cache.size : 'unavailable';
+
+    // ── 2a. Diagnostic: what does the reader actually know about each file? ─
+    // Every certificate reported as unreadable is one of three different
+    // situations, and from a report alone they look identical: never opened,
+    // opened and failed, or opened fine but not connected to a sub. This says
+    // which, per file, without opening anything.
+    if (q.diag === '1') {
+      const diag = {
+        anthropicKeySet: anthropicConfigured(),
+        driveFiles: coiFiles.length + w9Files.length,
+        cacheRows: cache ? cache.size : 'the cache could not be read at all, which is itself the problem',
+        neverRead: [], readButFailed: [], readOk: 0, byMethod: {},
+      };
+
+      for (const [kind, files] of [['coi', coiFiles], ['w9', w9Files]]) {
+        for (const f of files) {
+          const row = cache ? cache.get(cacheKey(f.id, f.modifiedTime)) : null;
+          if (!row) {
+            diag.neverRead.push({ kind, file: f.name, mimeType: f.mimeType, modified: f.modifiedTime });
+            continue;
+          }
+          const m = row.method || 'unknown';
+          diag.byMethod[m] = (diag.byMethod[m] || 0) + 1;
+          const ok = kind === 'coi' ? !!row.expiry : !!(row.insured_name || row.business_name);
+          if (ok) diag.readOk++;
+          else diag.readButFailed.push({ kind, file: f.name, method: m, readAt: row.created_at, error: row.error });
+        }
+      }
+      diag.summary = `${diag.driveFiles} files in Drive, ${diag.readOk} read cleanly, ${diag.readButFailed.length} opened but unreadable, ${diag.neverRead.length} never opened.`;
+      return { statusCode: 200, headers: corsH, body: JSON.stringify(diag, null, 2) };
+    }
 
     report.documents.coiFiles = coiFiles.length;
     report.documents.w9Files  = w9Files.length;
