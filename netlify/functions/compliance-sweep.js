@@ -52,7 +52,7 @@ import {
   listFolder, matchSub, readCoiExpiry, readW9Identity, coiState,
   COI_FOLDER_ID, W9_FOLDER_ID,
 } from './lib/compliance-docs.js';
-import { anthropicConfigured, setReadBudget, readsUsed, readsLeft } from './lib/doc-ai.js';
+import { anthropicConfigured, setReadBudget, readsUsed, readsLeft, errorLooksTransient } from './lib/doc-ai.js';
 import { loadCacheIndex, cacheKey, probeCache } from './lib/doc-cache.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
@@ -247,7 +247,7 @@ export const handler = async (event) => {
         // The raw database message is the answer, so it is passed through
         // untouched rather than summarized.
         cacheProbe: await probeCache(),
-        neverRead: [], readButFailed: [], readOk: 0, byMethod: {},
+        neverRead: [], willRetry: [], readButFailed: [], readOk: 0, byMethod: {},
       };
 
       for (const [kind, files] of [['coi', coiFiles], ['w9', w9Files]]) {
@@ -261,10 +261,18 @@ export const handler = async (event) => {
           diag.byMethod[m] = (diag.byMethod[m] || 0) + 1;
           const ok = kind === 'coi' ? !!row.expiry : !!(row.insured_name || row.business_name);
           if (ok) diag.readOk++;
+          // A failure that was never about the document belongs in its own
+          // list. Reported alongside genuinely unreadable files it looks like
+          // a hundred broken certificates rather than one broken account.
+          else if (errorLooksTransient(row.error)) diag.willRetry.push({ kind, file: f.name, readAt: row.created_at, error: row.error });
           else diag.readButFailed.push({ kind, file: f.name, method: m, readAt: row.created_at, error: row.error });
         }
       }
-      diag.summary = `${diag.driveFiles} files in Drive, ${diag.readOk} read cleanly, ${diag.readButFailed.length} opened but unreadable, ${diag.neverRead.length} never opened.`;
+      diag.summary =
+        `${diag.driveFiles} files in Drive, ${diag.readOk} read cleanly, ` +
+        `${diag.readButFailed.length} opened but genuinely unreadable, ` +
+        `${diag.willRetry.length} failed for a reason that was not about the document and will be read again, ` +
+        `${diag.neverRead.length} never opened.`;
       return { statusCode: 200, headers: corsH, body: JSON.stringify(diag, null, 2) };
     }
 

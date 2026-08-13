@@ -139,6 +139,33 @@ tin_last4 is the last four digits only. Never return a full SSN or EIN.
 
 Do not use em dashes in notes.`;
 
+// Some failures are facts about the document: it is a HEIC, it has no dates on
+// it, it is a photograph of a thumb. Those are worth remembering, because the
+// answer will not change until the file does.
+//
+// Others are facts about the moment: the account is out of credit, the API is
+// overloaded, the key is wrong, the network dropped. Remembering one of those
+// as if it were a property of the document is how a perfectly readable
+// certificate becomes permanently unreadable, and nobody would ever know to
+// look again once the real problem was fixed.
+export function isTransientFailure(status, body = '') {
+  if (status >= 500) return true;                       // overloaded, upstream fault
+  if (status === 429) return true;                      // rate limited
+  if (status === 401 || status === 403) return true;    // key wrong or revoked
+  // Billing comes back as a 400, which otherwise means "this request is bad".
+  if (status === 400 && /credit balance|billing|quota|insufficient/i.test(body)) return true;
+  return false;
+}
+
+// The same question asked of a cached row rather than a live response. Reads
+// recorded before this distinction existed still carry the reason in their
+// error text, so matching on it lets those rows heal themselves rather than
+// needing to be found and cleared by hand.
+const TRANSIENT_TEXT = /credit balance|billing|quota|insufficient|rate.?limit|overloaded|could not reach|Claude API (5\d\d|429|401|403)/i;
+export function errorLooksTransient(text) {
+  return !!text && TRANSIENT_TEXT.test(String(text));
+}
+
 // Pulls the object out of a response that may be wrapped in prose or a fence.
 // Claude was told to return bare JSON and usually does, but a parse failure
 // here would throw away a read that cost real money, so be forgiving.
@@ -206,11 +233,12 @@ async function ask(prompt, bytes, mediaType, kind) {
       }),
     });
   } catch (err) {
-    return { ok: false, error: `could not reach the Claude API: ${err.message}` };
+    return { ok: false, transient: true, error: `could not reach the Claude API: ${err.message}` };
   }
 
   if (!res.ok) {
-    return { ok: false, error: `Claude API ${res.status}: ${(await res.text()).slice(0, 300)}` };
+    const body = (await res.text()).slice(0, 300);
+    return { ok: false, transient: isTransientFailure(res.status, body), error: `Claude API ${res.status}: ${body}` };
   }
 
   const payload = await res.json();
@@ -241,7 +269,7 @@ export async function readCertificate({ bytes, file = {} }) {
   if (!kind) return { ...blank, error: why };
 
   const r = await ask(COI_PROMPT, bytes, mediaType, kind);
-  if (!r.ok) return { ...blank, error: r.error, budgetExhausted: !!r.budgetExhausted };
+  if (!r.ok) return { ...blank, error: r.error, budgetExhausted: !!r.budgetExhausted, transient: !!r.transient };
 
   const d = r.data;
   const policies = {
@@ -300,7 +328,7 @@ export async function readW9({ bytes, file = {} }) {
   if (!kind) return { ...blank, error: why };
 
   const r = await ask(W9_PROMPT, bytes, mediaType, kind);
-  if (!r.ok) return { ...blank, error: r.error, budgetExhausted: !!r.budgetExhausted };
+  if (!r.ok) return { ...blank, error: r.error, budgetExhausted: !!r.budgetExhausted, transient: !!r.transient };
 
   const d = r.data;
   return {

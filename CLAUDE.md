@@ -258,8 +258,15 @@ Rules that matter:
 - **The controlling expiry is the earliest of general liability and workers
   comp**, not the latest date on the page. Auto and umbrella are ignored.
 - **`?aiLimit=N`** caps how many documents one run may open with Claude
-  (default 6). Budget exhaustion is never cached: it is a fact about the run,
-  not the document.
+  (default 6). `0` means read nothing new at all: no downloads, no parsing,
+  cached answers only.
+- **A failure that was not about the document is never cached.** Out of
+  credit, rate limited, overloaded, bad key, dropped connection, budget spent:
+  all facts about the moment, not the file. Caching one turns a readable
+  certificate permanently unreadable, and nobody would know to look again
+  after the real problem was fixed. `errorLooksTransient()` also matches the
+  reason recorded on existing rows, so any already written that way heal
+  themselves rather than needing to be found and cleared by hand.
 - **`?rematch=1`** opens files that no filename matched and matches them on
   the name printed inside instead. That is what fixes the unmatched pile.
 - **`?sub=` narrows the work, not the printout.** No document outside the

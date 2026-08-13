@@ -19,7 +19,7 @@
 // PDF text pass, then Claude. Most certificates never reach Claude. The ones
 // that do are the scans and phone photos that used to land on somebody's desk.
 
-import { readCertificate, readW9, anthropicConfigured } from './doc-ai.js';
+import { readCertificate, readW9, anthropicConfigured, errorLooksTransient } from './doc-ai.js';
 import { getRead, putRead, toCertificate, certificateRow, w9Row, cacheKey } from './doc-cache.js';
 
 const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files';
@@ -272,13 +272,27 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
     // A cached failure is only worth reusing when the reader that produced it
     // is the best one available. If the text pass gave up yesterday and Claude
     // is configured today, that document deserves another look.
-    if (cached && (cached.expiry || cached.method === 'ai')) return cached;
+    //
+    // And a failure that was never about the document at all, an account out
+    // of credit or an overloaded API, is never worth reusing. Sixty-four
+    // certificates were once recorded as unreadable because the account had
+    // run out of credit, which would have made every one of them permanently
+    // unreadable the moment the billing was fixed. Matching on the recorded
+    // reason lets those rows heal themselves.
+    const reusable = cached && (cached.expiry || cached.method === 'ai') && !errorLooksTransient(cached.error);
+    if (reusable) return cached;
   }
 
   if (opts.cacheOnly) {
     // "Never opened" and "opened and could not be read" are different
     // problems with different fixes, and reporting both as never opened sends
     // somebody to re-run a reader that has already tried.
+    if (cached && errorLooksTransient(cached.error)) {
+      return {
+        expiry: null, confidence: 'none', method: 'none', insuredName: null,
+        error: `the last attempt failed for a reason that was not about this document (${cached.error}), so it needs reading again.`,
+      };
+    }
     if (cached) {
       return {
         ...cached,
@@ -303,6 +317,7 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
 
   let best = null;
   let exhausted = false;
+  let transient = false;
   for (const step of order) {
     if (step === 'text' && !isPdf) continue;
     if (step === 'ai'   && !canAi) continue;
@@ -317,11 +332,20 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
     }
 
     if (result.budgetExhausted) { exhausted = true; continue; }
+    if (result.transient)        { transient = true; }
 
     // Keep the first attempt's reason if the second one also fails, since the
     // first is usually the more informative of the two.
     if (!best) best = result;
     if (result.expiry) { best = result; break; }
+  }
+
+  // One layer failing for a reason that was not about the document taints the
+  // whole attempt, even when another layer also failed on its own merits. The
+  // text pass giving up on a scan says nothing once Claude never got to look
+  // at it, so nothing here should be written down as settled.
+  if (transient && !best?.expiry) {
+    best = { ...(best || { expiry: null, confidence: 'none', method: 'none' }), transient: true };
   }
 
   // The AI reader never got its turn, so nothing here has established that the
@@ -343,10 +367,11 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
     };
   }
 
-  // Running out of read budget is a fact about this run, not about the
-  // document. Caching it would teach the system that a perfectly readable
-  // certificate is unreadable, and it would never look again.
-  if (!best.budgetExhausted) await putRead(certificateRow(cacheK, best));
+  // Running out of read budget, or credit, or the API being down, are facts
+  // about this run and not about the document. Caching one would teach the
+  // system that a perfectly readable certificate is unreadable, and it would
+  // never look again.
+  if (!best.budgetExhausted && !best.transient) await putRead(certificateRow(cacheK, best));
   return best;
 }
 
@@ -359,7 +384,9 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
 export async function readW9Identity(fileId, apiKey, file = {}, opts = {}) {
   if (!opts.force) {
     const row = await lookupRead(fileId, file, opts);
-    if (row) return { name: row.insured_name || null, businessName: row.business_name || null, cached: row.created_at, error: row.error || null };
+    if (row && !errorLooksTransient(row.error)) {
+      return { name: row.insured_name || null, businessName: row.business_name || null, cached: row.created_at, error: row.error || null };
+    }
   }
   if (opts.cacheOnly) {
     return { name: null, businessName: null, error: 'this document has not been read yet.' };
@@ -376,7 +403,7 @@ export async function readW9Identity(fileId, apiKey, file = {}, opts = {}) {
   }
 
   const result = await readW9({ bytes, file });
-  if (!result.budgetExhausted) await putRead(w9Row({ ...file, id: fileId }, result));
+  if (!result.budgetExhausted && !result.transient) await putRead(w9Row({ ...file, id: fileId }, result));
   return { name: result.name, businessName: result.businessName, error: result.error || null };
 }
 
