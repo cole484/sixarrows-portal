@@ -61,3 +61,21 @@ create policy document_reads_insert on document_reads
 drop policy if exists document_reads_select on document_reads;
 create policy document_reads_select on document_reads
   for select to anon, authenticated using (true);
+
+-- PostgREST answers the REST API from a cached picture of the schema. It
+-- usually notices a new table on its own, but when it does not, every request
+-- comes back PGRST205 "Could not find the table in the schema cache" and the
+-- table looks missing even though it is right there. This forces the reload.
+-- Harmless to run when nothing changed.
+notify pgrst, 'reload schema';
+
+-- Says plainly whether this worked, so nobody has to go and poke an endpoint
+-- to find out. Expect one row reading: document_reads  ready
+select
+  'document_reads' as table_name,
+  case when exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'document_reads'
+  ) then 'ready' else 'MISSING, the create above did not run' end as status,
+  (select count(*) from pg_policies
+    where schemaname = 'public' and tablename = 'document_reads') as policies;
