@@ -21,6 +21,7 @@
 // nothing changes a task until someone passes apply=1.
 
 import { templateTitleForTrade, TRADES_WITHOUT_TEMPLATE } from './lib/trade-aliases.js';
+import { certificatesBySub, verdictForStart, limitsShortfall } from './lib/sub-compliance.js';
 import { sendSlack, slackConfigured } from './lib/slack.js';
 import { sendGmail, gmailConfigured } from './lib/gmail.js';
 import { FROM_EMAIL } from './lib/compliance-email.js';
@@ -143,7 +144,7 @@ function daysUntil(iso, from = todayISO()) {
 //             mistake. Most of these route the task to a quote request rather
 //             than a signable work order.
 export function evaluateTask(task, ctx) {
-  const { templatesByTitle, subsById } = ctx;
+  const { templatesByTitle, subsById, certs } = ctx;
 
   const name     = prop(task, 'Task') || '(untitled)';
   const trade    = prop(task, 'Trade');
@@ -213,22 +214,52 @@ export function evaluateTask(task, ctx) {
     });
   }
 
-  // Subcontractor readiness. Insurance is a condition of sending work, and
-  // the data to check it is already in the Subcontractors DB.
-  if (sub) {
+  // Subcontractor readiness.
+  //
+  // This is the point Six Arrows decided compliance gets enforced: not by
+  // chasing a back catalogue of lapsed certificates, but by refusing to send
+  // work to a sub whose paperwork is not right, from here on. So insurance
+  // problems are blockers rather than flags, and they are judged against the
+  // task's start date rather than today.
+  //
+  // The certificate itself is the source, read from the document cache, not
+  // the Notion checkbox. The checkbox says whether a file exists; only the
+  // document says whether Six Arrows is actually covered by it.
+  if (sub && !isReminder) {
     const subName  = prop(sub, 'Subcontractor Name') || '(unnamed sub)';
     const subState = prop(sub, 'Status');
-    const insured  = prop(sub, 'Insurance on File');
-    const coi      = prop(sub, 'COI Expiration');
-    const coiEnd   = coi?.start || null;
 
     if (subState === 'Do Not Use' || subState === 'Inactive') {
       flags.push({ kind: 'sub_unavailable', detail: `${subName} is marked "${subState}" in the Subcontractors DB.` });
     }
-    if (!insured) {
-      flags.push({ kind: 'coi_missing', detail: `${subName} has no Insurance on File.` });
-    } else if (coiEnd && start && coiEnd < start.slice(0, 10)) {
-      flags.push({ kind: 'coi_expired', detail: `${subName}'s COI expires ${coiEnd}, before this task starts ${start.slice(0, 10)}.` });
+
+    const cert = certs ? certs.get(sub.id) : null;
+    const { verdict, reason } = verdictForStart(cert, start);
+
+    if (verdict === 'missing' || verdict === 'expired') {
+      blockers.push(`${subName}: ${reason}`);
+    } else if (verdict === 'review') {
+      // Real, and the fix takes days: the sub has to ask their agent to
+      // reissue. Blocking is the point, because the alternative is finding out
+      // after they are on site.
+      blockers.push(`${subName}: ${reason}`);
+    } else if (verdict === 'unread') {
+      // Not the subcontractor's problem and not a reason to stop the job. It
+      // means the reader has not caught up, which resolves on its own.
+      flags.push({ kind: 'coi_unread', detail: `${subName}: ${reason}.` });
+    }
+
+    // Short limits never block. Per Cole they are reported so he can have the
+    // conversation about raising coverage, and work goes ahead meanwhile.
+    const short = limitsShortfall(cert);
+    if (short) {
+      flags.push({
+        kind: 'coi_limits_short',
+        detail: `${subName} ${short.detail}.`,
+        sub: subName,
+        subId: sub.id,
+        limits: short,
+      });
     }
   }
 
@@ -259,11 +290,40 @@ export function evaluateTask(task, ctx) {
 }
 
 // ── Digest ────────────────────────────────────────────────────────────────
+// Subs whose general liability limits are below what Six Arrows requires,
+// collapsed to one entry each however many tasks they appear on. These do not
+// block anything. They are a list of conversations for Cole to have, and they
+// go at the top because buried in a task's flags is where they would be missed.
+function limitsShortList(report) {
+  const seen = new Map();
+  for (const p of report.projects) {
+    for (const t of p.tasks || []) {
+      for (const f of t.flags || []) {
+        if (f.kind !== 'coi_limits_short') continue;
+        if (!seen.has(f.sub)) seen.set(f.sub, { sub: f.sub, detail: f.detail, tasks: [] });
+        seen.get(f.sub).tasks.push(`${t.name} (${p.project}, ${t.daysOut}d)`);
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
 export function renderText(report) {
   const lines = [];
   lines.push(`Scheduling gate, ${report.generatedAt.slice(0, 10)}`);
   lines.push(`Looking ${report.lookaheadDays} days ahead.`);
   lines.push('');
+
+  const short = limitsShortList(report);
+  if (short.length) {
+    lines.push('  COVERAGE BELOW REQUIREMENT');
+    lines.push('  Not blocking anything. Worth a conversation about raising it.');
+    for (const x of short) {
+      lines.push(`    ${x.detail}`);
+      lines.push(`      on: ${x.tasks.join(', ')}`);
+    }
+    lines.push('');
+  }
 
   for (const p of report.projects) {
     lines.push(`${p.project}: ${p.inWindow} tasks in window, ${p.readyCount} ready, ${p.blockedCount} blocked`);
@@ -283,7 +343,10 @@ export function renderText(report) {
       for (const t of blocked) {
         lines.push(`  ${String(t.daysOut).padStart(4)}d  ${t.name}${t.trade ? ` (${t.trade})` : ''}`);
         for (const b of t.blockers)     lines.push(`          missing: ${b}`);
-        for (const f of t.flags)        lines.push(`          flag: ${f.detail}`);
+        for (const f of t.flags) {
+          if (f.kind === 'coi_limits_short') continue;   // already listed at the top
+          lines.push(`          flag: ${f.detail}`);
+        }
       }
       lines.push('');
     }
@@ -292,7 +355,10 @@ export function renderText(report) {
       lines.push('  READY TO SEND');
       for (const t of ready) {
         lines.push(`  ${String(t.daysOut).padStart(4)}d  ${t.name}${t.trade ? ` (${t.trade})` : ''}${t.isReminder ? '  [reminder, no work order]' : `  sub: ${t.subName || '?'}`}`);
-        for (const f of t.flags)        lines.push(`          flag: ${f.detail}`);
+        for (const f of t.flags) {
+          if (f.kind === 'coi_limits_short') continue;   // already listed at the top
+          lines.push(`          flag: ${f.detail}`);
+        }
       }
       lines.push('');
     }
@@ -432,7 +498,15 @@ export const handler = async (event) => {
           catch (err) { console.error(`scheduling-gate: could not read sub ${id}:`, err.message); }
         }
 
-        const ctx = { templatesByTitle, subsById };
+        // What each sub's certificate actually says. Read from the document
+        // cache, so this costs one Drive listing and one query no matter how
+        // many subs are involved, and never opens a document.
+        const subList = Object.entries(subsById)
+          .map(([id, page]) => ({ id, name: prop(page, 'Subcontractor Name') }))
+          .filter(x => x.name);
+        const certs = await certificatesBySub(subList, process.env.GOOGLE_API_KEY);
+
+        const ctx = { templatesByTitle, subsById, certs };
         entry.tasks    = open.map(p => evaluateTask(p, ctx));
         entry.inWindow = entry.tasks.length;
         entry.readyCount   = entry.tasks.filter(t => t.ready).length;

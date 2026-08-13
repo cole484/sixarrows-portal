@@ -98,7 +98,7 @@ Report only what the document shows. Never infer a date, a name or a coverage th
 
 Two things are easy to confuse and must be kept apart:
 - The CERTIFICATE HOLDER is the party the certificate was issued to. Six Arrows is almost always the holder. That alone means nothing about coverage.
-- ADDITIONAL INSURED means Six Arrows is covered under the subcontractor's policy. On an ACORD form this shows as a Y in the ADDL INSD column, or as wording in the Description of Operations naming Six Arrows as additional insured. Say yes only if you can actually see one of those.
+- ADDITIONAL INSURED means Six Arrows is covered under the subcontractor's policy. Six Arrows only requires this on the GENERAL LIABILITY policy, so judge it on that row alone. Ignore the ADDL INSD column on the auto, umbrella and workers compensation rows entirely. On an ACORD form it shows as a Y or X in the ADDL INSD column of the general liability row, or as wording in the Description of Operations naming Six Arrows as an additional insured. Say yes only if you can actually see one of those.
 
 Answer with a JSON object and nothing else. No preamble, no code fence.
 
@@ -107,7 +107,7 @@ Answer with a JSON object and nothing else. No preamble, no code fence.
   "insured_address": string or null,
   "certificate_holder": string or null,
   "six_arrows_is_holder": true or false,
-  "additional_insured": "yes" or "no" or "unclear",
+  "additional_insured": "yes" or "no" or "unclear",   // general liability only
   "additional_insured_evidence": string or null,
   "general_liability_each_occurrence": number or null,
   "general_liability_aggregate": number or null,
