@@ -42,11 +42,42 @@ export async function loadCacheIndex() {
       const k = cacheKey(r.file_id, r.modified_time);
       if (!idx.has(k)) idx.set(k, r);
     }
-    return idx;
+    return { index: idx, error: null };
   } catch (err) {
+    // Returned rather than logged. A log goes somewhere the person running
+    // this cannot see, and a cache that silently fails looks exactly like a
+    // reader that never ran: documents get opened, the results go nowhere,
+    // and the next run starts over.
     console.error('doc-cache index failed:', err.message);
-    return null;
+    return { index: null, error: err.message };
   }
+}
+
+// Can the cache be read and written at all? Answers the question the sweep
+// cannot: whether the table exists and its policies allow this key to use it.
+//
+// The write test inserts one row with a file id that matches no real file, so
+// it can never be mistaken for a document read. The table is append-only by
+// design, so a probe row is a permanent but harmless record that somebody
+// checked on this date.
+export async function probeCache() {
+  const out = { canRead: false, canWrite: false, readError: null, writeError: null };
+  try {
+    await supabase('document_reads', { select: 'file_id', limit: 1 });
+    out.canRead = true;
+  } catch (err) {
+    out.readError = err.message;
+  }
+  try {
+    await supabase('document_reads', {
+      method: 'POST',
+      body: { file_id: '__probe__', modified_time: '__probe__', kind: 'probe', method: 'probe', notes: 'connectivity probe from diag=1' },
+    });
+    out.canWrite = true;
+  } catch (err) {
+    out.writeError = err.message;
+  }
+  return out;
 }
 
 export async function getRead(fileId, modifiedTime) {

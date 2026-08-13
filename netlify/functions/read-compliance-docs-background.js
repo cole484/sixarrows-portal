@@ -63,17 +63,12 @@ async function eachInParallel(items, workers, fn) {
 // page covers it many times over. If that ever stops being true the reader
 // still works, it just re-reads a few documents it did not need to.
 async function cachedKeys() {
-  try {
-    const rows = await supabase('document_reads', {
-      select: 'file_id,modified_time',
-      order: 'created_at.desc',
-      limit: 2000,
-    });
-    return new Set(rows.map(r => `${r.file_id}|${r.modified_time || ''}`));
-  } catch (err) {
-    console.error(`read-compliance-docs: could not read the cache index (${err.message}), falling back to per-file lookups`);
-    return new Set();
-  }
+  const rows = await supabase('document_reads', {
+    select: 'file_id,modified_time',
+    order: 'created_at.desc',
+    limit: 2000,
+  });
+  return new Set(rows.map(r => `${r.file_id}|${r.modified_time || ''}`));
 }
 
 export const handler = async (event) => {
@@ -95,10 +90,25 @@ export const handler = async (event) => {
   const tally   = { read: 0, cached: 0, failed: 0, skipped: 0 };
 
   try {
-    const [coiFiles, w9Files, seen] = await Promise.all([
+    // If the cache cannot be read, it cannot be written either, and every
+    // document opened here would be paid for and then thrown away. Stop
+    // before spending anything. This function's whole job is filling the
+    // cache, so a cache that is not there is not a degraded mode, it is the
+    // job being impossible.
+    let seen;
+    try {
+      seen = force ? new Set() : await cachedKeys();
+    } catch (err) {
+      console.error(
+        `read-compliance-docs: STOPPING without reading anything. The document_reads table could not be read: ${err.message}. ` +
+        `Reading documents now would cost money and save nothing. Check that supabase/add-document-reads.sql has been run.`
+      );
+      return;
+    }
+
+    const [coiFiles, w9Files] = await Promise.all([
       kind === 'w9'  ? [] : listFolder(COI_FOLDER_ID, gKey),
       kind === 'coi' ? [] : listFolder(W9_FOLDER_ID,  gKey),
-      force ? new Set() : cachedKeys(),
     ]);
 
     const queue = [

@@ -53,7 +53,7 @@ import {
   COI_FOLDER_ID, W9_FOLDER_ID,
 } from './lib/compliance-docs.js';
 import { anthropicConfigured, setReadBudget, readsUsed, readsLeft } from './lib/doc-ai.js';
-import { loadCacheIndex, cacheKey } from './lib/doc-cache.js';
+import { loadCacheIndex, cacheKey, probeCache } from './lib/doc-cache.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -214,13 +214,23 @@ export const handler = async (event) => {
     // The cache index is the important one: asking about each file separately
     // meant seventy-odd sequential round trips before the run could start, and
     // that is what was killing this endpoint.
-    const [coiFiles, w9Files, subPages, cache] = await Promise.all([
+    const [coiFiles, w9Files, subPages, cacheLoad] = await Promise.all([
       listFolder(COI_FOLDER_ID, gKey),
       listFolder(W9_FOLDER_ID,  gKey),
       nQueryAll(SUBS_DB_ID, token),
       loadCacheIndex(),
     ]);
-    report.documents.cachedReads = cache ? cache.size : 'unavailable';
+    const cache = cacheLoad.index;
+    report.documents.cachedReads = cache ? cache.size : 0;
+
+    // Loud, at the top level, because a cache that cannot be read is not a
+    // degraded mode. Every document gets opened, every result is thrown away,
+    // and the next run does it all again. That has to be the first thing the
+    // report says, not something a person infers from everything else looking
+    // wrong.
+    if (cacheLoad.error) {
+      report.cacheError = `The read cache could not be read, so nothing can be remembered between runs: ${cacheLoad.error}. Until this is fixed, every run re-opens every document. Check that supabase/add-document-reads.sql has been run.`;
+    }
 
     // ── 2a. Diagnostic: what does the reader actually know about each file? ─
     // Every certificate reported as unreadable is one of three different
@@ -231,7 +241,12 @@ export const handler = async (event) => {
       const diag = {
         anthropicKeySet: anthropicConfigured(),
         driveFiles: coiFiles.length + w9Files.length,
-        cacheRows: cache ? cache.size : 'the cache could not be read at all, which is itself the problem',
+        cacheRows: cache ? cache.size : 0,
+        cacheError: cacheLoad.error || null,
+        // The decisive test: can this key read and write the table at all.
+        // The raw database message is the answer, so it is passed through
+        // untouched rather than summarized.
+        cacheProbe: await probeCache(),
         neverRead: [], readButFailed: [], readOk: 0, byMethod: {},
       };
 
