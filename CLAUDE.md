@@ -233,6 +233,15 @@ Optional, for product-meta image fetching cascade:
   Phases 2 to 4 (client read-only view, approval in place with threaded
   comments, guided wave walkthrough and room mood boards) are not built.
 
+## Subcontractor scheduling agent
+
+The full specification, current status, design invariants and open decisions
+live in `docs/subcontractor-scheduling-agent.md`. Read that before changing
+anything in `scheduling-gate.js`, `compliance-sweep.js`, the work order
+functions, or `lib/doc-*.js`. It is written to be read cold and covers the
+channel rules and scope boundaries that are Cole's decisions rather than
+implementation choices.
+
 ## Subcontractor compliance documents
 
 Certificates arrive as clean PDFs, scans, phone photos, and re-prints from
