@@ -30,7 +30,13 @@ export const READER_MODEL = process.env.COI_READER_MODEL || 'claude-opus-5';
 // and phone cameras produce it by default, so it gets named in the failure
 // message rather than being reported as a generic bad file.
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
-const MAX_BYTES   = 20 * 1024 * 1024;
+// The API's limits differ by block type, and they are not the same number.
+// A PDF may be 32 MB. An image is capped at 10 MB *after* base64 encoding,
+// which inflates by a third, so the real ceiling on a photo is about 7.5 MB.
+// Sending a bigger one comes back as a 400 that reads like a malformed
+// request rather than a file that is simply too large.
+const MAX_PDF_BYTES   = 30 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 7_500_000;
 
 // What Six Arrows requires on a general liability policy. A certificate that
 // is current and names Six Arrows correctly is still not acceptable if the
@@ -212,8 +218,15 @@ function cleanStr(v, max = 200) {
 async function ask(prompt, bytes, mediaType, kind) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY is not set, so documents cannot be read automatically.' };
-  if (bytes.length > MAX_BYTES) {
-    return { ok: false, error: `the file is ${(bytes.length / 1048576).toFixed(1)} MB, larger than the reader accepts.` };
+  const cap = kind === 'pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES;
+  if (bytes.length > cap) {
+    const mb = (bytes.length / 1048576).toFixed(1);
+    return {
+      ok: false,
+      error: kind === 'pdf'
+        ? `this PDF is ${mb} MB, larger than the reader accepts.`
+        : `this photo is ${mb} MB, and the reader cannot open an image over 7.5 MB. Open it in Drive and re-save it smaller, or save it as a PDF.`,
+    };
   }
   if (readsLeft() === 0) {
     // Deliberately not cached by the caller: this is a fact about the run, not
