@@ -20,7 +20,7 @@
 // that do are the scans and phone photos that used to land on somebody's desk.
 
 import { readCertificate, readW9, anthropicConfigured } from './doc-ai.js';
-import { getRead, putRead, toCertificate, certificateRow, w9Row } from './doc-cache.js';
+import { getRead, putRead, toCertificate, certificateRow, w9Row, cacheKey } from './doc-cache.js';
 
 const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files';
 
@@ -206,6 +206,14 @@ export function extractCoiExpiry(text) {
   };
 }
 
+// One cache lookup. opts.cache is a Map loaded once by the caller covering
+// every document; when it is present a miss is a real miss, so do not fall
+// back to a per-file query and reintroduce the round trip it exists to avoid.
+async function lookupRead(fileId, file, opts) {
+  if (opts.cache) return opts.cache.get(cacheKey(fileId, file.modifiedTime)) || null;
+  return getRead(fileId, file.modifiedTime);
+}
+
 // The local pass. Free, instant, and right about two thirds of the time: it
 // works on a PDF with a real text layer and fails on everything else.
 async function textPass(bytes) {
@@ -259,7 +267,7 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
   const cacheK = { ...file, id: fileId };
 
   if (!opts.force) {
-    const hit = toCertificate(await getRead(fileId, file.modifiedTime));
+    const hit = toCertificate(await lookupRead(fileId, file, opts));
     // A cached failure is only worth reusing when the reader that produced it
     // is the best one available. If the text pass gave up yesterday and Claude
     // is configured today, that document deserves another look.
@@ -340,7 +348,7 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
 // under a DBA that appears nowhere on their tax return.
 export async function readW9Identity(fileId, apiKey, file = {}, opts = {}) {
   if (!opts.force) {
-    const row = await getRead(fileId, file.modifiedTime);
+    const row = await lookupRead(fileId, file, opts);
     if (row) return { name: row.insured_name || null, businessName: row.business_name || null, cached: row.created_at, error: row.error || null };
   }
   if (opts.cacheOnly) {

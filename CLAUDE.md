@@ -266,6 +266,14 @@ Rules that matter:
   filter is opened, no Notion row outside it is written, and nobody outside
   it is emailed. It used to narrow only what got rendered, so checking one
   sub quietly read documents for the other seventy.
+- **The read cache is loaded once per run, never per document.** A lookup per
+  file meant seventy-odd sequential round trips before the sweep could start,
+  which killed the endpoint outright. `loadCacheIndex()` is one query;
+  `opts.cache` carries it into every read.
+- **Notion writebacks are capped per run** (`?maxWrites=20`) and the sweep
+  gives up gracefully on a deadline (`?budgetMs=18000`), returning a partial
+  report with `truncated` set. A partial answer tells you what is happening;
+  a dead connection tells you nothing.
 - **A backlog is drained by `read-compliance-docs-background.js`, not by the
   sweep.** The sweep answers an HTTP request and has seconds; `aiLimit` above
   about six will time out. The background function has minutes and only

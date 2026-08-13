@@ -16,6 +16,39 @@
 
 import { supabase } from './supabase-client.js';
 
+export function cacheKey(fileId, modifiedTime) {
+  return `${fileId}|${modifiedTime || ''}`;
+}
+
+// The whole cache in one query.
+//
+// The alternative, a lookup per file, is what broke the sweep: seventy-odd
+// documents meant seventy-odd sequential round trips before any work started,
+// and a function answering an HTTP request does not have that long. One query
+// costs the same as one lookup and answers for every file.
+//
+// Returns a Map, or null if the cache could not be read at all, which the
+// caller treats as "fall back to per-file lookups" rather than "no cache".
+export async function loadCacheIndex() {
+  try {
+    const rows = await supabase('document_reads', {
+      select: '*',
+      order: 'created_at.desc',
+      limit: 2000,
+    });
+    const idx = new Map();
+    // Newest first, so the first row seen for a key is the one that counts.
+    for (const r of rows) {
+      const k = cacheKey(r.file_id, r.modified_time);
+      if (!idx.has(k)) idx.set(k, r);
+    }
+    return idx;
+  } catch (err) {
+    console.error('doc-cache index failed:', err.message);
+    return null;
+  }
+}
+
 export async function getRead(fileId, modifiedTime) {
   if (!fileId) return null;
   try {

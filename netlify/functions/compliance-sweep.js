@@ -21,7 +21,11 @@
 //                            them on the name printed inside instead. Slower
 //                            and costs a little, so it is opt-in rather than
 //                            part of every run.
-//   GET /?aiLimit=6          how many documents this run may open with Claude
+//   GET /?aiLimit=6          how many documents this run may open with Claude.
+//                            0 means read nothing new and report from cache,
+//                            which is fast and free.
+//   GET /?maxWrites=20       ceiling on Notion writebacks in one run
+//   GET /?budgetMs=18000     give up and return a partial report after this
 //
 // Documents are read by the layered reader in lib/compliance-docs.js: a cached
 // result, then a local PDF text pass, then Claude for the scans and phone
@@ -44,6 +48,7 @@ import {
   COI_FOLDER_ID, W9_FOLDER_ID,
 } from './lib/compliance-docs.js';
 import { anthropicConfigured, setReadBudget, readsUsed, readsLeft } from './lib/doc-ai.js';
+import { loadCacheIndex } from './lib/doc-cache.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -148,7 +153,23 @@ export const handler = async (event) => {
   // How many documents this run may open with Claude. Cached reads are free
   // and do not count. Six is enough to keep a warm system current; raise it on
   // a manual run to clear a backlog in one go.
-  setReadBudget(Number(q.aiLimit) > 0 ? Number(q.aiLimit) : 6);
+  const aiLimit = (q.aiLimit ?? '') === '' ? 6 : Math.max(0, Number(q.aiLimit) || 0);
+  setReadBudget(aiLimit);
+
+  // This function answers an HTTP request, so it has a fixed and fairly short
+  // life. Everything below is written to give up gracefully and return what it
+  // has rather than be killed mid-flight: a truncated report tells you what is
+  // happening, and a dead connection tells you nothing at all.
+  const startedAt = Date.now();
+  const deadline  = Number(q.budgetMs) > 0 ? Number(q.budgetMs) : 18_000;
+  const outOfTime = () => Date.now() - startedAt > deadline;
+
+  // Writing back to Notion is one request per subcontractor, and the first full
+  // sweep after a batch of new reads wants to write nearly all of them. Bounded
+  // so the run finishes; the rest go on the next one, and the daily cron means
+  // there always is a next one.
+  const maxWrites = Number(q.maxWrites) > 0 ? Number(q.maxWrites) : 20;
+  let   writes    = 0, writesDeferred = 0;
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -177,11 +198,17 @@ export const handler = async (event) => {
     }
 
     // ── 2. Read Drive and the Subcontractors DB ───────────────────────────
-    const [coiFiles, w9Files, subPages] = await Promise.all([
+    // Four requests in parallel, and then no further lookups per document.
+    // The cache index is the important one: asking about each file separately
+    // meant seventy-odd sequential round trips before the run could start, and
+    // that is what was killing this endpoint.
+    const [coiFiles, w9Files, subPages, cache] = await Promise.all([
       listFolder(COI_FOLDER_ID, gKey),
       listFolder(W9_FOLDER_ID,  gKey),
       nQueryAll(SUBS_DB_ID, token),
+      loadCacheIndex(),
     ]);
+    report.documents.cachedReads = cache ? cache.size : 'unavailable';
 
     report.documents.coiFiles = coiFiles.length;
     report.documents.w9Files  = w9Files.length;
@@ -233,10 +260,11 @@ export const handler = async (event) => {
     for (const o of orphans) {
       // Same rule as above: a narrowed run reads only what it was asked about.
       if (only && !o.file.name.toLowerCase().includes(only)) continue;
+      if (outOfTime()) { report.truncated = 'ran out of time while rematching leftover files'; break; }
 
       let names = [];
       try {
-        const opts = { cacheOnly: !rematch, force: force && rematch };
+        const opts = { cacheOnly: !rematch, force: force && rematch, cache };
         if (o.kind === 'coi') {
           const r = await readCoiExpiry(o.file.id, gKey, o.file, { ...opts, ai: true });
           names = [r.insuredName];
@@ -302,6 +330,7 @@ export const handler = async (event) => {
     // ── 4. Read each matched certificate, write the truth back to Notion ──
     const state = new Map();          // subId -> { coiState, coiExpiry, hasW9 }
     for (const sub of focus) {
+      if (outOfTime()) { report.truncated = `ran out of time after ${report.subs.length} of ${focus.length} subcontractors`; break; }
       const docs = bySub.get(sub.id) || {};
       let expiry = null, confidence = 'none', parseError = null;
       let readVia = null, additionalInsured = null, insuredName = null, readNotes = null;
@@ -312,7 +341,7 @@ export const handler = async (event) => {
         // Everyone else gets the cheap pass, which escalates on its own if it
         // cannot read the document.
         const r = await readCoiExpiry(docs.coiFile.id, gKey, docs.coiFile, {
-          ai: upcoming.has(sub.id), force,
+          ai: upcoming.has(sub.id), force, cache,
         });
         expiry = r.expiry; confidence = r.confidence; parseError = r.error || null;
         readVia = r.method || null;
@@ -337,7 +366,11 @@ export const handler = async (event) => {
         (sub.coiOn || null) !== (expiry || null) ||
         sub.w9On !== hasW9;
 
-      if (changed) {
+      let wrote = false;
+      if (changed && writes >= maxWrites) {
+        writesDeferred++;
+      } else if (changed) {
+        writes++;
         const properties = {
           'Insurance on File': { checkbox: wantInsured },
           'W9 on File':        { checkbox: hasW9 },
@@ -345,6 +378,7 @@ export const handler = async (event) => {
         if (expiry) properties['COI Expiration'] = { date: { start: expiry } };
         try {
           await patchSub(sub.id, token, properties);
+          wrote = true;
         } catch (err) {
           report.errors.push({ sub: sub.name, error: `Notion writeback failed: ${err.message}` });
         }
@@ -369,7 +403,8 @@ export const handler = async (event) => {
         w9File: docs.w9File ? docs.w9File.name : null,
         hasW9,
         email: sub.email || null,
-        updated: changed,
+        updated: wrote,
+        writeDeferred: changed && !wrote,
       });
     }
 
@@ -381,6 +416,8 @@ export const handler = async (event) => {
     }
 
     report.documents.read = { withClaude: readsUsed(), budgetLeft: readsLeft() };
+    report.notionWrites = { written: writes, deferredToNextRun: writesDeferred, ceiling: maxWrites };
+    report.elapsedMs = Date.now() - startedAt;
 
     if (syncOnly) {
       return { statusCode: 200, headers: corsH, body: JSON.stringify(report, null, 2) };
