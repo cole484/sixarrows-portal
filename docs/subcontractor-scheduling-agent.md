@@ -414,9 +414,45 @@ compliance follow-up ladder counts business days for a different reason: there
 the question is how much time a person has actually had to act, and a weekend
 is not time anybody has had.
 
-**Reminder trades** (currently just Material Ordering) are reminders to Six
-Arrows rather than work sent to a sub, so they skip the sub, duration, cost and
-provenance checks.
+### Three kinds of task
+
+Not everything on a build schedule is work sent to a sub, and the rest fail in
+completely different ways. `lib/task-kind.js` sorts them by trade.
+
+| Kind | Trades | Needs | Does not need |
+| --- | --- | --- | --- |
+| **service** | everything not listed below | scope, definition of done, a price the sub gave us, current COI naming Six Arrows, a committed window, signature | |
+| **purchase** | Material Ordering | a supplier, a price, and an `Ordered` date confirming it was actually placed | COI, scope paragraph, work order |
+| **internal** | Planning, Inspection | a date and a definition of done | everything else |
+
+An unrecognised or missing trade is treated as a **service**, because that errs
+toward asking a question rather than skipping a check.
+
+Internal covers Six Arrows, the client, and the county. Nobody is hired, so
+there is no price to agree, no certificate to hold and nothing to sign.
+
+### Start and Lead time mean opposite things on a service and a purchase
+
+This is the one that produced a false alarm for a month.
+
+| | Start is | Lead time is | Derived |
+| --- | --- | --- | --- |
+| **service** | the day the crew arrives | runway **before** it | work order due `Start - Lead` |
+| **purchase** | the day the order must be placed | delivery time **after** ordering | arrives `Ordered + Lead` |
+
+Cole, on the Johnson window package: *"We have it set where it is on the
+timeline because that's when it needs to be ordered. So it really didn't need
+to be ordered forty five days previous to now. They just need to be ordered
+now."*
+
+Reading a purchase the way a service is read turns an order-by date into an
+arrival date and reports a task due today as 45 days overdue. The gate now
+branches before any of that arithmetic runs.
+
+The `Ordered` date property was added to the Johnson timeline for this. It is
+what separates "this needs ordering today" from "this was ordered, it lands on
+the 28th", and without it a purchase task could pass the gate forever while
+nobody placed the order.
 
 ---
 

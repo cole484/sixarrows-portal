@@ -23,6 +23,7 @@
 import { templateTitleForTrade, TRADES_WITHOUT_TEMPLATE } from './lib/trade-aliases.js';
 import { certificatesBySub, verdictForStart, limitsShortfall } from './lib/sub-compliance.js';
 import { quotesForProject } from './lib/sub-quotes.js';
+import { taskKind, releaseDate, deliveryEstimate, shiftDays } from './lib/task-kind.js';
 import { sendSlack, slackConfigured } from './lib/slack.js';
 import { sendGmail, gmailConfigured } from './lib/gmail.js';
 import { FROM_EMAIL } from './lib/compliance-email.js';
@@ -58,13 +59,6 @@ const OUT_OF_SCOPE_STATUSES = new Set(['Completed', 'On Hold']);
 // Statuses that assert the task is handled. If one of these fails the gate,
 // the status is lying and that is worth saying out loud.
 const CLAIMS_HANDLED = new Set(['Scheduled', 'In Progress', 'Awaiting Confirmation']);
-
-// Trades whose tasks are reminders to Six Arrows, not work sent to a sub.
-// "Order cabinets" is a note to place an order, so demanding a subcontractor,
-// a contract value and a signable work order for it is noise. What actually
-// matters on these is whether the lead time still fits before the install
-// date, which the lead-time check already covers.
-const REMINDER_TRADES = new Set(['Material Ordering']);
 
 // ── Notion helpers ────────────────────────────────────────────────────────
 function notionHeaders(token) {
@@ -136,15 +130,10 @@ function daysUntil(iso, from = todayISO()) {
   return Math.round((b - a) / 86_400_000);
 }
 
-// Calendar days, deliberately, because that is what the Lead time field on
-// these tasks has always meant and Cole confirmed it should stay that way.
-// The compliance follow-up ladder counts business days for a different reason:
-// there the question is how long a person has had to act, and a weekend is not
-// time anybody has had.
-function shiftDays(iso, n) {
-  if (!iso) return null;
-  const t = new Date(iso.slice(0, 10) + 'T00:00:00Z').getTime() + n * 86_400_000;
-  return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+// Every evaluateTask return goes through here, so the internal short-circuit
+// and the full service path cannot drift into different shapes.
+function result(o) {
+  return { ...o, ready: o.blockers.length === 0 };
 }
 
 // ── The gate ──────────────────────────────────────────────────────────────
@@ -193,10 +182,16 @@ export function evaluateTask(task, ctx) {
   const source   = prop(task, 'Cost Source');
   const subIds   = prop(task, 'Subcontractor') || [];
   const sub      = subIds.length ? subsById[subIds[0]] : null;
+  const orderedOn = (prop(task, 'Ordered') || {}).start || null;
 
   const out      = daysUntil(start);
   const blockers = [];
   const flags    = [];
+
+  // What sort of task this is decides which questions are even worth asking.
+  // A purchase needs no scope paragraph and no certificate of insurance; an
+  // inspection needs neither of those nor a price.
+  const kind = taskKind(trade);
 
   // Scope can come from the task or from the trade's template. Either is fine.
   const templateTitle = templateTitleForTrade(trade);
@@ -205,7 +200,9 @@ export function evaluateTask(task, ctx) {
 
   if (!trade) {
     blockers.push('no Trade set');
-  } else if (!scope && !templateScope) {
+  } else if (kind === 'service' && !scope && !templateScope) {
+    // Only a work order needs a scope paragraph. Nobody writes a scope of work
+    // for ordering cabinets or for the county turning up to inspect a rough-in.
     blockers.push(
       TRADES_WITHOUT_TEMPLATE.has(trade)
         ? `no Scope of Work, and trade "${trade}" has no Trade Template to fall back on`
@@ -213,12 +210,76 @@ export function evaluateTask(task, ctx) {
     );
   }
 
-  // A reminder task produces no work order, so most of the gate does not apply
-  // to it. It still needs to say what done looks like and when it happens.
-  const isReminder = REMINDER_TRADES.has(trade);
+  if (!dod)   blockers.push('no Definition of done');
+  if (!start) blockers.push('no Start date');
 
-  if (!dod)                       blockers.push('no Definition of done');
-  if (!start)                     blockers.push('no Start date');
+  // An internal task is Six Arrows, the client, or the county. A kickoff
+  // meeting, a walkthrough, a rough-in inspection. There is nobody to hire, no
+  // price to agree, no certificate to hold and nothing to sign, so a date and a
+  // definition of done is the whole gate.
+  if (kind === 'internal') {
+    return result({
+      taskId: task.id, name, trade, kind, status, start,
+      daysOut: out, duration, leadTime,
+      estimatedCost: cost, costSource: source,
+      subName: sub ? prop(sub, 'Subcontractor Name') : null,
+      scopeFrom: null, blockers, flags,
+    });
+  }
+
+  // ── Purchases ───────────────────────────────────────────────────────────
+  // A purchase task is Six Arrows buying a thing. Nobody sets foot on the
+  // property, so there is no certificate to check, no scope to write and
+  // nothing to sign. What can go wrong is simpler and worse: the order never
+  // gets placed, and nobody finds out until the framers are standing around
+  // waiting for windows.
+  //
+  // Start on one of these is the day the order has to go in, not the day
+  // anything arrives, and Lead time counts forward from there rather than
+  // backward. Reading it the other way is what made a window package due today
+  // report as 45 days overdue.
+  if (kind === 'purchase') {
+    const supplier = sub ? prop(sub, 'Subcontractor Name') : null;
+    if (!supplier) blockers.push('no supplier assigned (put them in Subcontractor)');
+
+    const eta = deliveryEstimate({ orderedOn, leadTime, today: todayISO() });
+
+    if (orderedOn) {
+      flags.push({
+        kind: 'ordered',
+        detail: eta
+          ? `Ordered ${orderedOn} from ${supplier || 'an unnamed supplier'}. With ${leadTime} days of lead that lands about ${eta.on}.`
+          : `Ordered ${orderedOn} from ${supplier || 'an unnamed supplier'}. No lead time set, so there is no delivery estimate.`,
+        orderedOn, expectedOn: eta ? eta.on : null,
+      });
+    } else if (out != null && out < 0) {
+      // The order-by date has passed and nothing records an order being placed.
+      // This is the failure the Ordered field exists to catch.
+      blockers.push(`the order-by date was ${start}, ${-out} day(s) ago, and nothing has been recorded as ordered`);
+      if (eta) flags.push({ kind: 'delivery_estimate', detail: `Ordered today, ${leadTime} days of lead puts delivery about ${eta.on}.`, expectedOn: eta.on });
+    } else if (out === 0) {
+      flags.push({
+        kind: 'order_today',
+        detail: eta
+          ? `Today is the order-by date. ${leadTime} days of lead puts delivery about ${eta.on}.`
+          : 'Today is the order-by date.',
+        expectedOn: eta ? eta.on : null,
+      });
+    }
+
+    if (cost == null) {
+      flags.push({ kind: 'no_price', detail: 'No Estimated Cost on this order. Not a blocker, but the budget will not see it coming.' });
+    }
+
+    return result({
+      taskId: task.id, name, trade, kind, status, start,
+      daysOut: out, duration, leadTime, orderedOn,
+      estimatedCost: cost, costSource: source,
+      subName: supplier, scopeFrom: null,
+      expectedDelivery: eta ? eta.on : null,
+      blockers, flags,
+    });
+  }
 
   // Duration is deliberately not checked. It used to be a blocker, on the
   // theory that a work order needs a window. It does, but the window is the
@@ -226,7 +287,7 @@ export function evaluateTask(task, ctx) {
   // number typed into Notion months ago is a guess that then has to be argued
   // out of. The work order asks for a window and the returned commitment sets
   // the task's dates, so a planned duration is a hint and never a gate.
-  if (!isReminder && !subIds.length) blockers.push('no Subcontractor assigned');
+  if (kind === 'service' && !subIds.length) blockers.push('no Subcontractor assigned');
 
   // ── Money ───────────────────────────────────────────────────────────────
   // A work order carries a signature block and a payment schedule, so it needs
@@ -241,7 +302,7 @@ export function evaluateTask(task, ctx) {
   // next, and that is the difference between a quote request and a work order.
   const quote = quoteForTask(ctx, subIds[0]);
 
-  if (!isReminder) {
+  if (kind === 'service') {
     if (cost != null && source === 'Bid Received') {
       // Notion says a sub gave us this number. Where we also hold their quote,
       // the two should agree, and when they do not the document is right: the
@@ -313,9 +374,6 @@ export function evaluateTask(task, ctx) {
     }
   }
 
-  // Lead time versus start. A task whose lead time exceeds the days remaining
-  // is already late no matter how complete its fields are, and no amount of
-  // filling in Notion fixes it.
   // Lead time is the runway: how many days before the start date the work
   // order has to go out. A task with 7 days of lead starting on the 17th is a
   // task whose work order belongs in a sub's hands on the 10th.
@@ -326,8 +384,10 @@ export function evaluateTask(task, ctx) {
   // ideally we would have put this through the work order system 7 days before
   // it is supposed to happen. A system that only reports the miss cannot help
   // anybody hit it.
+  // Services only: the purchase branch returned above, and on a purchase this
+  // arithmetic runs the wrong way round entirely.
   if (leadTime != null && out != null && start) {
-    const release = shiftDays(start, -leadTime);
+    const release = releaseDate(start, leadTime);
     if (out === leadTime) {
       flags.push({
         kind: 'release_today',
@@ -357,7 +417,7 @@ export function evaluateTask(task, ctx) {
   // The certificate itself is the source, read from the document cache, not
   // the Notion checkbox. The checkbox says whether a file exists; only the
   // document says whether Six Arrows is actually covered by it.
-  if (sub && !isReminder) {
+  if (sub && kind === 'service') {
     const subName  = prop(sub, 'Subcontractor Name') || '(unnamed sub)';
     const subState = prop(sub, 'Status');
 
@@ -405,20 +465,19 @@ export function evaluateTask(task, ctx) {
     });
   }
 
-  return {
+  return result({
     taskId: task.id,
-    name, trade, status, start,
+    name, trade, kind, status, start,
     daysOut: out,
     duration, leadTime,
+    orderedOn,
     estimatedCost: cost,
     costSource: source,
     subName: sub ? prop(sub, 'Subcontractor Name') : null,
     scopeFrom: scope ? 'task' : (templateScope ? 'trade template' : null),
-    isReminder,
     blockers,
     flags,
-    ready: blockers.length === 0,
-  };
+  });
 }
 
 // ── Digest ────────────────────────────────────────────────────────────────
@@ -447,7 +506,12 @@ function releaseToday(report) {
   const out = [];
   for (const p of report.projects) {
     for (const t of p.tasks || []) {
-      if ((t.flags || []).some(f => f.kind === 'release_today')) out.push({ ...t, project: p.project });
+      // Both kinds of "today": a work order due out, and an order due to be
+      // placed. Different tasks, same answer to the only question that matters
+      // in a morning digest, which is what has to happen before tonight.
+      if ((t.flags || []).some(f => f.kind === 'release_today' || f.kind === 'order_today')) {
+        out.push({ ...t, project: p.project });
+      }
     }
   }
   return out;
@@ -465,9 +529,10 @@ export function renderText(report) {
   const today = releaseToday(report);
   if (today.length) {
     lines.push('  SEND TODAY');
-    lines.push('  These hit their lead time today. Sending tomorrow means starting late.');
+    lines.push('  Work orders due out and orders due to be placed. Tomorrow is late.');
     for (const t of today) {
-      lines.push(`    ${t.project}: ${t.name}${t.subName ? ` (${t.subName})` : ''}, starts ${t.start}`);
+      const verb = t.kind === 'purchase' ? 'order by' : 'starts';
+      lines.push(`    ${t.project}: ${t.name}${t.subName ? ` (${t.subName})` : ''}, ${verb} ${t.start}`);
       if (!t.ready) lines.push(`      Not ready: ${t.blockers.join('; ')}`);
     }
     lines.push('');
@@ -513,7 +578,7 @@ export function renderText(report) {
     if (ready.length) {
       lines.push('  READY TO SEND');
       for (const t of ready) {
-        lines.push(`  ${String(t.daysOut).padStart(4)}d  ${t.name}${t.trade ? ` (${t.trade})` : ''}${t.isReminder ? '  [reminder, no work order]' : `  sub: ${t.subName || '?'}`}`);
+        lines.push(`  ${String(t.daysOut).padStart(4)}d  ${t.name}${t.trade ? ` (${t.trade})` : ''}${t.kind === 'service' ? `  sub: ${t.subName || '?'}` : `  [${t.kind}, no work order]`}`);
         for (const f of t.flags) {
           if (f.kind === 'coi_limits_short') continue;   // already listed at the top
           lines.push(`          flag: ${f.detail}`);
@@ -547,9 +612,9 @@ export function renderSlack(report) {
   if (today.length) {
     L.push('');
     L.push(':bell: *Send today*');
-    L.push('_These hit their lead time today. Sending tomorrow means starting late._');
+    L.push('_Work orders due out and orders due to be placed. Tomorrow is late._');
     for (const t of today) {
-      L.push(`  • *${t.project}* · ${t.name}${t.subName ? ` · ${t.subName}` : ''} · starts ${t.start}`);
+      L.push(`  • *${t.project}* · ${t.name}${t.subName ? ` · ${t.subName}` : ''} · ${t.kind === 'purchase' ? 'order by' : 'starts'} ${t.start}`);
       if (!t.ready) L.push(`    _Not ready: ${t.blockers.join('; ')}_`);
     }
   }
@@ -582,7 +647,7 @@ export function renderSlack(report) {
       L.push('');
       L.push('*Ready to send*');
       for (const t of ready) {
-        L.push(`  ✓ *${t.daysOut}d* · ${t.name} · ${t.isReminder ? '_reminder, no work order_' : (t.subName || 'sub not named')}`);
+        L.push(`  ✓ *${t.daysOut}d* · ${t.name} · ${t.kind === 'service' ? (t.subName || 'sub not named') : `_${t.kind}, no work order_`}`);
         for (const f of t.flags) L.push(`    :warning: ${f.detail}`);
       }
     }

@@ -93,6 +93,9 @@ netlify/functions/
                             #   sheet (see docs, section 9, for why).
   read-quotes-background.js # drains the quote backlog. The sync endpoint has
                             #   seconds; one of these takes ~14.
+  lib/task-kind.js          # service / purchase / internal. Decides which gate
+                            #   checks apply, and which direction Lead time
+                            #   points (see docs section 7).
   lib/quote-docs.js         # folder map, vendor-from-filename, three-layer read
   lib/sub-quotes.js         # cache-only quote verdict per sub, for the gate
   scheduling-gate.js        # Tier 1 of the sub scheduling agent. Looks ahead at
