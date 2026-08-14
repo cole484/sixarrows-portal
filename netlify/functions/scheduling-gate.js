@@ -597,9 +597,14 @@ export const handler = async (event) => {
         // What price we already hold from each of them on this project. Also
         // cache-only: this opens nothing and costs one Drive listing, so a gate
         // run stays the same shape it was. quote-lookup does the opening.
-        const quoteData = await quotesForProject(subList, target.project, process.env.GOOGLE_API_KEY);
-        const quotes    = quoteData.bySub;
-        entry.quotesUnmatched = quoteData.unmatched.map(f => f.name);
+        // Note what this does NOT report. quotesForProject also returns the
+        // files that matched no subcontractor, but subList here is only the
+        // subs on tasks inside the window, so "unmatched" from this call means
+        // "belongs to a sub with nothing scheduled in the next 90 days", which
+        // is not the same thing at all and reads as an alarm about files that
+        // are perfectly well filed. quote-lookup asks that question against the
+        // whole Subcontractors database, which is the only way to answer it.
+        const quotes = (await quotesForProject(subList, target.project, process.env.GOOGLE_API_KEY)).bySub;
 
         const ctx = { templatesByTitle, subsById, certs, quotes };
         entry.tasks    = open.map(p => evaluateTask(p, ctx));
