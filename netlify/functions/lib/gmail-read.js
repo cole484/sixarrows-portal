@@ -143,11 +143,23 @@ export async function getAttachment(messageId, attachmentId) {
 const DOCUMENT_TYPES = /^(application\/pdf|image\/(jpeg|png|heic|heif|tiff))$/i;
 const DOCUMENT_EXT   = /\.(pdf|jpe?g|png|heic|heif|tiff?)$/i;
 
-// A tracking pixel and a logo are both images. Nobody's certificate is 8 KB.
-const MIN_DOCUMENT_BYTES = 20_000;
+// The size floor applies to IMAGES ONLY, and that distinction was learned the
+// hard way. It exists to skip the logo in a signature block, which is always an
+// image. Applied to PDFs it skipped a real one: KEMI, Kentucky's workers comp
+// carrier, sends a text-only certificate that weighs 2.6 KB, and a rule meant
+// to ignore logos threw away an actual certificate of insurance.
+//
+// A PDF attached to an email is essentially never decoration, so any PDF is
+// worth opening whatever it weighs.
+const MIN_IMAGE_BYTES = 20_000;
 
 export function looksLikeDocument(att) {
   if (!att) return false;
-  if (!DOCUMENT_TYPES.test(att.mimeType) && !DOCUMENT_EXT.test(att.filename || '')) return false;
-  return (att.size || 0) >= MIN_DOCUMENT_BYTES;
+
+  const name  = att.filename || '';
+  const isPdf = /^application\/pdf$/i.test(att.mimeType) || /\.pdf$/i.test(name);
+  if (isPdf) return true;
+
+  if (!DOCUMENT_TYPES.test(att.mimeType) && !DOCUMENT_EXT.test(name)) return false;
+  return (att.size || 0) >= MIN_IMAGE_BYTES;
 }
