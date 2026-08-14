@@ -152,6 +152,14 @@ function quoteForTask(ctx, subId) {
   return ctx.quotes.get(subId) || null;
 }
 
+// Rounding, a dropped cent, a number entered without the change: not worth
+// raising. A real disagreement between what somebody typed and what the sub
+// sent is, and on these jobs that gap runs to thousands.
+function costDisagrees(taskCost, quoteTotal) {
+  const tolerance = Math.max(50, quoteTotal * 0.01);
+  return Math.abs(taskCost - quoteTotal) > tolerance;
+}
+
 function moneyText(v) {
   return typeof v === 'number'
     ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -224,7 +232,21 @@ export function evaluateTask(task, ctx) {
 
   if (!isReminder) {
     if (cost != null && source === 'Bid Received') {
-      // Nothing to do. This is a number a sub gave us and Notion says so.
+      // Notion says a sub gave us this number. Where we also hold their quote,
+      // the two should agree, and when they do not the document is right: the
+      // field was typed by a person and the quote is what the sub actually
+      // sent. Worth catching, because the same drift is already visible in the
+      // Johnson budget sheet, where the garage door line reads $5,281.88
+      // against a quote of $8,451.
+      if (quote && quote.total != null && costDisagrees(cost, quote.total)) {
+        flags.push({
+          kind: 'quote_mismatch',
+          detail: `Estimated Cost is ${moneyText(cost)} and marked "Bid Received", but ${quote.file} says ${moneyText(quote.total)}. The document is the record. Check which is right before this goes out under a signature block.`,
+          taskCost: cost,
+          quoteTotal: quote.total,
+          file: quote.file,
+        });
+      }
     } else if (quote && quote.state === 'current') {
       flags.push({
         kind: 'quote_on_file',
