@@ -478,6 +478,10 @@ export const handler = async (event) => {
         w9File: docs.w9File ? docs.w9File.name : null,
         hasW9,
         email: sub.email || null,
+        // Reported because the email greets this person by their first name,
+        // and a Contact Name holding a company rather than a person is
+        // invisible until it arrives in somebody's inbox as "Hi Goodnight's,".
+        contact: sub.contact || null,
         updated: wrote,
         writeDeferred: changed && !wrote,
       });
