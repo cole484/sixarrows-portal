@@ -72,8 +72,16 @@ This is the one-time "yes, this app may send mail as me" step.
    **Input your own scopes** box at the bottom:
 
    ```
-   https://www.googleapis.com/auth/gmail.send
+   https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.file
    ```
+
+   All three on one line, separated by spaces. What each one buys:
+
+   | Scope | What it lets the agent do |
+   |---|---|
+   | `gmail.send` | send the compliance requests and the correction replies |
+   | `gmail.readonly` | read the replies and pull down the attached certificate |
+   | `drive.file` | upload that certificate into the COI and W9 folders |
 
 6. Click **Authorize APIs**, sign in as `cole@sixarrowsconstruction.com`, and
    allow the access
@@ -84,8 +92,29 @@ This is the one-time "yes, this app may send mail as me" step.
 > **Go to Six Arrows Agent (unsafe)**. You are the app's author and the only
 > user; that warning is aimed at strangers' apps.
 
-Note the scope is `gmail.send` only. This grants permission to send mail and
-nothing else. It cannot read your inbox.
+### What you are actually granting
+
+Worth reading once rather than clicking through.
+
+**`gmail.readonly` is full inbox read access.** Google has no narrower Gmail
+scope that can reach an attachment, so there is no smaller version of this to
+ask for. What keeps it narrow is the code rather than the grant: every
+compliance email we send records its `gmail_thread_id`, and the watcher fetches
+**those threads by id**. It never runs a search across the mailbox and never
+opens a thread Six Arrows did not start. If that ever needs to change, it is a
+conversation first.
+
+**`drive.file` is the narrow Drive scope.** The agent can only touch files it
+created itself. It cannot read the rest of the Drive. It should be able to
+upload into the existing COI and W9 folders given their ids, which is the normal
+pattern for this scope, but that is unproven against this setup. If it turns out
+to need the full `drive` scope, that is a wider grant and worth deciding on
+rather than assuming.
+
+**Revoking is one click.** myaccount.google.com, then Security, then
+"Third-party apps with account access". Removing "Six Arrows Agent" kills every
+scope at once and the compliance email stops sending. Nothing else in the portal
+depends on it.
 
 ## 6. Add the three values to Netlify
 
@@ -107,11 +136,32 @@ Redeploy, or just wait for the next push.
 
 ## Verifying it works
 
+Sending, which is the part that already worked:
+
 ```
 curl -X POST 'https://sparkly-baklava-bb8c92.netlify.app/.netlify/functions/compliance-sweep?test=1'
 ```
 
 That sends one email to Cole and nothing to any subcontractor.
+
+Reading and uploading, after the re-authorization:
+
+```
+curl 'https://sparkly-baklava-bb8c92.netlify.app/.netlify/functions/inbox-watch?diag=1'
+```
+
+That reports which scopes the token actually carries and whether a test upload
+to Drive succeeds. It reads nothing and writes nothing else.
+
+### Re-authorizing an existing setup
+
+Steps 1 through 4 are already done. Only step 5 changes: paste all three scopes
+instead of one, exchange for a new refresh token, and replace
+`GMAIL_REFRESH_TOKEN` in Netlify. The client id and secret stay as they are.
+
+Google issues a new refresh token that carries all three scopes. The old
+send-only token keeps working until it is replaced, so there is no window where
+compliance email stops.
 
 ## If it stops working
 

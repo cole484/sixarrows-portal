@@ -30,6 +30,24 @@ export function senderAddress() {
   return process.env.GMAIL_SENDER || DEFAULT_SENDER;
 }
 
+// Exported so the Drive uploader and the inbox watcher share one token
+// exchange rather than each growing their own. The scopes ride on the refresh
+// token, so a token minted for sending only will fail a read with a 403 that
+// says "insufficient authentication scopes", which is worth recognising.
+export async function googleAccessToken() { return accessToken(); }
+
+// What this token can actually do, straight from Google rather than from what
+// somebody wrote in a setup doc a month ago. Used by the diagnostic so a
+// re-authorization can be confirmed in one call instead of by trying a real
+// operation and reading the failure.
+export async function tokenScopes() {
+  const token = await accessToken();
+  const res = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(token)}`);
+  if (!res.ok) throw new Error(`tokeninfo ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  return String(data.scope || '').split(/\s+/).filter(Boolean);
+}
+
 async function accessToken() {
   const body = new URLSearchParams({
     client_id:     process.env.GMAIL_CLIENT_ID,

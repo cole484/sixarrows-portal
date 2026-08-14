@@ -204,30 +204,29 @@ export function evaluateTask(task, ctx) {
   const template      = templateTitle ? templatesByTitle[templateTitle] : null;
   const templateScope = template ? prop(template, 'Scope') : null;
 
+  // Scope of Work is required on every service task, per task, with no
+  // fallback. Cole: the scope has to be relevant to the specific task they are
+  // scheduled to do at that time, and underslab plumbing is a different job
+  // from plumbing rough-in.
+  //
+  // The Trade Template used to satisfy this, which meant a plumber coming out
+  // four times under one price received the same paragraph four times. A work
+  // order that describes "plumbing" to a plumber standing over an open trench
+  // is a category, not a scope. Cole's call: require the real thing, and say so
+  // in the digest when a task reaches the window without one so he can write it.
+  //
+  // Standard per-trade scopes may come back someday. Until then the template is
+  // offered as a starting point in the message and is not accepted as an answer.
+  //
+  // Only services. Nobody writes a scope of work for ordering cabinets or for
+  // the county turning up to inspect a rough-in.
   if (!trade) {
     blockers.push('no Trade set');
-  } else if (kind === 'service' && !scope && templateScope) {
-    // The template is a fallback, not an answer. Cole: the scope has to be
-    // relevant to the specific task they are scheduled to do at that time, and
-    // underslab plumbing is a different job from plumbing rough-in.
-    //
-    // One trade template cannot say both. Where the same sub is coming out four
-    // times under one price, every visit falls back to the same paragraph, and
-    // a work order that describes "plumbing" to a plumber standing over an open
-    // trench is not a scope of work. It is a category.
-    flags.push({
-      kind: 'scope_is_generic',
-      detail: coveredBy.length || covers.length
-        ? `No Scope of Work on this task, so the work order would carry the generic "${trade}" trade template. Every visit in this group would get that same paragraph. Each one needs its own scope describing what happens on that trip.`
-        : `No Scope of Work on this task, so the work order would carry the generic "${trade}" trade template rather than what this crew is actually doing on this date.`,
-    });
-  } else if (kind === 'service' && !scope && !templateScope) {
-    // Only a work order needs a scope paragraph. Nobody writes a scope of work
-    // for ordering cabinets or for the county turning up to inspect a rough-in.
+  } else if (kind === 'service' && !scope) {
     blockers.push(
-      TRADES_WITHOUT_TEMPLATE.has(trade)
-        ? `no Scope of Work, and trade "${trade}" has no Trade Template to fall back on`
-        : `no Scope of Work, and no Trade Template found for "${trade}"`
+      coveredBy.length || covers.length
+        ? 'no Scope of Work. This visit is one of several under one price, so it needs its own scope saying what happens on this trip'
+        : `no Scope of Work${templateScope ? `. The "${trade}" trade template is there as a starting point, but it describes the trade rather than this task` : ''}`
     );
   }
 
