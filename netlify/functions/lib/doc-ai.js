@@ -156,6 +156,59 @@ tin_last4 is the last four digits only. Never return a full SSN or EIN.
 
 Do not use em dashes in notes.`;
 
+// A subcontractor's quote is not a form. Three real Johnson quotes, opened side
+// by side, had almost nothing in common: one was a line-item invoice from
+// accounting software, one a fill-in-the-blank sheet with a TOTAL line, one a
+// typed proposal letter. Two carried the price of the job in a line called
+// "Total"; the third carried most of its meaning in the paragraph above the
+// price, which said that water and sewer were charged per foot and were not in
+// the number at all.
+//
+// That paragraph is the reason this reads with Claude rather than a regular
+// expression. Pulling the largest dollar figure off the page would produce a
+// number for every one of these documents and would be quietly wrong about the
+// one that mattered, and the way that error surfaces is a change order nobody
+// budgeted for.
+const QUOTE_PROMPT = `You are reading a price a subcontractor or supplier sent to a small home builder, Six Arrows Construction. It may call itself an estimate, a quote, a proposal or a bid.
+
+Report only what the document says. Never infer a price, a date or a term that is not printed on it. If something is absent, use null.
+
+The most important thing you can get right is the difference between a price that covers the job and a price that covers part of it. Many of these documents state a total and then, elsewhere, list work that is charged separately: priced per foot, "extra", "if needed", "by others", "not included", or added to the final invoice. If any such work exists, the total is not the whole cost and you must say so.
+
+Answer with a JSON object and nothing else. No preamble, no code fence.
+
+{
+  "vendor_name": string or null,
+  "document_type": "estimate" or "quote" or "proposal" or "invoice" or "other",
+  "quote_number": string or null,
+  "quote_date": "YYYY-MM-DD" or null,
+  "project_reference": string or null,
+  "total": number or null,
+  "total_covers_whole_scope": true or false,
+  "line_items": [ { "description": string, "amount": number or null } ],
+  "priced_separately": [ string ],
+  "exclusions": [ string ],
+  "valid_until": "YYYY-MM-DD" or null,
+  "validity_text": string or null,
+  "scope_summary": string,
+  "confidence": "high" or "low",
+  "notes": string
+}
+
+total is the bottom line the vendor is asking for, as a plain number with no commas or dollar sign. If the document shows a subtotal, tax and a grand total, report the grand total. If it prices several alternatives and does not choose one, use null and explain in notes.
+
+total_covers_whole_scope is false whenever any work is priced separately, charged by the foot, or called extra. Default to false when you are unsure. Saying a partial price is complete is the worst mistake available here.
+
+priced_separately is one short line per item, in the vendor's own terms, including the rate if one is given. For example: "Water line at $5/ft if owner digs, $15/ft if we dig".
+
+exclusions is work the vendor states they are not doing at all, as opposed to work they will do for an additional charge.
+
+valid_until is a date the document actually prints. If it instead says something like "good for 90 days" or "expires in 10 days", leave valid_until null and put that wording in validity_text.
+
+scope_summary is two or three sentences describing what this vendor is being paid to do, written so a project manager could put it on a work order.
+
+Do not use em dashes anywhere in your answer.`;
+
 // Some failures are facts about the document: it is a HEIC, it has no dates on
 // it, it is a photograph of a thumb. Those are worth remembering, because the
 // answer will not change until the file does.
@@ -358,6 +411,94 @@ export async function readCertificate({ bytes, file = {} }) {
     model: r.model,
     usage: r.usage,
     raw: d,
+  };
+}
+
+// ── Quotes ────────────────────────────────────────────────────────────────
+// Returns what the document says, never a decision about it. Whether a price
+// is still good, and whether it is close enough to the budget to act on, are
+// judgements made where the task and the budget are both in view.
+export async function readQuote({ bytes, file = {} }) {
+  const blank = {
+    total: null, coversWholeScope: false, quoteDate: null, validUntil: null,
+    validityText: null, scope: null, lineItems: [], pricedSeparately: [],
+    exclusions: [], confidence: 'none', method: 'ai', notes: null, raw: null,
+  };
+
+  const { kind, mediaType, why } = classify(file);
+  if (!kind) return { ...blank, error: why };
+
+  const r = await ask(QUOTE_PROMPT, bytes, mediaType, kind);
+  if (!r.ok) return { ...blank, error: r.error, budgetExhausted: !!r.budgetExhausted, transient: !!r.transient };
+
+  const d = r.data;
+
+  // A quote is money, so a total that came back as "$4,250.50" or with a stray
+  // character is cleaned rather than refused, but anything that is not a
+  // positive finite number is dropped instead of guessed at.
+  const money = v => {
+    const n = Number(String(v ?? '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+  };
+  const lines = a => (Array.isArray(a) ? a : []).map(x => cleanStr(x, 300)).filter(Boolean).slice(0, 25);
+
+  const quoteDate = cleanDate(d.quote_date);
+  const stated    = cleanDate(d.valid_until);
+
+  // "Good for 90 days" is the commonest way these documents express an expiry
+  // and the least useful, because it needs the quote date to mean anything.
+  // Computing it here is the difference between knowing a price is dead and
+  // having a sentence about it.
+  const validityText = cleanStr(d.validity_text, 200);
+  let validUntil = stated;
+  let validityDerived = false;
+  if (!validUntil && quoteDate && validityText) {
+    const m = validityText.match(/(\d{1,3})\s*(day|business day|week|month)/i);
+    if (m) {
+      const n    = Number(m[1]);
+      const unit = m[2].toLowerCase();
+      const days = unit.startsWith('week') ? n * 7 : unit.startsWith('month') ? n * 30 : n;
+      const t    = Date.parse(quoteDate + 'T00:00:00Z') + days * 86400000;
+      if (Number.isFinite(t)) {
+        validUntil      = new Date(t).toISOString().slice(0, 10);
+        validityDerived = true;
+      }
+    }
+  }
+
+  const total = money(d.total);
+  const pricedSeparately = lines(d.priced_separately);
+
+  // The model was told to default to false, but a total with carve-outs beside
+  // it is not a whole-scope price whatever it answered, so the two are
+  // reconciled here rather than trusted separately.
+  const coversWholeScope = !!d.total_covers_whole_scope && pricedSeparately.length === 0;
+
+  return {
+    vendorName:  cleanStr(d.vendor_name),
+    documentType: cleanStr(d.document_type, 20),
+    quoteNumber: cleanStr(d.quote_number, 40),
+    projectReference: cleanStr(d.project_reference, 200),
+    total,
+    coversWholeScope,
+    lineItems: (Array.isArray(d.line_items) ? d.line_items : []).slice(0, 40)
+      .map(li => ({ description: cleanStr(li?.description, 200), amount: money(li?.amount) }))
+      .filter(li => li.description),
+    pricedSeparately,
+    exclusions: lines(d.exclusions),
+    quoteDate,
+    validUntil,
+    validityDerived,
+    validityText,
+    scope: cleanStr(d.scope_summary, 1200),
+    // No number means nothing to be confident about, whatever the model said.
+    confidence: total == null ? 'none' : (String(d.confidence) === 'high' ? 'high' : 'low'),
+    method: 'ai',
+    notes: cleanStr(d.notes, 400),
+    error: total == null ? 'the reader opened the document but found no price on it.' : null,
+    model: r.model,
+    usage: r.usage,
+    raw:   d,
   };
 }
 

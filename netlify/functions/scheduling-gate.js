@@ -22,6 +22,7 @@
 
 import { templateTitleForTrade, TRADES_WITHOUT_TEMPLATE } from './lib/trade-aliases.js';
 import { certificatesBySub, verdictForStart, limitsShortfall } from './lib/sub-compliance.js';
+import { quotesForProject } from './lib/sub-quotes.js';
 import { sendSlack, slackConfigured } from './lib/slack.js';
 import { sendGmail, gmailConfigured } from './lib/gmail.js';
 import { FROM_EMAIL } from './lib/compliance-email.js';
@@ -143,6 +144,20 @@ function daysUntil(iso, from = todayISO()) {
 //   flags     a work order can be produced, but sending it as-is would be a
 //             mistake. Most of these route the task to a quote request rather
 //             than a signable work order.
+// The quote we hold from the sub this task is assigned to, or null. Kept as a
+// helper so a gate run with no quote data behaves exactly as it did before,
+// rather than reporting "no quote on file" when nothing looked.
+function quoteForTask(ctx, subId) {
+  if (!ctx.quotes || !subId) return null;
+  return ctx.quotes.get(subId) || null;
+}
+
+function moneyText(v) {
+  return typeof v === 'number'
+    ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : 'a price that could not be read';
+}
+
 export function evaluateTask(task, ctx) {
   const { templatesByTitle, subsById, certs } = ctx;
 
@@ -186,22 +201,73 @@ export function evaluateTask(task, ctx) {
   if (!dod)                       blockers.push('no Definition of done');
   if (!start)                     blockers.push('no Start date');
 
-  if (!isReminder) {
-    if (duration == null && !dateVal.end) blockers.push('no Duration and Start is not a date range');
-    if (!subIds.length)                   blockers.push('no Subcontractor assigned');
-    if (cost == null)                     blockers.push('no Estimated Cost');
-  }
+  // Duration is deliberately not checked. It used to be a blocker, on the
+  // theory that a work order needs a window. It does, but the window is the
+  // subcontractor's to give: they know their crew and their backlog, and a
+  // number typed into Notion months ago is a guess that then has to be argued
+  // out of. The work order asks for a window and the returned commitment sets
+  // the task's dates, so a planned duration is a hint and never a gate.
+  if (!isReminder && !subIds.length) blockers.push('no Subcontractor assigned');
 
-  // Money provenance. The work order carries a signature block and a payment
-  // schedule computed off this number, so an estimate must not go out as
-  // though the sub had agreed to it.
-  if (!isReminder && cost != null && source !== 'Bid Received') {
-    flags.push({
-      kind: 'needs_quote',
-      detail: source
-        ? `Estimated Cost is set but Cost Source is "${source}", so this is not a number the sub gave us. Send a quote request first.`
-        : 'Estimated Cost is set but Cost Source is blank. Confirm whether this is a bid or an estimate.',
-    });
+  // ── Money ───────────────────────────────────────────────────────────────
+  // A work order carries a signature block and a payment schedule, so it needs
+  // a price the subcontractor actually gave us. But an empty Estimated Cost
+  // does not mean nobody has quoted the job. On Johnson every quote received so
+  // far is a PDF in the client's Drive folder and none of them ever reached
+  // Notion, so gating on the field alone would send quote requests to people
+  // who quoted the work in March.
+  //
+  // So the field is checked, and when it is empty or unconfirmed the folder is
+  // checked too. Which of those two produced the number decides what happens
+  // next, and that is the difference between a quote request and a work order.
+  const quote = quoteForTask(ctx, subIds[0]);
+
+  if (!isReminder) {
+    if (cost != null && source === 'Bid Received') {
+      // Nothing to do. This is a number a sub gave us and Notion says so.
+    } else if (quote && quote.state === 'current') {
+      flags.push({
+        kind: 'quote_on_file',
+        detail: `${quote.file} has ${moneyText(quote.total)} from ${quote.vendorName || 'this vendor'}, ${quote.reason} Put it on the task as Estimated Cost with Cost Source "Bid Received" and send a work order, not a quote request.`,
+        total: quote.total,
+        file: quote.file,
+        coversWholeScope: quote.coversWholeScope,
+        pricedSeparately: quote.pricedSeparately || [],
+      });
+      // A price that only covers part of the job is the failure this system
+      // exists to stop. It becomes a change order later, and the sub is right.
+      if (quote.coversWholeScope === false && (quote.pricedSeparately || []).length) {
+        flags.push({
+          kind: 'quote_partial',
+          detail: `${moneyText(quote.total)} does not cover the whole scope. Charged separately: ${quote.pricedSeparately.join('; ')}. The work order has to say so or it turns into a change order.`,
+        });
+      }
+    } else if (quote && quote.state === 'stale') {
+      flags.push({
+        kind: 'quote_stale',
+        detail: `${quote.file} has ${moneyText(quote.total)} but ${quote.reason} Ask whether the price still holds before sending a work order. That is a text, not a fresh quote request.`,
+        total: quote.total,
+        file: quote.file,
+      });
+    } else if (quote && quote.state === 'unread') {
+      flags.push({
+        kind: 'quote_unread',
+        detail: `${quote.file} is on file for this vendor but has not been read yet, so the price is unknown. Run quote-lookup with read= to open it.`,
+        file: quote.file,
+      });
+    } else if (cost == null) {
+      blockers.push('no Estimated Cost, and no quote on file for this subcontractor on this project');
+    } else {
+      // A number exists but nobody says a sub gave it to us, and nothing in the
+      // folder backs it up. That is an estimate, and it must not go out under a
+      // signature block as though it were agreed.
+      flags.push({
+        kind: 'needs_quote',
+        detail: source
+          ? `Estimated Cost is set but Cost Source is "${source}", so this is not a number the sub gave us, and no quote for them is on file. Send a quote request first.`
+          : 'Estimated Cost is set but Cost Source is blank, and no quote for this sub is on file. Confirm whether this is a bid or an estimate.',
+      });
+    }
   }
 
   // Lead time versus start. A task whose lead time exceeds the days remaining
@@ -506,7 +572,14 @@ export const handler = async (event) => {
           .filter(x => x.name);
         const certs = await certificatesBySub(subList, process.env.GOOGLE_API_KEY);
 
-        const ctx = { templatesByTitle, subsById, certs };
+        // What price we already hold from each of them on this project. Also
+        // cache-only: this opens nothing and costs one Drive listing, so a gate
+        // run stays the same shape it was. quote-lookup does the opening.
+        const quoteData = await quotesForProject(subList, target.project, process.env.GOOGLE_API_KEY);
+        const quotes    = quoteData.bySub;
+        entry.quotesUnmatched = quoteData.unmatched.map(f => f.name);
+
+        const ctx = { templatesByTitle, subsById, certs, quotes };
         entry.tasks    = open.map(p => evaluateTask(p, ctx));
         entry.inWindow = entry.tasks.length;
         entry.readyCount   = entry.tasks.filter(t => t.ready).length;
