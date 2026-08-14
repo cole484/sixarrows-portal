@@ -3,22 +3,27 @@
 // Closes the loop on a compliance request: reads the reply, files the document,
 // and updates Notion.
 //
-// Right now this is the diagnostic half only. The watcher itself is not built,
-// because it cannot be until the Gmail token carries scopes it does not
-// currently have. Shipping the check first means the re-authorization can be
-// confirmed in one call rather than by running a real sweep and reading the
-// failure.
+//   GET /?diag=1              what the Google token can actually do
+//   GET /?diag=1&labels=1     list Gmail labels
+//   GET /?diag=1&q=<search>   preview messages a query would reach
 //
-//   GET /?diag=1     what the token can actually do
+// On how much of the mailbox this touches. The original plan was to read only
+// the threads Six Arrows started, by their recorded gmail_thread_id, and never
+// to search at all. Cole changed that deliberately: he files certificates into
+// a Gmail label as they arrive so his inbox stays clear, and asked that both
+// the label and the inbox be checked. A sub who forwards a certificate from
+// their agent, or replies from a different address, never lands in the original
+// thread, so thread ids alone would have missed exactly the documents this
+// exists to catch.
 //
-// What the watcher will do once the scopes are there, and the constraint that
-// shapes it: every compliance email we send records its gmail_thread_id, so
-// this reads THOSE THREADS BY ID. It never searches the mailbox and never opens
-// a thread Six Arrows did not start. gmail.readonly grants far more than that;
-// the narrowness lives in this code, which is the reason it is written down
-// here rather than left as an intention.
+// So it searches, and the searches are narrow and written down: a specific
+// label, or the inbox with an attachment filter and a date floor. gmail.readonly
+// grants the whole mailbox; what this actually reads is bounded by the queries
+// in QUERIES below, and widening them is a visible change rather than a quiet
+// one.
 
 import { gmailConfigured, tokenScopes, senderAddress } from './lib/gmail.js';
+import { listLabels, searchMessages, getMessage, looksLikeDocument } from './lib/gmail-read.js';
 import { corsHeaders } from './lib/supabase-client.js';
 
 // What the whole loop needs. Checked by name rather than counted, because
@@ -60,6 +65,8 @@ export function checkScopes(granted = []) {
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: corsHeaders(), body: '' };
 
+  const q = event.queryStringParameters || {};
+
   const reply = (code, body) => ({
     statusCode: code,
     headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
@@ -85,6 +92,31 @@ export const handler = async (event) => {
 
   const { rows, ok, missing } = checkScopes(granted);
 
+  // Labels and a sample search, so the watcher can be built against what is
+  // actually in the mailbox rather than against a guess at the label name.
+  // Reads envelopes only: no attachment is downloaded here.
+  let labels = null, sample = null, sampleError = null;
+  if (ok && q.labels === '1') {
+    try { labels = await listLabels(); }
+    catch (err) { sampleError = err.message; }
+  }
+  if (ok && q.q) {
+    try {
+      const hits = await searchMessages(q.q, { max: Math.min(Number(q.max) || 10, 25) });
+      sample = [];
+      for (const h of hits) {
+        const m = await getMessage(h.id);
+        sample.push({
+          from: m.from, subject: m.subject, on: m.internalDate, labelIds: m.labelIds,
+          attachments: m.attachments.map(a => ({
+            filename: a.filename, mimeType: a.mimeType, size: a.size,
+            wouldRead: looksLikeDocument(a),
+          })),
+        });
+      }
+    } catch (err) { sampleError = err.message; }
+  }
+
   return reply(200, {
     sender: senderAddress(),
     ready: ok,
@@ -99,6 +131,11 @@ export const handler = async (event) => {
     next: ok
       ? 'All three scopes are present. The watcher can be built against this token.'
       : `Still missing ${missing.length} scope(s). Redo step 5 of docs/gmail-setup.md with all three in the scopes box, then replace GMAIL_REFRESH_TOKEN in Netlify.`,
-    note: 'Diagnostic only. This reads no mail, uploads nothing, and changes nothing.',
+    labels,
+    sample,
+    sampleError,
+    note: q.q
+      ? 'Diagnostic. Envelopes and attachment names only, nothing downloaded, nothing changed.'
+      : 'Diagnostic only. Pass labels=1 to list Gmail labels, or q=<gmail search> to preview matching messages.',
   });
 };
