@@ -206,6 +206,21 @@ export function evaluateTask(task, ctx) {
 
   if (!trade) {
     blockers.push('no Trade set');
+  } else if (kind === 'service' && !scope && templateScope) {
+    // The template is a fallback, not an answer. Cole: the scope has to be
+    // relevant to the specific task they are scheduled to do at that time, and
+    // underslab plumbing is a different job from plumbing rough-in.
+    //
+    // One trade template cannot say both. Where the same sub is coming out four
+    // times under one price, every visit falls back to the same paragraph, and
+    // a work order that describes "plumbing" to a plumber standing over an open
+    // trench is not a scope of work. It is a category.
+    flags.push({
+      kind: 'scope_is_generic',
+      detail: coveredBy.length || covers.length
+        ? `No Scope of Work on this task, so the work order would carry the generic "${trade}" trade template. Every visit in this group would get that same paragraph. Each one needs its own scope describing what happens on that trip.`
+        : `No Scope of Work on this task, so the work order would carry the generic "${trade}" trade template rather than what this crew is actually doing on this date.`,
+    });
   } else if (kind === 'service' && !scope && !templateScope) {
     // Only a work order needs a scope paragraph. Nobody writes a scope of work
     // for ordering cabinets or for the county turning up to inspect a rough-in.

@@ -475,11 +475,23 @@ A covered visit:
 The covering task raises `covers_visits`, which is what tells the work order
 generator to list every visit and split the payment across them.
 
-**The payment schedule is Cole's design and is not built yet.** His words: the
-work order should offer payment all at once, in two parts, or in three, because
-subs want paying for the portion of work performed rather than everything at
-the end. The visits are the natural payment points. What is undecided is how a
-draw is sized: an explicit percentage per visit, or an even split across them.
+**The payment schedule is asked of the subcontractor, not set by Six Arrows.**
+Cole: *"on the work order, we need them to tell us how they wanna break up their
+payment schedule, and it could be different for each vendor."* So it is a field
+on the returned work order, exactly like the committed window: the sub says how
+they want to be paid across the visits, and that answer comes back with their
+signature. Six Arrows does not propose percentages and then negotiate them
+down. Not built yet.
+
+**Scope of work belongs to the visit, not to the trade.** Cole: *"The scope of
+work needs to be relevant to the specific task that they're scheduled to do at
+that time. So underslab plumbing would have a different scope than plumbing
+rough in."* The Trade Template scope is a fallback that keeps a work order from
+being empty; it is not an answer. One template cannot describe four different
+trips, so every task in a covered group falling back to it gets the same
+paragraph. The gate raises `scope_is_generic` whenever a service task has no
+scope of its own, and says so more sharply when the task is part of a covered
+group. All 59 Johnson tasks are currently in this state.
 
 ### Start and Lead time mean opposite things on a service and a purchase
 
