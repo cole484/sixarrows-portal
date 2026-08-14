@@ -83,6 +83,16 @@ export const handler = async (event) => {
       return reply({ folder, count: rows.length, rows: rows.slice(0, 400) });
     }
 
+    if (q.file) {
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${q.file}?alt=media&key=${key}`);
+      if (!res.ok) return reply({ error: `${res.status} ${(await res.text()).slice(0, 200)}` });
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const { extractText } = await import('unpdf');
+      const { text } = await extractText(bytes, { mergePages: true });
+      const raw = String(text || '');
+      return reply({ file: q.file, bytes: bytes.length, chars: raw.length, head: raw.slice(0, Number(q.chars) || 3000) });
+    }
+
     if (sheetId && q.tabs) {
       const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?key=${key}&fields=sheets.properties`);
       const data = await res.json();
