@@ -392,13 +392,27 @@ mistake:
   different number. The document is the record.
 - `needs_quote`: no quote anywhere, or a number with Cost Source other than
   "Bid Received" and nothing in the folder backing it up
-- lead time versus start date
+- `release_today`: the task hits its lead time today, so the work order goes
+  out now. This is the one line in the digest that is about today rather than
+  about a condition, so it is rendered first, above everything else, in both
+  the text and Slack versions. A task can be on that list and still be blocked;
+  knowing the day has arrived and the paperwork is not ready is more useful
+  than either fact alone.
+- `lead_time_missed`: the release date has passed. It reports the date the work
+  order was due rather than a countdown, because a date can be checked against
+  a calendar and "4 days behind" cannot.
 - the sub has no Insurance on File
 - the sub's COI expires before the task starts
 - the sub is marked Do Not Use or Inactive
 - `status_inconsistent`: the task claims to be Scheduled, In Progress or
   Awaiting Confirmation while still failing the gate. The status is lying and
   that is worth saying out loud.
+
+**Lead time is calendar days, and that is deliberate.** It is what the field
+has always meant on these tasks and Cole confirmed it stays that way. The
+compliance follow-up ladder counts business days for a different reason: there
+the question is how much time a person has actually had to act, and a weekend
+is not time anybody has had.
 
 **Reminder trades** (currently just Material Ordering) are reminders to Six
 Arrows rather than work sent to a sub, so they skip the sub, duration, cost and

@@ -136,6 +136,17 @@ function daysUntil(iso, from = todayISO()) {
   return Math.round((b - a) / 86_400_000);
 }
 
+// Calendar days, deliberately, because that is what the Lead time field on
+// these tasks has always meant and Cole confirmed it should stay that way.
+// The compliance follow-up ladder counts business days for a different reason:
+// there the question is how long a person has had to act, and a weekend is not
+// time anybody has had.
+function shiftDays(iso, n) {
+  if (!iso) return null;
+  const t = new Date(iso.slice(0, 10) + 'T00:00:00Z').getTime() + n * 86_400_000;
+  return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+}
+
 // ── The gate ──────────────────────────────────────────────────────────────
 // Two severities, kept apart because they need different actions.
 //
@@ -305,11 +316,34 @@ export function evaluateTask(task, ctx) {
   // Lead time versus start. A task whose lead time exceeds the days remaining
   // is already late no matter how complete its fields are, and no amount of
   // filling in Notion fixes it.
-  if (leadTime != null && out != null && leadTime > out) {
-    flags.push({
-      kind: 'lead_time_missed',
-      detail: `Lead time is ${leadTime} days but the task starts in ${out}. This is already ${leadTime - out} days behind.`,
-    });
+  // Lead time is the runway: how many days before the start date the work
+  // order has to go out. A task with 7 days of lead starting on the 17th is a
+  // task whose work order belongs in a sub's hands on the 10th.
+  //
+  // The old check only fired once that day had passed, so on the exact day the
+  // work order was due it said nothing at all, and the first thing it ever said
+  // was that you were a day late. Cole described the intent in one sentence:
+  // ideally we would have put this through the work order system 7 days before
+  // it is supposed to happen. A system that only reports the miss cannot help
+  // anybody hit it.
+  if (leadTime != null && out != null && start) {
+    const release = shiftDays(start, -leadTime);
+    if (out === leadTime) {
+      flags.push({
+        kind: 'release_today',
+        detail: `Today is the day. Lead time is ${leadTime} days and the task starts ${start}, so the work order goes out now to stay on schedule.`,
+        releaseOn: release,
+      });
+    } else if (out < leadTime) {
+      flags.push({
+        kind: 'lead_time_missed',
+        // The date the work order was due beats a countdown. "4 days behind"
+        // needs arithmetic before it means anything; a date can be compared
+        // against a calendar.
+        detail: `The work order was due ${release} (lead time ${leadTime} days, starts ${start}), which was ${leadTime - out} day(s) ago.`,
+        releaseOn: release,
+      });
+    }
   }
 
   // Subcontractor readiness.
@@ -406,11 +440,38 @@ function limitsShortList(report) {
   return [...seen.values()];
 }
 
+// Tasks whose work order is due to go out today, across every project. A task
+// can be on this list and still be blocked: knowing the day has arrived and
+// the paperwork is not ready is more useful than either fact alone.
+function releaseToday(report) {
+  const out = [];
+  for (const p of report.projects) {
+    for (const t of p.tasks || []) {
+      if ((t.flags || []).some(f => f.kind === 'release_today')) out.push({ ...t, project: p.project });
+    }
+  }
+  return out;
+}
+
 export function renderText(report) {
   const lines = [];
   lines.push(`Scheduling gate, ${report.generatedAt.slice(0, 10)}`);
   lines.push(`Looking ${report.lookaheadDays} days ahead.`);
   lines.push('');
+
+  // First, because it is the only part of this report that is about today.
+  // Everything else is a condition; this is an instruction with a deadline
+  // that expires tonight.
+  const today = releaseToday(report);
+  if (today.length) {
+    lines.push('  SEND TODAY');
+    lines.push('  These hit their lead time today. Sending tomorrow means starting late.');
+    for (const t of today) {
+      lines.push(`    ${t.project}: ${t.name}${t.subName ? ` (${t.subName})` : ''}, starts ${t.start}`);
+      if (!t.ready) lines.push(`      Not ready: ${t.blockers.join('; ')}`);
+    }
+    lines.push('');
+  }
 
   const short = limitsShortList(report);
   if (short.length) {
@@ -481,6 +542,17 @@ export function renderSlack(report) {
 
   L.push(`*Scheduling gate · ${day}*`);
   L.push(`_Next ${report.lookaheadDays} days · ${totalReady} ready · ${totalBlocked} not ready_`);
+
+  const today = releaseToday(report);
+  if (today.length) {
+    L.push('');
+    L.push(':bell: *Send today*');
+    L.push('_These hit their lead time today. Sending tomorrow means starting late._');
+    for (const t of today) {
+      L.push(`  • *${t.project}* · ${t.name}${t.subName ? ` · ${t.subName}` : ''} · starts ${t.start}`);
+      if (!t.ready) L.push(`    _Not ready: ${t.blockers.join('; ')}_`);
+    }
+  }
 
   for (const p of report.projects) {
     L.push('');
