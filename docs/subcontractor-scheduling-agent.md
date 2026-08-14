@@ -428,6 +428,25 @@ completely different ways. `lib/task-kind.js` sorts them by trade.
 An unrecognised or missing trade is treated as a **service**, because that errs
 toward asking a question rather than skipping a check.
 
+**A `Task Kind` select on the timeline overrides the trade when set.** Some of
+these decisions do not follow from the trade at all. Trade `Other` on Johnson
+covers "Metal siding install" and "Gutters / downspouts", which need work
+orders, alongside "Exterior penetrations sealed" and "Punch list completion +
+re-walk", which are punch list items. "Garage door install" needs no work order
+because Overhead Door quoted it *installed*, which is a fact about that quote
+rather than about garage doors. The trade gives the default for the ninety
+percent nobody needs to think about; the field records the rest. Cole's calls,
+already set on Johnson:
+
+| Task | Kind |
+| --- | --- |
+| Metal siding install | Service |
+| Gutters / downspouts | Service |
+| Shower glass / mirrors | Service |
+| Countertops template & measure | Service |
+| Exterior penetrations sealed | Internal (punch list item) |
+| Punch list completion + re-walk | Internal |
+
 Internal covers Six Arrows, the client, and the county. Nobody is hired, so
 there is no price to agree, no certificate to hold and nothing to sign.
 

@@ -48,14 +48,32 @@ export const INTERNAL_TRADES = new Set([
   'Inspection',
 ]);
 
-export function taskKind(trade) {
+// The trade gives a good default and cannot give a correct answer for every
+// task, because some of these decisions do not follow from the trade at all.
+// On Johnson: "Metal siding install" and "Gutters / downspouts" are both Trade
+// "Other" and both need a work order, while "Exterior penetrations sealed" and
+// "Punch list completion" share that trade and are punch list items. "Garage
+// door install" needs no work order because Overhead Door quoted it installed,
+// which is a fact about the quote rather than about garage doors.
+//
+// So the timeline carries a "Task Kind" select that wins when it is set. The
+// trade-derived answer is the default for the 90 percent of tasks where nobody
+// needs to think about it.
+const OVERRIDES = { service: 'service', purchase: 'purchase', internal: 'internal' };
+
+export function taskKind(trade, override) {
+  const o = OVERRIDES[String(override || '').trim().toLowerCase()];
+  if (o) return o;
+
   const t = String(trade || '').trim();
   if (PURCHASE_TRADES.has(t)) return 'purchase';
   if (INTERNAL_TRADES.has(t)) return 'internal';
+  // An unrecognised or missing trade is a service, because that errs toward
+  // asking a question rather than skipping a check.
   return 'service';
 }
 
-export const needsWorkOrder = trade => taskKind(trade) === 'service';
+export const needsWorkOrder = (trade, override) => taskKind(trade, override) === 'service';
 
 // Calendar days. Lead time on these tasks has always meant calendar days and
 // Cole confirmed it stays that way.

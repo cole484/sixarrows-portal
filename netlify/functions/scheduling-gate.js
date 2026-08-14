@@ -191,7 +191,7 @@ export function evaluateTask(task, ctx) {
   // What sort of task this is decides which questions are even worth asking.
   // A purchase needs no scope paragraph and no certificate of insurance; an
   // inspection needs neither of those nor a price.
-  const kind = taskKind(trade);
+  const kind = taskKind(trade, prop(task, 'Task Kind'));
 
   // Scope can come from the task or from the trade's template. Either is fine.
   const templateTitle = templateTitleForTrade(trade);
