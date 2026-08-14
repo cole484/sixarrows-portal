@@ -87,6 +87,14 @@ netlify/functions/
                             #   Estimated Cost + Cost Source only when the
                             #   field is empty, so a later quote never
                             #   overwrites an earlier one.
+  quote-lookup.js           # which subs have already quoted a project, what
+                            #   the price is, and whether it is still good.
+                            #   Reads the client's Drive folder, not the budget
+                            #   sheet (see docs, section 9, for why).
+  read-quotes-background.js # drains the quote backlog. The sync endpoint has
+                            #   seconds; one of these takes ~14.
+  lib/quote-docs.js         # folder map, vendor-from-filename, three-layer read
+  lib/sub-quotes.js         # cache-only quote verdict per sub, for the gate
   scheduling-gate.js        # Tier 1 of the sub scheduling agent. Looks ahead at
                             #   tasks entering the window, checks the readiness
                             #   gate, notifies. Cron: weekdays 12 UTC. Never
@@ -96,9 +104,11 @@ netlify/functions/
                             #   emails subs whose documents are missing or
                             #   expired ahead of scheduled work. Cron: daily
                             #   13 UTC. Manual runs send nothing without send=1.
-  lib/doc-ai.js             # reads a COI or W9 with Claude: expiry, insured
-                            #   name, and whether Six Arrows is actually listed
-                            #   as additionally insured. Per-run read budget.
+  lib/doc-ai.js             # reads a COI, W9 or quote with Claude. On a COI:
+                            #   expiry, insured name, and whether Six Arrows is
+                            #   actually listed as additionally insured. On a
+                            #   quote: the total, and crucially what the total
+                            #   does NOT cover. Per-run read budget.
   lib/doc-cache.js          # append-only cache of document reads, keyed on
                             #   Drive file id + modifiedTime
   lib/compliance-docs.js    # Drive listing, name matching, and the three-layer
@@ -305,6 +315,31 @@ Rules that matter:
 - A **new email variant needs Cole's approval** before it sends. A certificate
   that is current but does not name Six Arrows as additionally insured is
   reported as `review`, not emailed, for exactly that reason.
+
+## Quotes we already hold
+
+The work order is the primary scheduling document, not the quote request. A
+quote request goes out only when nobody has quoted the job.
+
+- **Quotes live in the client's Drive folder**, named `<Vendor> - <Client>.pdf`,
+  sometimes with a `(updated 5-19)` or `(casement)` parenthetical. Superseded
+  versions are moved into `Previous Drafts`, which is read as Cole saying the
+  quote is dead, so only the top level is searched.
+- **The client budget spreadsheet is NOT a quote source.** Its Cost column is
+  the estimator's number and it disagrees with the real quotes, sometimes by
+  thousands. See `docs/subcontractor-scheduling-agent.md` section 9.
+- **The total is not the whole story.** Several of these documents state a
+  price and then charge water, sewer, purlins or felt separately. `readQuote`
+  reports `coversWholeScope` and `pricedSeparately` for exactly this reason,
+  and the gate raises `quote_partial` so the work order can name the carve-outs
+  instead of meeting them later as a change order.
+- **Four states**: `none` / `unread` / `stale` / `current`. Stale means the
+  quote passed its own stated validity, or is over 90 days old with none
+  stated. A stale quote calls for a text asking whether the price still holds,
+  not a fresh quote request.
+- **Reads share the `document_reads` cache** with certificates, keyed on Drive
+  file id plus modifiedTime, with the payload in the `data` jsonb column
+  (`supabase/add-document-reads-data.sql`).
 
 ## When in doubt
 

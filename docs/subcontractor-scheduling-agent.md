@@ -56,15 +56,27 @@ window. For each one, check a readiness gate:
 
 - Scope of work
 - Completion standard
-- Duration
 - Linked subcontractor
-- Estimated cost
+- A price the subcontractor actually gave us
 
 If anything is missing, flag it to Cole with **what specifically is missing**
 and **how many days out the task is**. If the gate passes, generate a
 pre-filled work order and a draft outbound message.
 
 **A human sends it.** No exceptions in tier 1.
+
+**The work order is the primary document, not the quote request.** On most of
+these jobs a price already exists: it arrived by email months ago and was saved
+into the client's Drive folder. So before anything is sent, that folder is
+searched for a quote from this subcontractor, and the work order goes out
+pre-filled with the number they already gave. A quote request only goes out
+when nobody has quoted the job. Sending one to a sub who quoted the work in
+March is not automation, it is a system that does not know what the company
+knows.
+
+**Duration is not asked for and not gated on.** The window belongs to the
+subcontractor: they know their crew and their backlog. The work order asks for
+one and the returned commitment sets the Notion task's dates.
 
 ### Tier 2: SEND AND TRACK
 
@@ -132,6 +144,12 @@ contributor should treat changing one as requiring his explicit agreement.
 - **Johnson's job site address is 106 Reynolds Ln.**
 - **Slack is deferred to the end.** Notifications go by email until the rest is
   working, then the Slack app gets added.
+- **Existing quotes are found, not re-requested.** Cole: on a lot of these
+  projects we have received quotes and they are in the customer's budget and
+  billing spreadsheet or in their Google Drive. The Drive folder turned out to
+  be the real source; see section 9 on why the spreadsheet is not.
+- **Duration (days) is ignored.** The sub gives the window on the returned work
+  order and the Notion task moves to match it.
 - **Document reading is automated, not manual.** Cole was explicit: he does not
   want to open every certificate and type in an expiration date. When the
   system cannot read one, it asks a person; it does not hand the whole pile
@@ -342,15 +360,26 @@ subcontractor assigned at all.
 - no Trade set
 - no Definition of done
 - no Start date
-- no Duration, and Start is not a date range
 - no Subcontractor assigned
-- no Estimated Cost
+- no Estimated Cost **and** no quote on file for that sub on that project
+- the sub's certificate is missing, expired at the task's start date, or does
+  not name Six Arrows as additionally insured on general liability
 
 **Flags** mean a work order can be produced, but sending it as-is would be a
 mistake:
 
-- cost provenance: a number is going out for signature with Cost Source other
-  than "Bid Received"
+- `quote_on_file`: a current quote exists in the client's Drive folder. Put the
+  number on the task and send a work order, not a quote request.
+- `quote_partial`: the quote's total does not cover the whole job. The carve-outs
+  are listed so the work order can say so, because otherwise they arrive later
+  as a change order and the sub is right.
+- `quote_stale`: a quote exists and has passed its own expiration. That calls
+  for a text asking whether the price still holds, not a fresh quote request.
+- `quote_unread`: a document is on file and has not been opened yet.
+- `quote_mismatch`: Notion says Bid Received and the quote on file says a
+  different number. The document is the record.
+- `needs_quote`: no quote anywhere, or a number with Cost Source other than
+  "Bid Received" and nothing in the folder backing it up
 - lead time versus start date
 - the sub has no Insurance on File
 - the sub's COI expires before the task starts
@@ -423,14 +452,48 @@ way to be wrong.
 
 ## 9. Known problems and open decisions
 
+**The client budget spreadsheet is not a quote source, and treating it as one
+would be worse than useless.** Cole's instruction was to search the customer's
+budget and billing spreadsheet as well as their Drive. The Johnson Budget tab
+does have the right shape for it, with Contractor / Vendor, Status and Cost
+columns per line. But every one of its 59 rows reads Status "Need Estimate",
+and its numbers are the estimator's, transcribed from
+`johnson_estimate_draft5_homeowner.xlsx`, not the subs'. Where a quote also
+exists in Drive the two disagree, sometimes badly:
+
+| Line | Budget sheet | Actual quote |
+| --- | --- | --- |
+| Garage Doors | $5,281.88 | $8,451.00 (Overhead Door, 5-11) |
+| Gutters & Downspouts | $1,875.00 | $1,897.50 (Chaffin, 3-09) |
+| Plumbing | $12,050.00 | $10,800.00 (Goodnight's, 5-12) plus water and sewer per foot |
+
+The document is what a sub will invoice against; the sheet is what somebody
+hoped it would cost. So the sheet is deliberately **not** read as a price
+source. The one thing worth taking from it is the Contractor / Vendor column,
+which names the intended vendor on lines where Notion has no Subcontractor
+linked. That is not built.
+
+**Every quote currently on file for Johnson has expired or gone stale.** Eleven
+of the fourteen have passed their own stated validity window, several by
+months. This was invisible before, and it is the single most useful thing the
+quote reader surfaced: the prices the schedule is built on are not prices
+anybody is still standing behind. Confirming them is a round of texts, not a
+round of quote requests.
+
+**Fifty of Johnson's 59 tasks have no Subcontractor linked.** Nothing else in
+tier 1 can run on a task without one: no insurance check, no quote lookup, no
+work order. This is the largest single blocker to tier 1 being useful across
+the whole job rather than the next few tasks.
+
+**Seven quotes match no subcontractor.** Sun Windows, Watson Metals, Mayhew
+Brothers, Madisonville Garage Doors and SRS Building are prices Six Arrows
+holds from vendors who have no row in the Subcontractors database. The matcher
+is behaving correctly; the database is incomplete.
+
 **The API credit balance is empty.** This is an account matter, not a code one.
 The Anthropic API is billed separately from a Claude subscription, at
 console.anthropic.com. Until it is topped up, every AI read fails. Reading all
 98 documents once costs on the order of a couple of dollars.
-
-**The reader is unproven on real documents.** 29 certificates have been read,
-all by the free local text pass. The AI path has never completed against a real
-file. This is the single biggest open question in the feature.
 
 **Five HEIC files cannot be read at all.** The API does not accept the format
 and iPhones produce it by default. They need re-saving as PDF or JPEG by hand.
