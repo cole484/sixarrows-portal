@@ -27,14 +27,27 @@ const FILES  = 'https://www.googleapis.com/drive/v3/files';
 // certificate for the same sub has to sit beside the first rather than replace
 // it. Without the date they would be "Artisan Electrical.pdf" and "Artisan
 // Electrical (1).pdf", and the second tells nobody anything.
-export function documentName({ subName, kind, receivedOn, sourceName }) {
+// An unmatched document takes the sender's domain as a suffix. Without it the
+// two that arrived on the first real run would both have been filed as
+// "Unmatched COI 2026-08-14.pdf": one from an insurance agency and one from
+// KEMI. drive.file cannot overwrite, so they would have sat side by side under
+// one name with nothing to tell them apart, which is worse than not filing
+// them. "Unmatched COI 2026-08-14 lipca.pdf" at least says where to look.
+function senderTag(fromEmail) {
+  const domain = String(fromEmail || '').split('@')[1] || '';
+  const label = domain.split('.').filter(p => !/^(com|net|org|co|us|inc)$/i.test(p)).pop() || '';
+  return label.replace(/[^a-z0-9]/gi, '').slice(0, 20);
+}
+
+export function documentName({ subName, kind, receivedOn, sourceName, fromEmail }) {
   const clean = String(subName || 'Unmatched')
     .replace(/[\\/:*?"<>|]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   const ext = (String(sourceName || '').match(/\.([a-z0-9]{2,5})$/i) || [, 'pdf'])[1].toLowerCase();
   const day = String(receivedOn || '').slice(0, 10) || 'undated';
-  return `${clean} ${kind === 'w9' ? 'W9' : 'COI'} ${day}.${ext}`;
+  const tag = subName ? '' : (senderTag(fromEmail) ? ` ${senderTag(fromEmail)}` : '');
+  return `${clean} ${kind === 'w9' ? 'W9' : 'COI'} ${day}${tag}.${ext}`;
 }
 
 // Multipart upload: metadata and bytes in one request. Simple upload cannot

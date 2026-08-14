@@ -326,7 +326,7 @@ async function runWatcher(q) {
         kind,
         sub: match.subName, matchedVia: match.via, confidence: match.confidence,
         why: explainMatch(match, msg),
-        willFileAs: documentName({ subName: match.subName, kind, receivedOn: msg.internalDate, sourceName: att.filename }),
+        willFileAs: documentName({ subName: match.subName, kind, receivedOn: msg.internalDate, sourceName: att.filename, fromEmail: msg.from?.email }),
         uploaded: false,
       };
 
