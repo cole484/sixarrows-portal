@@ -256,14 +256,6 @@ export function evaluateTask(task, ctx) {
         coversWholeScope: quote.coversWholeScope,
         pricedSeparately: quote.pricedSeparately || [],
       });
-      // A price that only covers part of the job is the failure this system
-      // exists to stop. It becomes a change order later, and the sub is right.
-      if (quote.coversWholeScope === false && (quote.pricedSeparately || []).length) {
-        flags.push({
-          kind: 'quote_partial',
-          detail: `${moneyText(quote.total)} does not cover the whole scope. Charged separately: ${quote.pricedSeparately.join('; ')}. The work order has to say so or it turns into a change order.`,
-        });
-      }
     } else if (quote && quote.state === 'stale') {
       flags.push({
         kind: 'quote_stale',
@@ -288,6 +280,24 @@ export function evaluateTask(task, ctx) {
         detail: source
           ? `Estimated Cost is set but Cost Source is "${source}", so this is not a number the sub gave us, and no quote for them is on file. Send a quote request first.`
           : 'Estimated Cost is set but Cost Source is blank, and no quote for this sub is on file. Confirm whether this is a bid or an estimate.',
+      });
+    }
+
+    // Raised outside the branches above, because it applies whenever we hold a
+    // quote with carve-outs and does not care how the task's cost field got
+    // filled in. Putting it inside the "no number yet" branch meant that typing
+    // the number into Notion silenced the warning, which is backwards: the
+    // moment the price is settled is the moment the work order goes out, and
+    // the work order is the document that has to name what the price does not
+    // cover. Goodnight's $10,800 excludes water and sewer priced per foot;
+    // meeting that after the trench is open is a change order and the sub is
+    // right.
+    if (quote && quote.coversWholeScope === false && (quote.pricedSeparately || []).length) {
+      flags.push({
+        kind: 'quote_partial',
+        detail: `${moneyText(quote.total)} in ${quote.file} does not cover the whole scope. Charged separately: ${quote.pricedSeparately.join('; ')}. The work order has to say so or it turns into a change order.`,
+        pricedSeparately: quote.pricedSeparately,
+        file: quote.file,
       });
     }
   }
