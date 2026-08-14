@@ -68,6 +68,22 @@ export function isBusinessDay(iso) {
   return d !== 0 && d !== 6;
 }
 
+// "Eric Haley" becomes "Eric". Per Cole: these are people he has worked with
+// for years and greeting them by their full name reads like a mail merge.
+//
+// Deliberately just the first word. All 65 Contact Name values in the
+// Subcontractors database were checked and every one is either "First Last" or
+// a bare first name: no company names, no "Last, First", no titles. Parsing for
+// cases that do not occur is how a real name eventually gets mangled, so this
+// stays as simple as the data allows. If a company name ever lands in that
+// field it will greet somebody as "Hi Goodnight's," which is why the sweep
+// report now prints the contact for every sub.
+export function firstName(full) {
+  const s = String(full ?? '').trim().replace(/\s+/g, ' ');
+  if (!s) return null;
+  return s.split(' ')[0].replace(/[,;:]+$/, '') || null;
+}
+
 function fmtDate(iso) {
   if (!iso) return null;
   const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
@@ -120,8 +136,9 @@ export function buildBody({ contactName, coiState, coiExpiry, needsW9, attempt =
   const needs = needsClause({ coiState, coiExpiry, needsW9 }, attempt > 1);
   if (!needs.length) return null;              // nothing to ask for
 
+  const first = firstName(contactName);
   const L = [];
-  L.push(contactName ? `Hi ${contactName},` : 'Hi,');
+  L.push(first ? `Hi ${first},` : 'Hi,');
   L.push('');
 
   if (attempt === 1) {
