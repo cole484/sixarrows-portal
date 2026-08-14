@@ -138,6 +138,18 @@ contributor should treat changing one as requiring his explicit agreement.
 - **Compliance emails are the one deliberate exception to no-auto-send.** They
   come from Cole, not Lindsey, they send automatically, they include W9
   requests, and they follow up until the document arrives.
+- **A compliance email names no project, no task and no date.** Cole's call. A
+  certificate is a standing requirement for working with Six Arrows at all, not
+  a condition attached to Thursday's rough-in, and the earlier version that
+  named the task invited the reply "we can sort that out closer to the time".
+  The email says what is needed, gives the address to list Six Arrows as
+  additionally insured, and stops. The project and task are still recorded on
+  the `compliance_requests` row, because that is how we know which job put the
+  sub in the window.
+- **Every interval in the follow-up ladder is business days**, and the sweep
+  will not send on a weekend. An agent does not issue certificates on a
+  Saturday, and a follow-up that arrives before anybody could have acted on the
+  first one burns one of the three we are ever going to send.
 - **Six Arrows must be listed as additionally insured** on every certificate.
   The address subs should use is: Six Arrows Construction, PO Box 10059,
   Bowling Green, KY 42102.

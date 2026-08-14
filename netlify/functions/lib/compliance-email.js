@@ -23,12 +23,50 @@ export const FROM_EMAIL = 'cole@sixarrowsconstruction.com';
 // How the chase escalates. Bounded on purpose: these are relationships Six
 // Arrows depends on, so the system asks a small number of times and then hands
 // the problem to a person rather than emailing indefinitely.
+//
+// Every number here is BUSINESS days. A subcontractor's agent does not issue
+// certificates on a Saturday, so counting the weekend against them produces a
+// follow-up that arrives before anybody could have acted on the first email.
+// Three calendar days from a Thursday is Sunday; three business days is
+// Tuesday, which is when a person would actually have chased it.
 export const ESCALATION = {
-  followUpDays:   [3, 7],   // days after the initial request
+  followUpDays:   [3, 7],   // business days after the previous email
   maxEmails:      3,        // initial + 2 follow-ups, ever, per sub per doc
-  escalateAfter:  10,       // days after initial with no document
-  escalateWithin: 2,        // or this many days before start, whichever is first
+  // The ladder reaches its third email 10 business days after the first, so an
+  // escalation set at 10 fired on the same day and the third email could never
+  // be sent at all. maxEmails said three and the system sent two. 15 leaves the
+  // last follow-up a week to work before a person takes it over.
+  escalateAfter:  15,       // business days after the first request
+  escalateWithin: 2,        // or this many business days before start
 };
+
+// Business days between two dates, counting the end and not the start, so
+// Friday to Monday is 1.
+//
+// Federal holidays are not handled. Adding them means a calendar that has to
+// be maintained every year, and the cost of being wrong is one follow-up email
+// arriving a day early, which is not worth that.
+export function businessDaysBetween(fromISO, toISO) {
+  const from = Date.parse(String(fromISO).slice(0, 10) + 'T00:00:00Z');
+  const to   = Date.parse(String(toISO).slice(0, 10) + 'T00:00:00Z');
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  if (to === from) return 0;
+
+  const sign = to > from ? 1 : -1;
+  let n = 0;
+  // Bounded so a bad date cannot spin. Nothing here reasons past a year out.
+  for (let t = from, i = 0; t !== to && i < 800; i++) {
+    t += sign * 86_400_000;
+    const day = new Date(t).getUTCDay();
+    if (day !== 0 && day !== 6) n += sign;
+  }
+  return n;
+}
+
+export function isBusinessDay(iso) {
+  const d = new Date(String(iso).slice(0, 10) + 'T00:00:00Z').getUTCDay();
+  return d !== 0 && d !== 6;
+}
 
 function fmtDate(iso) {
   if (!iso) return null;
@@ -54,45 +92,40 @@ function needsClause({ coiState, coiExpiry, needsW9 }, terse = false) {
   return parts;
 }
 
-export function buildSubject({ coiState, needsW9, taskName }) {
-  // Per Cole: an expired certificate gets the bare subject, no task suffix.
-  // It is the case a sub recognizes instantly and the extra clause adds
-  // nothing.
-  if (coiState === 'expired' && !needsW9) return 'Updated insurance certificate needed';
-
+// Per Cole: the subject says what is needed and stops. No project, no task, no
+// date. A sub who works on three of our jobs does not need to be told which one
+// prompted this, because the certificate covers all of them anyway.
+export function buildSubject({ coiState, needsW9 }) {
   // "Updated" is wrong when there was never one to update.
-  const what = (coiState !== 'ok' && needsW9) ? 'Insurance certificate and W9 needed'
-             : needsW9                        ? 'W9 needed'
-             : coiState === 'expired'         ? 'Updated insurance certificate needed'
-             :                                  'Insurance certificate needed';
-
-  return taskName ? `${what} before ${taskName.toLowerCase()}` : what;
+  if (coiState !== 'ok' && needsW9) return 'Insurance certificate and W9 needed';
+  if (needsW9)                      return 'W9 needed';
+  if (coiState === 'expired')       return 'Updated insurance certificate needed';
+  return 'Insurance certificate needed';
 }
 
 // attempt: 1 = initial request, 2+ = follow-up. The follow-ups get shorter and
 // more direct rather than repeating the whole message.
-export function buildBody({
-  contactName, subName, projectName, projectAddress,
-  taskName, startDate, coiState, coiExpiry, needsW9, attempt = 1,
-}) {
-  const needs      = needsClause({ coiState, coiExpiry, needsW9 }, attempt > 1);
+//
+// The email says what we need and how to send it, and nothing else. Cole's
+// call, and it is the right one: naming the project and the task turns a
+// standing requirement into a negotiation about one job. A certificate is
+// something a sub has to carry to work for us at all, not a condition attached
+// to Thursday's rough-in, and the version that named the task invited the reply
+// "we can sort it out when we get closer".
+//
+// projectName, taskName and startDate are deliberately not parameters. Leaving
+// them in the signature unused would read as an oversight and invite somebody
+// to put them back into a sentence.
+export function buildBody({ contactName, coiState, coiExpiry, needsW9, attempt = 1 }) {
+  const needs = needsClause({ coiState, coiExpiry, needsW9 }, attempt > 1);
   if (!needs.length) return null;              // nothing to ask for
 
-  const greeting   = contactName ? `Hi ${contactName},` : 'Hi,';
-  const startNice  = fmtDate(startDate);
-  const where      = [projectName && `the ${projectName} project`, projectAddress]
-                       .filter(Boolean).join(' at ');
-  const L          = [];
-
-  L.push(greeting);
+  const L = [];
+  L.push(contactName ? `Hi ${contactName},` : 'Hi,');
   L.push('');
 
   if (attempt === 1) {
-    const lead = where ? `Before we get started on ${where}, ` : 'Before this work starts, ';
-    // Deliberately does not add "we do not have one on record" for the missing
-    // case: the opener already says we need it on file, and saying it twice
-    // reads like a form letter.
-    L.push(`${lead}we need ${joinList(needs)} on file.`);
+    L.push(`We need ${joinList(needs)} on file.`);
     L.push('');
 
     if (coiState !== 'ok') {
@@ -108,24 +141,13 @@ export function buildBody({
       L.push('');
     }
 
-    if (taskName && startNice) {
-      L.push(`${taskName} is scheduled to start ${startNice}, so we need this back before then.`);
-    } else if (startNice) {
-      L.push(`Work is scheduled to start ${startNice}, so we need this back before then.`);
-    }
-    L.push('');
     L.push(coiState !== 'ok'
       ? 'Let me know if you need anything from us to get it issued.'
       : 'Let me know if you need anything from us.');
   } else {
     // Follow-up. Assume they read the first one; do not re-explain.
     L.push(`Following up on ${joinList(needs)}. We still do not have ${needs.length > 1 ? 'them' : 'it'}.`);
-    L.push('');
-    if (taskName && startNice) {
-      L.push(`${taskName} starts ${startNice}. We cannot have anyone on site without current insurance on file, so this is holding up the schedule.`);
-    } else {
-      L.push('We cannot have anyone on site without current insurance on file, so this is holding up the schedule.');
-    }
+
     if (coiState !== 'ok') {
       L.push('');
       L.push('Certificate holder, listed as additionally insured:');
@@ -155,6 +177,7 @@ function joinList(items) {
 //
 // history: prior sends for this sub + doc set, newest first,
 //          [{ sent_at, attempt }]
+// Every interval is measured in business days. See ESCALATION above for why.
 export function nextAction({ history = [], startDate, today = new Date().toISOString().slice(0, 10) }) {
   const sent = history.length;
 
@@ -162,28 +185,34 @@ export function nextAction({ history = [], startDate, today = new Date().toISOSt
     return { action: 'escalate', reason: `already sent ${sent} requests with no document` };
   }
 
-  const daysTo = startDate
-    ? Math.round((new Date(startDate.slice(0, 10) + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86_400_000)
-    : null;
+  // Escalation is a decision, not an email, so it stands on a weekend. Sending
+  // does not: an email that lands on a subcontractor's Saturday is either
+  // ignored until Monday or read as us not knowing what day it is, and either
+  // way it burns one of the three we are ever going to send.
+  const canSendToday = isBusinessDay(today);
 
-  if (!sent) return { action: 'send', attempt: 1 };
+  const daysTo = startDate ? businessDaysBetween(today, startDate) : null;
+
+  if (!sent) return canSendToday ? { action: 'send', attempt: 1 } : null;
 
   const firstSent  = history[history.length - 1].sent_at.slice(0, 10);
   const lastSent   = history[0].sent_at.slice(0, 10);
-  const sinceFirst = Math.round((new Date(today + 'T00:00:00Z') - new Date(firstSent + 'T00:00:00Z')) / 86_400_000);
-  const sinceLast  = Math.round((new Date(today + 'T00:00:00Z') - new Date(lastSent  + 'T00:00:00Z')) / 86_400_000);
+  const sinceFirst = businessDaysBetween(firstSent, today);
+  const sinceLast  = businessDaysBetween(lastSent,  today);
 
   // Stop emailing and hand it to a person once we are out of runway, whether
   // that is elapsed time or the start date arriving.
-  if (sinceFirst >= ESCALATION.escalateAfter) {
-    return { action: 'escalate', reason: `${sinceFirst} days since the first request` };
+  if (sinceFirst != null && sinceFirst >= ESCALATION.escalateAfter) {
+    return { action: 'escalate', reason: `${sinceFirst} business days since the first request` };
   }
   if (daysTo != null && daysTo <= ESCALATION.escalateWithin) {
-    return { action: 'escalate', reason: `work starts in ${daysTo} day(s) and the document is still missing` };
+    return { action: 'escalate', reason: `work starts in ${daysTo} business day(s) and the document is still missing` };
   }
 
+  if (!canSendToday) return null;
+
   const dueAfter = ESCALATION.followUpDays[sent - 1];
-  if (dueAfter != null && sinceLast >= dueAfter) {
+  if (dueAfter != null && sinceLast != null && sinceLast >= dueAfter) {
     return { action: 'send', attempt: sent + 1 };
   }
 

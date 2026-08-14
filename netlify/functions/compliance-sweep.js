@@ -196,14 +196,12 @@ export const handler = async (event) => {
     if (q.test === '1') {
       if (!gmailConfigured()) return { statusCode: 500, headers: corsH, body: JSON.stringify({ error: 'Gmail not configured' }) };
       const body = buildBody({
-        contactName: 'Cole', subName: 'Test Sub', projectName: 'Johnson',
-        projectAddress: '106 Reynolds Ln, Hartford, KY',
-        taskName: 'Underslab plumbing rough-in', startDate: '2026-08-24',
-        coiState: 'expired', coiExpiry: '2025-08-04', needsW9: true, attempt: 1,
+        contactName: 'Cole', coiState: 'expired', coiExpiry: '2025-08-04',
+        needsW9: true, attempt: 1,
       });
       const sent = await sendGmail({
         to: FROM_EMAIL,
-        subject: '[TEST] ' + buildSubject({ coiState: 'expired', needsW9: true, taskName: 'Underslab plumbing rough-in' }),
+        subject: '[TEST] ' + buildSubject({ coiState: 'expired', needsW9: true }),
         body: `This is a test send from compliance-sweep. No subcontractor received anything.\n\nBelow is what a real request looks like.\n\n${'-'.repeat(60)}\n\n${body}`,
       });
       return { statusCode: 200, headers: corsH, body: JSON.stringify({ test: true, sentTo: FROM_EMAIL, from: senderAddress(), ...sent }, null, 2) };
@@ -622,11 +620,13 @@ export const handler = async (event) => {
         continue;
       }
 
-      const subject = buildSubject({ coiState: st.coiState, needsW9, taskName: job.taskName });
+      // The task and the project still go on the record row below, because
+      // that is how we know which job put this sub in the window. They are
+      // deliberately not in the email: a certificate is a standing requirement
+      // for working with us, not a condition attached to one rough-in.
+      const subject = buildSubject({ coiState: st.coiState, needsW9 });
       const body    = buildBody({
-        contactName: sub.contact, subName: sub.name,
-        projectName: job.project, projectAddress: null,
-        taskName: job.taskName, startDate: job.start,
+        contactName: sub.contact,
         coiState: st.coiState, coiExpiry: st.coiExpiry,
         needsW9, attempt: decided.attempt,
       });
