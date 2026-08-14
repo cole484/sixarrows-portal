@@ -197,6 +197,8 @@ Answer with a JSON object and nothing else. No preamble, no code fence.
 
 total is the bottom line the vendor is asking for, as a plain number with no commas or dollar sign. If the document shows a subtotal, tax and a grand total, report the grand total. If it prices several alternatives and does not choose one, use null and explain in notes.
 
+line_items is at most 15 entries and exists so a person can see how the price was built up, not to reproduce the document. A supplier's material takeoff can run to hundreds of rows; when that happens, group them into the handful of headings the vendor themselves used, or into obvious ones like "framing lumber" and "sheathing", and say in notes that you grouped them. Never let this list run long enough to crowd out the fields below it.
+
 total_covers_whole_scope is false whenever any work is priced separately, charged by the foot, or called extra. Default to false when you are unsure. Saying a partial price is complete is the worst mistake available here.
 
 priced_separately is one short line per item, in the vendor's own terms, including the rate if one is given. For example: "Water line at $5/ft if owner digs, $15/ft if we dig".
@@ -231,7 +233,12 @@ export function isTransientFailure(status, body = '') {
 // recorded before this distinction existed still carry the reason in their
 // error text, so matching on it lets those rows heal themselves rather than
 // needing to be found and cleared by hand.
-const TRANSIENT_TEXT = /credit balance|billing|quota|insufficient|rate.?limit|overloaded|could not reach|Claude API (5\d\d|429|401|403)/i;
+// "ran out of room" and "not with usable JSON" are here because they are facts
+// about a request rather than about a document. Three of the first Johnson
+// quotes were recorded that way before the allowance was raised, and matching
+// on the wording is what lets those rows heal on the next run rather than
+// needing to be found and cleared by hand.
+const TRANSIENT_TEXT = /credit balance|billing|quota|insufficient|rate.?limit|overloaded|could not reach|ran out of room|not with usable JSON|Claude API (5\d\d|429|401|403)/i;
 export function errorLooksTransient(text) {
   return !!text && TRANSIENT_TEXT.test(String(text));
 }
@@ -268,7 +275,7 @@ function cleanStr(v, max = 200) {
 }
 
 // One call. Returns { ok, data, error, usage }.
-async function ask(prompt, bytes, mediaType, kind) {
+async function ask(prompt, bytes, mediaType, kind, maxTokens = 2000) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY is not set, so documents cannot be read automatically.' };
   const cap = kind === 'pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES;
@@ -305,7 +312,7 @@ async function ask(prompt, bytes, mediaType, kind) {
       // front of it before the instructions arrive.
       body: JSON.stringify({
         model: READER_MODEL,
-        max_tokens: 2000,
+        max_tokens: maxTokens,
         messages: [{ role: 'user', content: [doc, { type: 'text', text: prompt }] }],
       }),
     });
@@ -325,7 +332,23 @@ async function ask(prompt, bytes, mediaType, kind) {
     .join('\n');
 
   const data = parseJson(text);
-  if (!data) return { ok: false, error: `the reader replied but not with usable JSON: ${text.slice(0, 200)}` };
+  if (!data) {
+    // A lumber takeoff can run to two hundred line items, and transcribing all
+    // of them ran the answer off the end of its token allowance mid-object.
+    // That looks identical to a model that ignored the format instruction, and
+    // the two have completely different fixes, so say which one happened.
+    const cut = payload.stop_reason === 'max_tokens';
+    return {
+      ok: false,
+      error: cut
+        ? `the reader ran out of room before finishing its answer. This document has more detail on it than the allowance of ${maxTokens} tokens covers.`
+        : `the reader replied but not with usable JSON: ${text.slice(0, 200)}`,
+      // Room is a property of the request, not of the file. Reading it again
+      // with a bigger allowance is the fix, so do not remember this as an
+      // answer about the document.
+      transient: cut,
+    };
+  }
 
   return { ok: true, data, usage: payload.usage || null, model: payload.model || READER_MODEL };
 }
@@ -428,7 +451,10 @@ export async function readQuote({ bytes, file = {} }) {
   const { kind, mediaType, why } = classify(file);
   if (!kind) return { ...blank, error: why };
 
-  const r = await ask(QUOTE_PROMPT, bytes, mediaType, kind);
+  // Roomier than a certificate on purpose. A supplier's quote for a framing
+  // package is a takeoff, and the first three of these ran off the end of a
+  // 2,000 token answer partway through the line items.
+  const r = await ask(QUOTE_PROMPT, bytes, mediaType, kind, 8000);
   if (!r.ok) return { ...blank, error: r.error, budgetExhausted: !!r.budgetExhausted, transient: !!r.transient };
 
   const d = r.data;
