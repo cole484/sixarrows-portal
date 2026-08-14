@@ -183,6 +183,12 @@ export function evaluateTask(task, ctx) {
   const subIds   = prop(task, 'Subcontractor') || [];
   const sub      = subIds.length ? subsById[subIds[0]] : null;
   const orderedOn = (prop(task, 'Ordered') || {}).start || null;
+  // A visit under somebody else's work order. Plumbing is the clear case: the
+  // same sub comes out for underslab, rough-in, sewer and trim, and one price
+  // covers all four. Each visit is its own task because each has its own date
+  // and its own place in the sequence, but there is one price and one document.
+  const coveredBy = prop(task, 'Covered by') || [];
+  const covers    = prop(task, 'Covers')     || [];
 
   const out      = daysUntil(start);
   const blockers = [];
@@ -289,6 +295,27 @@ export function evaluateTask(task, ctx) {
   // the task's dates, so a planned duration is a hint and never a gate.
   if (kind === 'service' && !subIds.length) blockers.push('no Subcontractor assigned');
 
+  // ── Covered visits ──────────────────────────────────────────────────────
+  // A covered task is real work by a real sub on a real date, so the insurance
+  // check below still applies to it: a certificate that lapses between rough-in
+  // and trim-out is exactly the gap worth catching, and it would be invisible
+  // if only the covering task were checked.
+  //
+  // What it does NOT need is its own price, its own quote or its own work
+  // order. Demanding those would double count Blackstone's countertops in the
+  // budget and send a sub two documents for one job.
+  const isCovered = coveredBy.length > 0;
+  if (isCovered) {
+    const parent = (ctx.tasksById || {})[coveredBy[0]];
+    flags.push({
+      kind: 'covered_by',
+      detail: parent
+        ? `Price and work order live on "${prop(parent, 'Task') || 'another task'}". This visit is part of that scope, so it needs no separate quote or document.`
+        : 'Price and work order live on another task. This visit is part of that scope, so it needs no separate quote or document.',
+      coveredBy: coveredBy[0],
+    });
+  }
+
   // ── Money ───────────────────────────────────────────────────────────────
   // A work order carries a signature block and a payment schedule, so it needs
   // a price the subcontractor actually gave us. But an empty Estimated Cost
@@ -302,7 +329,7 @@ export function evaluateTask(task, ctx) {
   // next, and that is the difference between a quote request and a work order.
   const quote = quoteForTask(ctx, subIds[0]);
 
-  if (kind === 'service') {
+  if (kind === 'service' && !isCovered) {
     if (cost != null && source === 'Bid Received') {
       // Notion says a sub gave us this number. Where we also hold their quote,
       // the two should agree, and when they do not the document is right: the
@@ -455,6 +482,22 @@ export function evaluateTask(task, ctx) {
     }
   }
 
+  // A task that carries the price for several visits should say so, because the
+  // work order it produces has to list them and, per Cole, offer a payment
+  // schedule split across them: subs want paying for the portion performed
+  // rather than all at the end.
+  if (covers.length) {
+    const names = covers
+      .map(id => (ctx.tasksById || {})[id])
+      .map(t => (t ? prop(t, 'Task') : null))
+      .filter(Boolean);
+    flags.push({
+      kind: 'covers_visits',
+      detail: `One price covering ${covers.length + 1} visits${names.length ? `: this one, then ${names.join(', ')}` : ''}. The work order lists all of them and splits the payment across them.`,
+      covers,
+    });
+  }
+
   // A status that claims the work is handled, on a task that cannot produce a
   // work order, is worse than a task that admits it is not ready. Nobody is
   // looking at it.
@@ -470,7 +513,7 @@ export function evaluateTask(task, ctx) {
     name, trade, kind, status, start,
     daysOut: out,
     duration, leadTime,
-    orderedOn,
+    orderedOn, coveredBy: coveredBy[0] || null, covers,
     estimatedCost: cost,
     costSource: source,
     subName: sub ? prop(sub, 'Subcontractor Name') : null,
@@ -712,13 +755,13 @@ export const handler = async (event) => {
       const entry = { project: target.project, dbId: target.dbId, inWindow: 0, readyCount: 0, blockedCount: 0, tasks: [] };
 
       try {
-        const pages = await notionQueryAll(target.dbId, token, {
-          filter: {
-            and: [
-              { property: 'Start', date: { on_or_after:  today   } },
-              { property: 'Start', date: { on_or_before: horizon } },
-            ],
-          },
+        // The whole timeline, then the window is taken from it in code. One
+        // query either way, and it means a covering task four months out can
+        // still be named by a covered visit three weeks out.
+        const allPages = await notionQueryAll(target.dbId, token);
+        const pages = allPages.filter(p => {
+          const d = (prop(p, 'Start') || {}).start;
+          return d && d.slice(0, 10) >= today && d.slice(0, 10) <= horizon;
         });
 
         // Finished and parked tasks drop out. Everything else gets gated,
@@ -753,7 +796,13 @@ export const handler = async (event) => {
         // whole Subcontractors database, which is the only way to answer it.
         const quotes = (await quotesForProject(subList, target.project, process.env.GOOGLE_API_KEY)).bySub;
 
-        const ctx = { templatesByTitle, subsById, certs, quotes };
+        // Keyed on every task in the timeline, not only those inside the
+        // window. A rough-in in three weeks can be covered by a work order
+        // whose task sits four months out, and naming it "another task" when
+        // the name is right there would be a poor showing.
+        const tasksById = Object.fromEntries(allPages.map(p => [p.id, p]));
+
+        const ctx = { templatesByTitle, subsById, certs, quotes, tasksById };
         entry.tasks    = open.map(p => evaluateTask(p, ctx));
         entry.inWindow = entry.tasks.length;
         entry.readyCount   = entry.tasks.filter(t => t.ready).length;

@@ -450,6 +450,37 @@ already set on Johnson:
 Internal covers Six Arrows, the client, and the county. Nobody is hired, so
 there is no price to agree, no certificate to hold and nothing to sign.
 
+### One price, several visits
+
+The commonest shape on a real build, and the one the gate got wrong until Cole
+described it. From him, on plumbing: *"plumbers come out for underslab rough
+in, rough in after framing, finish, and again to do the final trim out, and
+they may even come one other time to connect the sewer. But all of that is
+typically recorded in one original price."*
+
+Each visit stays its own task, because each has its own date and its own place
+in the sequence. Only one of them carries the money. A `Covered by` / `Covers`
+two-way relation on the timeline records which.
+
+A covered visit:
+
+- **does not** need its own price, its own quote, or its own work order. Left
+  unhandled, Blackstone's countertops would be counted twice in a budget
+  rollup and the sub would get two documents for one job.
+- **does** still need a subcontractor, a date, a definition of done, and a
+  **current certificate of insurance judged against that visit's date**. A
+  policy that lapses between rough-in and trim-out is exactly the gap worth
+  catching, and it would be invisible if only the covering task were checked.
+
+The covering task raises `covers_visits`, which is what tells the work order
+generator to list every visit and split the payment across them.
+
+**The payment schedule is Cole's design and is not built yet.** His words: the
+work order should offer payment all at once, in two parts, or in three, because
+subs want paying for the portion of work performed rather than everything at
+the end. The visits are the natural payment points. What is undecided is how a
+draw is sized: an explicit percentage per visit, or an even split across them.
+
 ### Start and Lead time mean opposite things on a service and a purchase
 
 This is the one that produced a false alarm for a month.
