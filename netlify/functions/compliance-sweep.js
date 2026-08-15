@@ -47,6 +47,12 @@
 // photos that have no text to extract. Reads are cached per file and
 // modification time, so a daily run costs nothing until a document changes.
 //
+// A subcontractor's answer is assembled from every certificate on file, not
+// from the newest one. Carrying general liability and workers compensation with
+// two different carriers means two certificates, and lib/coverage.js takes each
+// coverage from whichever document actually carries it. The controlling expiry
+// is the earlier of the two.
+//
 // aiLimit exists because this function answers an HTTP request and therefore
 // has seconds, while opening a document takes several of them. Six fits.
 // Twenty-five times out having cached nothing. To read a whole backlog at
@@ -65,6 +71,7 @@ import {
   listFolder, matchSub, readCoiExpiry, readW9Identity, coiState,
   COI_FOLDER_ID, W9_FOLDER_ID,
 } from './lib/compliance-docs.js';
+import { mergeCoverage } from './lib/coverage.js';
 import { anthropicConfigured, setReadBudget, readsUsed, readsLeft, errorLooksTransient } from './lib/doc-ai.js';
 import { loadCacheIndex, cacheKey, probeCache } from './lib/doc-cache.js';
 
@@ -84,6 +91,13 @@ const SUBS_DB_ID     = '1944737b-ea6f-8086-8f45-f6b479ed36bb';
 const OWN_COMPANY = /^six arrows/i;
 
 const DEFAULT_LOOKAHEAD_DAYS = 45;
+
+// How many certificates one subcontractor's answer may be assembled from.
+// Two is the normal case, a liability certificate and a workers compensation
+// one from a different carrier. Three or four happens when a renewal arrives
+// before the old file is cleared out. Beyond that it is history, and reading it
+// costs time this request does not have.
+const MAX_COI_PER_SUB = 4;
 
 const TIMELINE_DBS = [
   { dbId: '437bb594-ae27-437b-9014-48c5e6739e8c', project: 'Johnson' },
@@ -310,14 +324,25 @@ export const handler = async (event) => {
     const focus = only ? subs.filter(s => s.name.toLowerCase().includes(only)) : subs;
     const focusIds = new Set(focus.map(s => s.id));
 
-    // Newest file wins when a sub has several certificates on file.
-    const bySub   = new Map();        // subId -> { coiFile, w9File }
+    // Every certificate a sub has on file, newest first, because one document
+    // is frequently not the whole picture. A sub who carries general liability
+    // and workers compensation from two different carriers sends two
+    // certificates, and reading only the newest answers a question about one
+    // policy while appearing to answer it about the subcontractor.
+    //
+    // W9s stay newest-wins: there is only one of them and a newer one replaces
+    // the last.
+    const bySub   = new Map();        // subId -> { coiFiles: [], w9File }
     const orphans = [];               // files no name matched
 
     const assign = (file, kind, subId) => {
-      const cur = bySub.get(subId) || {};
-      const key = kind === 'coi' ? 'coiFile' : 'w9File';
-      if (!cur[key] || file.modifiedTime > cur[key].modifiedTime) cur[key] = file;
+      const cur = bySub.get(subId) || { coiFiles: [] };
+      if (kind === 'coi') {
+        if (!cur.coiFiles.some(f => f.id === file.id)) cur.coiFiles.push(file);
+        cur.coiFiles.sort((a, b) => String(b.modifiedTime || '').localeCompare(String(a.modifiedTime || '')));
+      } else if (!cur.w9File || file.modifiedTime > cur.w9File.modifiedTime) {
+        cur.w9File = file;
+      }
       bySub.set(subId, cur);
     };
 
@@ -425,43 +450,39 @@ export const handler = async (event) => {
     const state = new Map();          // subId -> { coiState, coiExpiry, hasW9 }
     for (const sub of focus) {
       if (outOfTime()) { report.truncated = `ran out of time after ${report.subs.length} of ${focus.length} subcontractors`; break; }
-      const docs = bySub.get(sub.id) || {};
-      let expiry = null, confidence = 'none', parseError = null;
-      let readVia = null, additionalInsured = null, insuredName = null, readNotes = null;
-      let limitsOk = null, limits = null, producer = null, policies = null;
-      let cacheDecision = null, retryBecause = null;
+      const docs     = bySub.get(sub.id) || {};
+      const coiFiles = (docs.coiFiles || []).slice(0, MAX_COI_PER_SUB);
 
-      if (docs.coiFile) {
-        // Work coming up means the additional insured answer matters as much
-        // as the date, and only the AI reader can see the ADDL INSD column.
-        // Everyone else gets the cheap pass, which escalates on its own if it
-        // cannot read the document.
-        const r = await readCoiExpiry(docs.coiFile.id, gKey, docs.coiFile, {
+      // Read every certificate on file, then combine them. Work coming up means
+      // the additional insured answer matters as much as the date, and only the
+      // AI reader can see the ADDL INSD column. Everyone else gets the cheap
+      // pass, which escalates on its own if it cannot read the document.
+      const reads = [];
+      for (const f of coiFiles) {
+        if (outOfTime()) break;
+        const r = await readCoiExpiry(f.id, gKey, f, {
           ai: upcoming.has(sub.id), force, cache, cacheOnly,
         });
         if (r.method === 'none' && !r.expiry) notRead++;
-        cacheDecision = r.cacheDecision || null;
-        retryBecause  = r.retryBecause || null;
-        expiry = r.expiry; confidence = r.confidence; parseError = r.error || null;
-        readVia = r.method || null;
-        additionalInsured = r.additionalInsured || null;
-        insuredName = r.insuredName || null;
-        readNotes = r.notes || null;
-        limitsOk = r.limitsOk || null;
-        limits = r.policies
-          ? { eachOccurrence: r.policies.eachOccurrence ?? null, aggregate: r.policies.aggregate ?? null }
-          : null;
-        // The agency that issued it, and the individual policy dates, both of
-        // which the verification email quotes back so the agent confirms rather
-        // than looks up.
-        producer = r.producer || null;
-        policies = r.policies || null;
-        if (parseError) report.errors.push({ sub: sub.name, file: docs.coiFile.name, error: parseError });
+        reads.push({ file: f, read: r });
       }
 
-      const cs     = coiState(expiry, today, !!docs.coiFile);
+      const cov = mergeCoverage(reads);
+      const expiry = cov.expiry, confidence = cov.confidence, parseError = cov.readError;
+      const { additionalInsured, insuredName, limitsOk, limits, producer, policies,
+              readVia, cacheDecision, retryBecause } = cov;
+      const readNotes = cov.notes;
+      if (parseError) {
+        report.errors.push({ sub: sub.name, file: cov.sources.controlling || coiFiles[0]?.name || null, error: parseError });
+      }
+
+      const cs     = coiState(expiry, today, coiFiles.length > 0);
       const hasW9  = !!docs.w9File;
-      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, confidence, limitsOk, limits, insuredName, producer, policies, readError: parseError });
+      state.set(sub.id, {
+        coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, confidence,
+        limitsOk, limits, insuredName, producer, policies,
+        coverage: cov.coverage, missingCoverage: cov.missingCoverage, readError: parseError,
+      });
 
       // Only write when something actually changed, to keep Notion's edit
       // history meaningful rather than a wall of no-op touches.
@@ -509,9 +530,18 @@ export const handler = async (event) => {
         limitsOk,
         limits,
         readNotes,
+        // Per policy, and which document each one came off. The controlling
+        // date above is the earlier of these two, so when it looks wrong this
+        // is the line that says why.
+        coverage: cov.coverage,
+        // Coverages nothing on file speaks to. Reported only: a sole proprietor
+        // with no employees carries no workers compensation and is not out of
+        // compliance for it.
+        missingCoverage: cov.missingCoverage,
         // The two questions worth answering when a state looks wrong: did a
         // file get matched at all, and if so could its expiry be read?
-        coiFile: docs.coiFile ? docs.coiFile.name : null,
+        coiFile: cov.sources.controlling || null,
+        coiFiles: cov.files,
         // Whether this answer came from the cache or from opening the document,
         // and why. The question that took two rounds to answer by inference.
         cacheDecision,
@@ -594,6 +624,19 @@ export const handler = async (event) => {
       // Current, correctly named, and still not acceptable: the limits are
       // short of what Six Arrows requires. Reported rather than emailed, for
       // the same reason as the additional insured case below.
+      // Everything on file for this sub is a workers compensation certificate,
+      // and general liability is the coverage Six Arrows actually requires.
+      // Reported rather than emailed, because the approved wording says we have
+      // no certificate and that would not be true: we have one, it just covers
+      // the wrong thing.
+      if (st.coiState === 'ok' && (st.missingCoverage || []).includes('generalLiability')) {
+        report.actions.push({
+          sub: sub.name, action: 'review',
+          reason: `the only certificate on file covers workers compensation, expiring ${st.coverage?.workersComp?.expiry || st.coiExpiry}. No general liability policy is on file, and that is the coverage Six Arrows requires.`,
+          task: job.taskName, start: job.start,
+        });
+      }
+
       if (st.coiState === 'ok' && st.limitsOk === 'no') {
         const l = st.limits || {};
         report.actions.push({

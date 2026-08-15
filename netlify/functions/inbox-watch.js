@@ -41,6 +41,7 @@ import { gmailConfigured, tokenScopes, senderAddress } from './lib/gmail.js';
 import { listLabels, searchMessages, getMessage, getAttachment, looksLikeDocument } from './lib/gmail-read.js';
 import { uploadToFolder, documentName, deleteOwnFile, shareWithLink } from './lib/drive-upload.js';
 import { documentKind, matchDocument, explainMatch, identifyFromDocument } from './lib/inbox-match.js';
+import { coverageLabel } from './lib/coverage.js';
 import { certificateRow, w9Row, putRead } from './lib/doc-cache.js';
 import { setReadBudget, anthropicConfigured, readCertificate } from './lib/doc-ai.js';
 import { COI_FOLDER_ID, W9_FOLDER_ID } from './lib/compliance-docs.js';
@@ -477,6 +478,10 @@ async function runWatcher(q) {
         entry.willFileAs = documentName({
           subName: match.subName, kind, receivedOn: msg.internalDate,
           sourceName: att.filename, fromEmail: msg.from?.email,
+          // Only known when the document was opened, which happens when the
+          // envelope could not identify the sub. A certificate that arrived
+          // from a known sub's own address keeps the plainer name.
+          coverage: coverageLabel(entry.docRead),
         });
 
         const folder = kind === 'w9' ? W9_FOLDER_ID : COI_FOLDER_ID;

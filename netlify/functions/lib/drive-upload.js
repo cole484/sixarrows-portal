@@ -49,7 +49,13 @@ function senderTag(fromEmail) {
   return label.replace(/[^a-z0-9]/gi, '').slice(0, 20);
 }
 
-export function documentName({ subName, kind, receivedOn, sourceName, fromEmail }) {
+// coverage, when the document was actually opened, is "GL", "WC" or "GL+WC".
+// The sender tag already keeps two same-day certificates apart, but it says
+// which agency sent each one rather than what each one covers, and the coverage
+// is the thing a person scanning the folder is looking for. Both are only two
+// characters, so neither disturbs name matching: the matcher throws away tokens
+// shorter than three letters before it compares anything.
+export function documentName({ subName, kind, receivedOn, sourceName, fromEmail, coverage }) {
   const clean = String(subName || 'Unmatched')
     .replace(/[\\/:*?"<>|]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -57,7 +63,8 @@ export function documentName({ subName, kind, receivedOn, sourceName, fromEmail 
   const ext = (String(sourceName || '').match(/\.([a-z0-9]{2,5})$/i) || [, 'pdf'])[1].toLowerCase();
   const day = String(receivedOn || '').slice(0, 10) || 'undated';
   const tag = senderTag(fromEmail) ? ` ${senderTag(fromEmail)}` : '';
-  return `${clean} ${kind === 'w9' ? 'W9' : 'COI'} ${day}${tag}.${ext}`;
+  const cov = kind === 'w9' ? '' : (/^(GL|WC|GL\+WC)$/.test(String(coverage || '')) ? ` ${coverage}` : '');
+  return `${clean} ${kind === 'w9' ? 'W9' : 'COI'}${cov} ${day}${tag}.${ext}`;
 }
 
 // Multipart upload: metadata and bytes in one request. Simple upload cannot

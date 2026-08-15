@@ -116,6 +116,10 @@ netlify/functions/
                             #   Drive file id + modifiedTime
   lib/compliance-docs.js    # Drive listing, name matching, and the three-layer
                             #   read: cache, then PDF text, then Claude
+  lib/coverage.js           # one sub's insurance position, assembled from every
+                            #   certificate on file. Latest expiry per coverage,
+                            #   earliest across them. Additional insured and the
+                            #   limits come off the general liability document.
   lib/compliance-email.js   # the approved wording for compliance emails
   lib/gmail.js              # OAuth2 refresh-token send, returns threadId
   lib/slack.js              # digest delivery (not wired up yet)
@@ -287,6 +291,14 @@ Rules that matter:
   not have one is the most damaging thing this system could say.
 - **The controlling expiry is the earliest of general liability and workers
   comp**, not the latest date on the page. Auto and umbrella are ignored.
+- **A sub's answer comes from every certificate on file, not the newest one**
+  (`lib/coverage.js`). GL and workers comp from two carriers means two
+  certificates. Per coverage the latest expiry wins, because a second GL
+  document is a renewal; across coverages the earliest controls. Additional
+  insured and the limits are read off the GL document only, since a workers
+  comp certificate never names an additional insured and judging one says "no"
+  about a sub who did nothing wrong. A coverage nothing speaks to is reported,
+  never emailed about: plenty of one-man crews carry no workers comp.
 - **`?aiLimit=N`** caps how many documents one run may open with Claude
   (default 6). `0` means read nothing new at all: no downloads, no parsing,
   cached answers only.

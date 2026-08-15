@@ -266,6 +266,7 @@ Two hard platform limits shape most of the design:
 | `lib/doc-ai.js` | Reads one COI or W9 with Claude. Per-run budget. |
 | `lib/doc-cache.js` | Append-only cache of document reads. |
 | `lib/compliance-docs.js` | Drive listing, name matching, the three-layer read. |
+| `lib/coverage.js` | Combines every certificate a sub has into one position. Latest per coverage, earliest across them. |
 | `lib/compliance-email.js` | The approved outbound wording and escalation schedule. |
 | `lib/gmail.js` | OAuth2 send, returns a thread id so follow-ups thread. |
 | `lib/slack.js` | Written, not wired up. Deferred by decision. |
@@ -532,6 +533,34 @@ we do not have one is the single most damaging thing this system could say.
 comp**, not the latest date on the page. Auto and umbrella are ignored. Taking
 the latest date can mark a lapsed certificate as live, which is the dangerous
 direction to be wrong in.
+
+**A subcontractor's position is assembled from every certificate on file, not
+from the newest one** (`lib/coverage.js`). Carrying general liability and
+workers comp with two different carriers means two certificates, and that is a
+normal arrangement rather than an edge case. Home Pro Pest Control is the case
+that forced this: liability through LIPCA to 2027-07-15, workers comp through
+KEMI to 2026-09-28. Reading only the newest file answered "covered until 2027",
+which is true of one policy and false of the subcontractor, and it hid a
+liability aggregate of 1,000,000 against the 2,000,000 Six Arrows requires.
+Three rules keep the merge honest:
+
+- **Per coverage, the latest expiry wins.** Two documents both carrying general
+  liability is a renewal, and the older one is dead paper. This is the one place
+  where taking the later date is correct.
+- **Across coverages, the earliest expiry controls.** Workers comp lapsing in
+  September is not rescued by liability running to next July.
+- **Additional insured and the limits are read off the general liability
+  document and no other.** A workers comp certificate never names an additional
+  insured, so judging one and concluding "no" accuses a subcontractor of a
+  paperwork failure they did not commit. This was live: whichever of Home Pro's
+  two same-day certificates sorted newest decided the answer.
+
+A coverage nothing on file speaks to is **reported and never emailed about**. A
+sole proprietor with no employees carries no workers comp and is not out of
+compliance for it. The one case that raises a flag is a subcontractor whose only
+certificate is workers comp, because general liability is the coverage Six
+Arrows actually requires, and that goes to a person rather than to the sub: the
+approved wording says we have no certificate, and that would not be true.
 
 **A failure that was not about the document is never cached.** Out of credit,
 rate limited, overloaded, bad key, dropped connection, run budget spent: all
