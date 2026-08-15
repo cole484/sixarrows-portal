@@ -156,6 +156,8 @@ export const handler = async (event) => {
     return reply(200, await runWatcher(q));
   }
 
+  let labels = null, sample = null, sampleError = null, agents = null;
+
   // Who issued each certificate. Reads the documents straight from the mail
   // rather than through Drive and the read cache, because the question here is
   // what is printed on the page and a cached answer from before the reader
@@ -199,7 +201,6 @@ export const handler = async (event) => {
   // Labels and a sample search, so the watcher can be built against what is
   // actually in the mailbox rather than against a guess at the label name.
   // Reads envelopes only: no attachment is downloaded here.
-  let labels = null, sample = null, sampleError = null, agents = null;
   if (ok && q.labels === '1') {
     try { labels = await listLabels(); }
     catch (err) { sampleError = err.message; }
