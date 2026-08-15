@@ -288,7 +288,21 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
     // unreadable the moment the billing was fixed. Matching on the recorded
     // reason lets those rows heal themselves.
     const reusable = cached && (cached.expiry || cached.method === 'ai') && !errorLooksTransient(cached.error);
-    if (reusable) return cached;
+    // Why this row was or was not reused, carried on the result. Two rounds of
+    // this were spent inferring from the outside and getting it wrong, which is
+    // exactly the situation the rest of this file already says to instrument
+    // rather than guess at.
+    if (reusable) {
+      return { ...cached, cacheDecision: 'reused', cacheHadExpiry: !!cached.expiry, cacheMethod: cached.method || null };
+    }
+    if (cached) {
+      // Fall through to a fresh read, but remember why, so the report can say
+      // "this was retried because the last failure was transient" rather than
+      // leaving somebody to work it out.
+      var retryBecause = errorLooksTransient(cached.error)
+        ? 'the last failure was not about the document'
+        : 'the last attempt produced no expiry and was not an AI read';
+    }
   }
 
   if (opts.cacheOnly) {
@@ -407,7 +421,7 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
   // system that a perfectly readable certificate is unreadable, and it would
   // never look again.
   if (!best.budgetExhausted && !best.transient) await putRead(certificateRow(cacheK, best));
-  return best;
+  return { ...best, cacheDecision: cached ? 'retried' : 'first read', retryBecause: typeof retryBecause === 'string' ? retryBecause : null };
 }
 
 // Reads the identifying names off a W9. Cached the same way certificates are.

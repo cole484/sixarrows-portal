@@ -429,6 +429,7 @@ export const handler = async (event) => {
       let expiry = null, confidence = 'none', parseError = null;
       let readVia = null, additionalInsured = null, insuredName = null, readNotes = null;
       let limitsOk = null, limits = null, producer = null, policies = null;
+      let cacheDecision = null, retryBecause = null;
 
       if (docs.coiFile) {
         // Work coming up means the additional insured answer matters as much
@@ -439,6 +440,8 @@ export const handler = async (event) => {
           ai: upcoming.has(sub.id), force, cache, cacheOnly,
         });
         if (r.method === 'none' && !r.expiry) notRead++;
+        cacheDecision = r.cacheDecision || null;
+        retryBecause  = r.retryBecause || null;
         expiry = r.expiry; confidence = r.confidence; parseError = r.error || null;
         readVia = r.method || null;
         additionalInsured = r.additionalInsured || null;
@@ -509,6 +512,10 @@ export const handler = async (event) => {
         // The two questions worth answering when a state looks wrong: did a
         // file get matched at all, and if so could its expiry be read?
         coiFile: docs.coiFile ? docs.coiFile.name : null,
+        // Whether this answer came from the cache or from opening the document,
+        // and why. The question that took two rounds to answer by inference.
+        cacheDecision,
+        retryBecause,
         coiParseError: parseError,
         w9File: docs.w9File ? docs.w9File.name : null,
         hasW9,
