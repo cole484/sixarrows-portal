@@ -12,6 +12,10 @@
 //   GET /?diag=1              what the Google token can actually do
 //   GET /?diag=1&labels=1     list Gmail labels
 //   GET /?diag=1&q=<search>   preview messages a query would reach
+//   GET /?diag=1&agents=1     open every certificate in the label and report
+//                             the issuing agency, so the addresses the
+//                             verification and correction emails need can be
+//                             checked before anything is sent to them
 //
 // Dry run is the default, deliberately. A run with apply unset downloads
 // nothing, uploads nothing and writes nothing: it reports what it would file
@@ -38,7 +42,7 @@ import { listLabels, searchMessages, getMessage, getAttachment, looksLikeDocumen
 import { uploadToFolder, documentName, deleteOwnFile } from './lib/drive-upload.js';
 import { documentKind, matchDocument, explainMatch, identifyFromDocument } from './lib/inbox-match.js';
 import { certificateRow, w9Row, putRead } from './lib/doc-cache.js';
-import { setReadBudget, anthropicConfigured } from './lib/doc-ai.js';
+import { setReadBudget, anthropicConfigured, readCertificate } from './lib/doc-ai.js';
 import { COI_FOLDER_ID, W9_FOLDER_ID } from './lib/compliance-docs.js';
 import { supabase, corsHeaders } from './lib/supabase-client.js';
 
@@ -152,10 +156,50 @@ export const handler = async (event) => {
     return reply(200, await runWatcher(q));
   }
 
+  // Who issued each certificate. Reads the documents straight from the mail
+  // rather than through Drive and the read cache, because the question here is
+  // what is printed on the page and a cached answer from before the reader
+  // learned to look for a producer would not have it.
+  if (ok && q.agents === '1') {
+    setReadBudget(Math.min(Number(q.readLimit) || 10, 20));
+    const out = [];
+    try {
+      const seen = new Set();
+      for (const { q: query } of QUERIES(Math.min(Number(q.days) || 30, 365))) {
+        for (const m of await searchMessages(query, { max: 25 })) seen.add(m.id);
+      }
+      for (const id of seen) {
+        const msg = await getMessage(id);
+        for (const att of msg.attachments.filter(looksLikeDocument)) {
+          const kind = documentKind({ filename: att.filename, subject: msg.subject, body: msg.text });
+          if (kind === 'w9') continue;                 // a W9 names no agency
+          const bytes = await getAttachment(msg.id, att.attachmentId);
+          const r = await readCertificate({ bytes, file: { name: att.filename, mimeType: att.mimeType } });
+          out.push({
+            emailedBy: msg.from?.email || null,
+            file: att.filename,
+            insured: r.insuredName,
+            agency: r.producer?.name || null,
+            agencyContact: r.producer?.contact || null,
+            agencyEmail: r.producer?.email || null,
+            agencyPhone: r.producer?.phone || null,
+            generalLiabilityExpires: r.policies?.generalLiability || null,
+            workersCompExpires: r.policies?.workersComp || null,
+            eachOccurrence: r.policies?.eachOccurrence ?? null,
+            aggregate: r.policies?.aggregate ?? null,
+            additionalInsured: r.additionalInsured,
+            error: r.error || null,
+          });
+        }
+      }
+    } catch (err) { sampleError = err.message; }
+    agents = out;
+  }
+
   // Labels and a sample search, so the watcher can be built against what is
   // actually in the mailbox rather than against a guess at the label name.
   // Reads envelopes only: no attachment is downloaded here.
-  let labels = null, sample = null, sampleError = null;
+  let labels = null, sample = null, sampleError = null, agents = null;
   if (ok && q.labels === '1') {
     try { labels = await listLabels(); }
     catch (err) { sampleError = err.message; }
@@ -192,6 +236,7 @@ export const handler = async (event) => {
       ? 'All three scopes are present. The watcher can be built against this token.'
       : `Still missing ${missing.length} scope(s). Redo step 5 of docs/gmail-setup.md with all three in the scopes box, then replace GMAIL_REFRESH_TOKEN in Netlify.`,
     labels,
+    agents,
     sample,
     sampleError,
     note: q.q
