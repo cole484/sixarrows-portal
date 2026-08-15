@@ -330,7 +330,19 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
     // run out of credit, which would have made every one of them permanently
     // unreadable the moment the billing was fixed. Matching on the recorded
     // reason lets those rows heal themselves.
-    const reusable = cached && (cached.expiry || cached.method === 'ai') && !errorLooksTransient(cached.error);
+    //
+    // And a caller who asked for the AI reader is not asking for a date. It
+    // wants what only that reader produces: which policy each date belongs to,
+    // whether Six Arrows is additionally insured, and the limits. A cached text
+    // pass carries none of that however good its date is, so reusing one
+    // answers a different question from the one being asked. Home Pro's workers
+    // compensation certificate sat in exactly that state, dated by the cheap
+    // pass and therefore never opened again, while the sweep believed it had
+    // read every certificate properly.
+    const reusable = cached
+      && (cached.expiry || cached.method === 'ai')
+      && !errorLooksTransient(cached.error)
+      && !(useAi && cached.method !== 'ai');
     // Why this row was or was not reused, carried on the result. Two rounds of
     // this were spent inferring from the outside and getting it wrong, which is
     // exactly the situation the rest of this file already says to instrument
@@ -344,7 +356,9 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
       // leaving somebody to work it out.
       var retryBecause = errorLooksTransient(cached.error)
         ? 'the last failure was not about the document'
-        : 'the last attempt produced no expiry and was not an AI read';
+        : cached.expiry && useAi && cached.method !== 'ai'
+          ? 'the cached date came from the text pass, which cannot say which policy it belongs to'
+          : 'the last attempt produced no expiry and was not an AI read';
     }
   }
 
@@ -361,7 +375,14 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
     if (cached) {
       return {
         ...cached,
-        error: cached.error || `read on ${String(cached.cached).slice(0, 10)} but no expiry came out of it.`,
+        error: cached.error || (
+          cached.expiry
+            // Reached when the caller wanted the AI reader and the cache holds a
+            // text pass. There is a date, so this is not a failure: it is an
+            // answer to a smaller question than the one asked.
+            ? `dated by the text pass on ${String(cached.cached).slice(0, 10)}, which cannot say which policy the date belongs to. Raise aiLimit to have it opened properly.`
+            : `read on ${String(cached.cached).slice(0, 10)} but no expiry came out of it.`
+        ),
       };
     }
     return {
