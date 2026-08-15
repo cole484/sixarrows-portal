@@ -14,7 +14,12 @@
 // different situations and only one of them is the sub's fault.
 
 import { listFolder, matchSub, readCoiExpiry, COI_FOLDER_ID } from './compliance-docs.js';
+import { mergeCoverage } from './coverage.js';
 import { loadCacheIndex } from './doc-cache.js';
+
+// Same ceiling as the sweep. Two is the normal case, a liability certificate
+// and a workers compensation one from a different carrier.
+const MAX_COI_PER_SUB = 4;
 
 // Six Arrows requires this on the general liability policy only. The ADDL INSD
 // column on the auto, umbrella and workers comp rows is not our concern.
@@ -48,35 +53,50 @@ export async function certificatesBySub(subs, gKey, opts = {}) {
     return out;
   }
 
-  // Newest file wins where a sub has several certificates on file.
+  // Every certificate a sub has, not the newest one. Two carriers means two
+  // documents, and the whole point of this module is that the gate and the
+  // sweep answer the same question the same way. They stopped doing that the
+  // moment the sweep learned to combine them, and the gate is the worse place
+  // to be wrong: it is what decides whether a crew is allowed on site.
   const bySub = new Map();
   for (const f of files) {
     const m = matchSub(f.name, subs);
     if (!m) continue;
-    const cur = bySub.get(m.sub.id);
-    if (!cur || f.modifiedTime > cur.modifiedTime) bySub.set(m.sub.id, f);
+    const list = bySub.get(m.sub.id) || [];
+    list.push(f);
+    bySub.set(m.sub.id, list);
   }
 
   for (const sub of subs) {
-    const file = bySub.get(sub.id);
-    if (!file) {
+    const list = (bySub.get(sub.id) || [])
+      .sort((a, b) => String(b.modifiedTime || '').localeCompare(String(a.modifiedTime || '')))
+      .slice(0, MAX_COI_PER_SUB);
+
+    if (!list.length) {
       out.set(sub.id, { verdict: 'missing', file: null });
       continue;
     }
 
-    const r = await readCoiExpiry(file.id, gKey, file, { cacheOnly: true, cache });
+    const reads = [];
+    for (const f of list) {
+      reads.push({ file: f, read: await readCoiExpiry(f.id, gKey, f, { cacheOnly: true, cache }) });
+    }
+    const cov = mergeCoverage(reads);
+
     out.set(sub.id, {
-      file: file.name,
-      expiry: r.expiry || null,
-      confidence: r.confidence || 'none',
-      additionalInsured: r.additionalInsured || 'unclear',
-      limitsOk: r.limitsOk || 'unknown',
-      limits: {
-        eachOccurrence: r.policies?.eachOccurrence ?? null,
-        aggregate:      r.policies?.aggregate ?? null,
-      },
-      notes: r.notes || null,
-      verdict: r.expiry ? 'read' : 'unread',
+      // The document that supplied the controlling date, which is the one to
+      // open when somebody wants to see it for themselves.
+      file: cov.sources.controlling || list[0].name,
+      files: cov.files,
+      expiry: cov.expiry || null,
+      confidence: cov.confidence || 'none',
+      additionalInsured: cov.additionalInsured || 'unclear',
+      limitsOk: cov.limitsOk || 'unknown',
+      limits: cov.limits || { eachOccurrence: null, aggregate: null },
+      coverage: cov.coverage,
+      missingCoverage: cov.missingCoverage,
+      notes: cov.notes || null,
+      verdict: cov.expiry ? 'read' : 'unread',
     });
   }
 
@@ -94,7 +114,29 @@ export function verdictForStart(cert, startDate) {
 
   const start = startDate ? String(startDate).slice(0, 10) : null;
   if (start && cert.expiry && cert.expiry < start) {
-    return { verdict: 'expired', reason: `the certificate expires ${cert.expiry}, before the work starts ${start}` };
+    // Which coverage lapsed, when we know. "The certificate expires" is the
+    // wrong sentence for a sub whose liability certificate is current and whose
+    // workers compensation is a year old: it sends somebody to chase the
+    // document they already have.
+    const gl = cert.coverage?.generalLiability;
+    const wc = cert.coverage?.workersComp;
+    const which = wc && wc.expiry === cert.expiry && gl && gl.expiry >= start
+      ? `workers compensation expired ${wc.expiry} and general liability is current to ${gl.expiry}`
+      : gl && gl.expiry === cert.expiry && wc && wc.expiry >= start
+        ? `general liability expired ${gl.expiry} and workers compensation is current to ${wc.expiry}`
+        : `the certificate expires ${cert.expiry}`;
+    return { verdict: 'expired', reason: `${which}, before the work starts ${start}` };
+  }
+
+  // Nothing on file carries general liability, which is the coverage Six Arrows
+  // actually requires. A workers compensation certificate on its own is not
+  // cover for the work, and it reads as compliant on every field the gate
+  // otherwise looks at.
+  if ((cert.missingCoverage || []).includes('generalLiability')) {
+    return {
+      verdict: 'review',
+      reason: `the only certificate on file covers workers compensation${cert.coverage?.workersComp?.expiry ? ` to ${cert.coverage.workersComp.expiry}` : ''}. No general liability policy is on file.`,
+    };
   }
 
   if (cert.additionalInsured === 'no') {
