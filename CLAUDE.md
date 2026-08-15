@@ -327,9 +327,19 @@ Rules that matter:
   sweep.** The sweep answers an HTTP request and has seconds; `aiLimit` above
   about six will time out. The background function has minutes and only
   fills the read cache: no Notion writes, no email, no decisions.
-- A **new email variant needs Cole's approval** before it sends. A certificate
-  that is current but does not name Six Arrows as additionally insured is
-  reported as `review`, not emailed, for exactly that reason.
+- A **new email variant needs Cole's approval** before it sends.
+- **The additional insured endorsement is chased with the agency, not the sub**
+  (`?corrections=1` alongside `send=1`). A sub cannot add an additional insured
+  to their own policy, so sending it to them adds the hop where the request
+  dies. When the certificate prints no agency email, which is common, the sub is
+  asked for that address and nothing else. Both follow up on the same business
+  day ladder and stop after three. `unclear` still never sends: that is the
+  reader saying it could not tell.
+- **Holding is reported, not silent.** The ladder does not send on a weekend or
+  between follow-ups, and both branches used to return without a word when it
+  held, so a Saturday run listed nothing and read as a clean bill of health.
+  Outstanding work now comes back as `waiting` with what is missing and when the
+  next message is due.
 
 ## Quotes we already hold
 

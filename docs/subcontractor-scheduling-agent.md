@@ -194,8 +194,28 @@ exist, because Notion rejects an entire update if one property name is unknown.
 
 **Compliance email wording** (`netlify/functions/lib/compliance-email.js`).
 Approved by Cole. Escalation is bounded: initial request, follow up at 3 days,
-again at 7, then stop and hand it to a person at 10 days or 2 days before the
-work starts, whichever comes first.
+again at 7, then stop and hand it to a person at 15 days or 2 days before the
+work starts, whichever comes first. Every interval is business days.
+
+Four messages, and who each one goes to matters:
+
+| Message | Goes to | Why |
+|---|---|---|
+| Document request | The subcontractor | They have the certificate and the W9, or their agent does. |
+| Additional insured endorsement | **The agency** | The sub cannot add an additional insured to their own policy. Sending it to them makes them a messenger and adds the hop where the request dies. |
+| Agent's email address | The subcontractor | Only when the certificate prints an agency name and phone and no email, which is common. It asks for the address and nothing else. |
+| Certificate verification | The agency | A certificate is a PDF and a date on one can be edited in a minute. Asked once per certificate, not per run. |
+
+The endorsement chase runs the same ladder as a document request, threaded onto
+the original so the agency sees what was asked. `unclear` never sends: that is
+the reader saying it could not tell, and asking somebody to fix something on
+that basis is how this system would lose a subcontractor's trust.
+
+**Holding is an outcome, not silence.** The ladder does not send on a weekend or
+between follow-ups. Both branches used to return without a word when it held, so
+a Saturday run listed nothing outstanding and read as a clean bill of health.
+Those now come back as `waiting`, with what is missing and when the next message
+is due.
 
 **Gmail sending** (`netlify/functions/lib/gmail.js`). OAuth2 refresh token flow,
 threads follow-ups onto the original message. Setup walkthrough in
