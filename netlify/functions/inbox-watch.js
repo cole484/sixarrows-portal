@@ -39,7 +39,7 @@
 
 import { gmailConfigured, tokenScopes, senderAddress } from './lib/gmail.js';
 import { listLabels, searchMessages, getMessage, getAttachment, looksLikeDocument } from './lib/gmail-read.js';
-import { uploadToFolder, documentName, deleteOwnFile } from './lib/drive-upload.js';
+import { uploadToFolder, documentName, deleteOwnFile, shareWithLink } from './lib/drive-upload.js';
 import { documentKind, matchDocument, explainMatch, identifyFromDocument } from './lib/inbox-match.js';
 import { certificateRow, w9Row, putRead } from './lib/doc-cache.js';
 import { setReadBudget, anthropicConfigured, readCertificate } from './lib/doc-ai.js';
@@ -140,6 +140,13 @@ export const handler = async (event) => {
   // Kept afterwards because the failure it repairs is one an agent with write
   // access can always make again, and cleaning it up by hand across two Drive
   // folders is exactly the sort of job nobody does.
+  // Repairs uploads made before sharing was applied. Idempotent: Drive accepts
+  // the same permission twice without complaint.
+  if (q.reshare === '1') {
+    if (!ok) return reply(500, { error: 'drive.file is not granted, so nothing can be shared.' });
+    return reply(200, await reshareUploads(q.apply === '1'));
+  }
+
   if (q.cleanupDuplicates === '1') {
     if (!ok) return reply(500, { error: 'drive.file is not granted, so nothing can be deleted.' });
     return reply(200, await cleanupDuplicates(q.apply === '1'));
@@ -492,6 +499,22 @@ async function runWatcher(q) {
         entry.driveFileName = up.name;
         report.filed++;
 
+        // Without this the compliance reader, which uses an API key, downloads
+        // the file as zero bytes and files the certificate as unreadable. The
+        // folder is link-shared; a file created through OAuth does not inherit
+        // that, and the listing gives no hint because the file shows up fine.
+        try {
+          await shareWithLink(up.id);
+          entry.shared = true;
+        } catch (err) {
+          entry.shared = false;
+          entry.shareError = err.message;
+          report.errors.push({
+            attachment: att.filename,
+            error: `uploaded but could not be shared: ${err.message}. The compliance reader will not be able to open it.`,
+          });
+        }
+
         await supabase('inbox_documents', { method: 'POST', body: {
           message_id: msg.id, thread_id: msg.threadId, attachment_id: att.attachmentId,
           from_email: msg.from?.email || null, from_name: msg.from?.name || null,
@@ -597,5 +620,41 @@ async function cleanupDuplicates(apply) {
   report.next = apply
     ? `Removed ${report.deleted} duplicate file(s).`
     : `Dry run. ${report.duplicates} duplicate(s) found across ${report.groups} document(s). Add apply=1 to delete them.`;
+  return report;
+}
+
+// Every file this app uploaded, given the link sharing the folder already has.
+// Needed once for the documents filed before the sharing step existed, and kept
+// because it costs nothing and repairs the same failure if it recurs.
+async function reshareUploads(apply) {
+  const report = { applied: apply, files: 0, shared: 0, alreadyFine: 0, errors: [], rows: [] };
+  let rows;
+  try {
+    rows = await supabase('inbox_documents', {
+      select: 'drive_file_id,drive_file_name,uploaded',
+      order: 'created_at.desc', limit: 2000,
+    });
+  } catch (err) {
+    report.errors.push({ error: err.message });
+    return report;
+  }
+
+  const seen = new Set();
+  for (const r of rows) {
+    if (!r.uploaded || !r.drive_file_id || seen.has(r.drive_file_id)) continue;
+    seen.add(r.drive_file_id);
+    report.files++;
+    if (!apply) { report.rows.push({ file: r.drive_file_name, driveFileId: r.drive_file_id, dryRun: true }); continue; }
+    try {
+      await shareWithLink(r.drive_file_id);
+      report.shared++;
+      report.rows.push({ file: r.drive_file_name, shared: true });
+    } catch (err) {
+      report.errors.push({ file: r.drive_file_name, error: err.message });
+    }
+  }
+  report.next = apply
+    ? `${report.shared} file(s) shared. Run compliance-sweep to read them.`
+    : `Dry run. ${report.files} uploaded file(s) would be given link sharing. Add apply=1.`;
   return report;
 }

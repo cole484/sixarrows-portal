@@ -127,3 +127,29 @@ export async function deleteOwnFile(fileId) {
   }
   return true;
 }
+
+// Make an uploaded file readable the way the rest of the folder is.
+//
+// This is the fix for a failure that took a diagnostic to find. The COI and W9
+// folders are shared "anyone with the link", because the compliance reader
+// authenticates with a plain API key and that is the only way a key can read
+// them. A file created through OAuth does NOT inherit that sharing. The folder
+// listing still showed it, so everything looked fine, but every attempt to
+// download the content came back empty and the reader recorded the certificate
+// as unreadable.
+//
+// So each upload is given the same link sharing the folder has. drive.file can
+// manage permissions on files it created, which is exactly and only what this
+// needs. It never touches a file somebody else put there.
+export async function shareWithLink(fileId) {
+  const token = await googleAccessToken();
+  const res = await fetch(`${FILES}/${fileId}/permissions?supportsAllDrives=true`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+  });
+  if (!res.ok) {
+    throw new Error(`Drive share ${fileId}: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  }
+  return true;
+}
