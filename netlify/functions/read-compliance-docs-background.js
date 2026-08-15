@@ -72,9 +72,17 @@ async function eachInParallel(items, workers, fn) {
 // The reader in compliance-docs.js already refuses to trust those rows. This
 // is the second place that decision has to be made, because this function
 // short-circuits before ever calling it.
+//
+// A certificate the cheap text pass dated does not count as read here either.
+// This function exists to fill the cache with answers the sweep can act on, and
+// the text pass gives a date and nothing else: not which policy the date
+// belongs to, not the limits, not whether Six Arrows is an additional insured.
+// Those rows used to look finished, so the backlog of half-read certificates
+// could only be cleared with force=1, which throws away every good AI read
+// alongside them.
 async function cachedKeys() {
   const rows = await supabase('document_reads', {
-    select: 'file_id,modified_time,error',
+    select: 'file_id,modified_time,error,method,kind',
     order: 'created_at.desc',
     limit: 2000,
   });
@@ -86,7 +94,9 @@ async function cachedKeys() {
     const k = `${r.file_id}|${r.modified_time || ''}`;
     if (decided.has(k)) continue;
     decided.add(k);
-    if (!errorLooksTransient(r.error)) done.add(k);
+    if (errorLooksTransient(r.error)) continue;
+    if (r.kind === 'coi' && r.method && r.method !== 'ai') continue;
+    done.add(k);
   }
   return done;
 }
