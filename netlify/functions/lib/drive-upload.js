@@ -102,3 +102,18 @@ export async function findOwnFile(name, folderId) {
   const data = await res.json();
   return (data.files || [])[0] || null;
 }
+
+// Removes a file this app uploaded. drive.file can only delete what it created,
+// so this can never touch a document somebody filed by hand, which is the right
+// limit for a cleanup that exists to undo the agent's own mistake.
+export async function deleteOwnFile(fileId) {
+  const token = await googleAccessToken();
+  const res = await fetch(`${FILES}/${fileId}?supportsAllDrives=true`, {
+    method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+  });
+  // 404 means it is already gone, which is the outcome we wanted.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Drive delete ${fileId}: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  }
+  return true;
+}

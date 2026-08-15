@@ -33,8 +33,10 @@
 
 import { gmailConfigured, tokenScopes, senderAddress } from './lib/gmail.js';
 import { listLabels, searchMessages, getMessage, getAttachment, looksLikeDocument } from './lib/gmail-read.js';
-import { uploadToFolder, documentName } from './lib/drive-upload.js';
-import { documentKind, matchDocument, explainMatch } from './lib/inbox-match.js';
+import { uploadToFolder, documentName, deleteOwnFile } from './lib/drive-upload.js';
+import { documentKind, matchDocument, explainMatch, identifyFromDocument } from './lib/inbox-match.js';
+import { certificateRow, w9Row, putRead } from './lib/doc-cache.js';
+import { setReadBudget, anthropicConfigured } from './lib/doc-ai.js';
 import { COI_FOLDER_ID, W9_FOLDER_ID } from './lib/compliance-docs.js';
 import { supabase, corsHeaders } from './lib/supabase-client.js';
 
@@ -122,6 +124,20 @@ export const handler = async (event) => {
   }
 
   const { rows, ok, missing } = checkScopes(granted);
+
+  // ── Cleanup ─────────────────────────────────────────────────────────────
+  // Undoes duplicate uploads. Needed once because the first dedupe key was the
+  // Gmail attachmentId, which is an opaque per-request token rather than an
+  // identifier: the same file came back with a different id on every fetch, so
+  // nothing ever matched and a second run filed everything twice.
+  //
+  // Kept afterwards because the failure it repairs is one an agent with write
+  // access can always make again, and cleaning it up by hand across two Drive
+  // folders is exactly the sort of job nobody does.
+  if (q.cleanupDuplicates === '1') {
+    if (!ok) return reply(500, { error: 'drive.file is not granted, so nothing can be deleted.' });
+    return reply(200, await cleanupDuplicates(q.apply === '1'));
+  }
 
   // ── The watcher ─────────────────────────────────────────────────────────
   if (!q.diag) {
@@ -241,17 +257,33 @@ async function loadThreadOwners() {
   return map;
 }
 
+// What identifies an attachment across two runs.
+//
+// NOT the Gmail attachmentId, which was the first attempt and was wrong. That
+// id is an opaque per-request token: fetching the same message twice returns
+// two different ones for the same file. Keyed on it, nothing ever matched, the
+// watcher believed it had never seen anything, and a second run uploaded a
+// duplicate of all five documents into the COI folder.
+//
+// The message id, the filename and the byte count are all properties of the
+// mail itself and do not move.
+export function attachmentKey(messageId, filename, size) {
+  return `${messageId}|${filename || ''}|${size || 0}`;
+}
+
 // Everything already filed, in one query. A lookup per attachment would be a
 // round trip each, which is the mistake the compliance sweep already made once.
 async function loadSeen() {
   try {
     const rows = await supabase('inbox_documents', {
-      select: 'message_id,attachment_id,uploaded',
+      select: 'message_id,source_filename,size_bytes,uploaded',
       order: 'created_at.desc',
       limit: 2000,
     });
     const seen = new Set();
-    for (const r of rows) if (r.uploaded) seen.add(`${r.message_id}|${r.attachment_id}`);
+    for (const r of rows) {
+      if (r.uploaded) seen.add(attachmentKey(r.message_id, r.source_filename, r.size_bytes));
+    }
     return { seen, error: null };
   } catch (err) {
     return { seen: null, error: err.message };
@@ -260,6 +292,9 @@ async function loadSeen() {
 
 async function runWatcher(q) {
   const apply = q.apply === '1';
+  // Reading a document to identify it costs a Claude call, so a run is capped.
+  // Four of five documents are identified from the envelope and never reach it.
+  setReadBudget(Math.min(Number(q.readLimit) || 6, 20));
   const days  = Math.min(Math.max(Number(q.days) || DEFAULT_DAYS, 1), 365);
   const max   = Math.min(Number(q.max) || DEFAULT_MAX, 50);
   const token = process.env.NOTION_TOKEN;
@@ -312,11 +347,11 @@ async function runWatcher(q) {
     const docs = msg.attachments.filter(looksLikeDocument);
     if (!docs.length) continue;
 
-    const match = matchDocument({ message: msg, threadsBySub, subs });
+    let match = matchDocument({ message: msg, threadsBySub, subs });
 
     for (const att of docs) {
       report.found++;
-      const key = `${msg.id}|${att.attachmentId}`;
+      const key = attachmentKey(msg.id, att.filename, att.size);
       if (seenRes.seen.has(key)) { report.alreadyFiled++; continue; }
 
       const kind = documentKind({ filename: att.filename, subject: msg.subject, body: msg.text });
@@ -339,6 +374,7 @@ async function runWatcher(q) {
       if (!apply) {
         entry.uploaded = false;
         entry.dryRun = true;
+        if (!match.subName) entry.willFileAs = '(decided after reading the document)';
         report.documents.push(entry);
         report.skipped++;
         continue;
@@ -346,10 +382,53 @@ async function runWatcher(q) {
 
       try {
         const bytes  = await getAttachment(msg.id, att.attachmentId);
+
+        // Cole: it has to open the attachment and read it to pull out the
+        // information, then upload it labelled correctly. Only reached when the
+        // envelope said nothing, which is where the agency and carrier emails
+        // land and where the envelope can never help.
+        if (!match.subId && anthropicConfigured()) {
+          const fromDoc = await identifyFromDocument({
+            bytes, filename: att.filename, mimeType: att.mimeType, kind, subs,
+          });
+          entry.readInsuredAs = fromDoc.readAs || null;
+          if (fromDoc.readError) entry.readError = fromDoc.readError;
+          if (fromDoc.subId) {
+            match = fromDoc;
+            entry.sub        = fromDoc.subName;
+            entry.matchedVia = 'document';
+            entry.confidence = fromDoc.confidence;
+            entry.why        = `read off the document itself, which names the insured as "${fromDoc.readAs}"`;
+            delete entry.note;
+          } else if (fromDoc.readAs) {
+            entry.note = `The document names "${fromDoc.readAs}", which matches no row in the Subcontractors database. Filed under "Unmatched" and worth a look: either the row is missing or the name differs.`;
+          }
+          // The read is kept so the compliance sweep does not pay for it twice.
+          entry.docRead = fromDoc.read || null;
+        }
+
+        // Computed after the read, so an identified document lands under the
+        // right name the first time rather than being relabelled later.
+        entry.willFileAs = documentName({
+          subName: match.subName, kind, receivedOn: msg.internalDate,
+          sourceName: att.filename, fromEmail: msg.from?.email,
+        });
+
         const folder = kind === 'w9' ? W9_FOLDER_ID : COI_FOLDER_ID;
         const up = await uploadToFolder({
           bytes, name: entry.willFileAs, mimeType: att.mimeType, folderId: folder,
         });
+
+        // Hand the read to the document cache under the Drive id it now has, so
+        // the sweep reads it from cache rather than opening it again. The cache
+        // is keyed on Drive file id plus modifiedTime, both of which only exist
+        // once the upload has happened.
+        if (entry.docRead && up.id) {
+          const f = { id: up.id, name: up.name, modifiedTime: up.modifiedTime || '' };
+          try {
+            await putRead(kind === 'w9' ? w9Row(f, entry.docRead) : certificateRow(f, entry.docRead));
+          } catch { /* a missed cache costs one re-read, nothing more */ }
+        }
         entry.uploaded      = true;
         entry.driveFileId   = up.id;
         entry.driveFileName = up.name;
@@ -365,6 +444,9 @@ async function runWatcher(q) {
           drive_file_id: up.id, drive_file_name: up.name, drive_folder_id: folder,
           uploaded: true,
         } });
+        // Rewritten after the possible document read, so the row records who it
+        // actually belongs to rather than who the envelope guessed.
+        entry.sub = match.subName;
       } catch (err) {
         entry.error = err.message;
         report.errors.push({ attachment: att.filename, from: msg.from?.email, error: err.message });
@@ -388,5 +470,64 @@ async function runWatcher(q) {
   report.next = apply
     ? 'Filed documents are in Drive. Run compliance-sweep to read them and update Notion.'
     : 'Dry run. Nothing downloaded, uploaded or recorded. Add apply=1 to file these.';
+  return report;
+}
+
+// One document, uploaded more than once. Keeps the earliest copy and removes
+// the rest, because the earliest is the one anything else may already point at.
+async function cleanupDuplicates(apply) {
+  const report = { applied: apply, groups: 0, duplicates: 0, deleted: 0, kept: [], removed: [], errors: [] };
+
+  let rows;
+  try {
+    rows = await supabase('inbox_documents', {
+      select: 'id,created_at,message_id,source_filename,size_bytes,drive_file_id,drive_file_name,uploaded',
+      order: 'created_at.asc',
+      limit: 2000,
+    });
+  } catch (err) {
+    report.errors.push({ error: `could not read inbox_documents: ${err.message}` });
+    return report;
+  }
+
+  const byKey = new Map();
+  for (const r of rows) {
+    if (!r.uploaded || !r.drive_file_id) continue;
+    const k = attachmentKey(r.message_id, r.source_filename, r.size_bytes);
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(r);
+  }
+
+  for (const [, group] of byKey) {
+    if (group.length < 2) continue;
+    report.groups++;
+    // Ascending by created_at, so the first is the original.
+    const [keep, ...extra] = group;
+    report.kept.push({ file: keep.drive_file_name, driveFileId: keep.drive_file_id, uploadedAt: keep.created_at });
+
+    for (const dup of extra) {
+      report.duplicates++;
+      if (!apply) { report.removed.push({ file: dup.drive_file_name, driveFileId: dup.drive_file_id, dryRun: true }); continue; }
+      try {
+        await deleteOwnFile(dup.drive_file_id);
+        report.deleted++;
+        report.removed.push({ file: dup.drive_file_name, driveFileId: dup.drive_file_id, deleted: true });
+        // The row stays. The table is append-only and it is a true record of
+        // what happened, including the mistake. A new row records the removal.
+        await supabase('inbox_documents', { method: 'POST', body: {
+          message_id: dup.message_id, attachment_id: 'deleted-duplicate',
+          source_filename: dup.source_filename, size_bytes: dup.size_bytes,
+          drive_file_id: dup.drive_file_id, drive_file_name: dup.drive_file_name,
+          uploaded: false, error: `duplicate upload removed, superseded by ${keep.drive_file_id}`,
+        } });
+      } catch (err) {
+        report.errors.push({ driveFileId: dup.drive_file_id, error: err.message });
+      }
+    }
+  }
+
+  report.next = apply
+    ? `Removed ${report.deleted} duplicate file(s).`
+    : `Dry run. ${report.duplicates} duplicate(s) found across ${report.groups} document(s). Add apply=1 to delete them.`;
   return report;
 }
