@@ -29,6 +29,11 @@
 //                            read cleanly. Opens nothing. This is the call to
 //                            make when certificates report as unreadable and
 //                            it is not obvious why.
+//   GET /?verify=1           with send=1, email the agency that issued each
+//                            certificate and ask them to confirm it. A
+//                            certificate is a PDF and anyone can edit a date on
+//                            one, so the only real check is with the people who
+//                            issued it. Asked once per certificate, not per run.
 //   GET /?corrections=1      with send=1, also email subs whose certificate is
 //                            current but names Six Arrows as the holder rather
 //                            than as an additional insured. Behind its own
@@ -52,7 +57,10 @@
 
 import { supabase } from './lib/supabase-client.js';
 import { sendGmail, gmailConfigured, senderAddress } from './lib/gmail.js';
-import { buildSubject, buildBody, buildCorrectionSubject, buildCorrectionBody, nextAction, FROM_EMAIL } from './lib/compliance-email.js';
+import {
+  buildSubject, buildBody, buildCorrectionSubject, buildCorrectionBody,
+  buildVerificationSubject, buildVerificationBody, nextAction, FROM_EMAIL,
+} from './lib/compliance-email.js';
 import {
   listFolder, matchSub, readCoiExpiry, readW9Identity, coiState,
   COI_FOLDER_ID, W9_FOLDER_ID,
@@ -397,13 +405,30 @@ export const handler = async (event) => {
     }
 
     // ── 4. Read each matched certificate, write the truth back to Notion ──
+    // Certificates already confirmed with their issuing agency, keyed on the
+    // sub and the expiry that was verified. One query, not one per sub, and it
+    // is what stops an agency being asked the same question every morning.
+    const verifiedAlready = new Set();
+    try {
+      const rows = await supabase('compliance_requests', {
+        select: 'sub_id,coi_expiry,action',
+        filters: [{ col: 'action', op: 'eq', val: 'verification' }],
+        order: 'created_at.desc', limit: 1000,
+      });
+      for (const r of rows) if (r.sub_id && r.coi_expiry) verifiedAlready.add(`${r.sub_id}|${r.coi_expiry}`);
+    } catch (err) {
+      // Losing this means asking an agency twice, which is rude but harmless.
+      // Losing the whole run over it would be worse.
+      report.errors.push({ error: `could not read verification history: ${err.message}. Agencies may be asked again.` });
+    }
+
     const state = new Map();          // subId -> { coiState, coiExpiry, hasW9 }
     for (const sub of focus) {
       if (outOfTime()) { report.truncated = `ran out of time after ${report.subs.length} of ${focus.length} subcontractors`; break; }
       const docs = bySub.get(sub.id) || {};
       let expiry = null, confidence = 'none', parseError = null;
       let readVia = null, additionalInsured = null, insuredName = null, readNotes = null;
-      let limitsOk = null, limits = null;
+      let limitsOk = null, limits = null, producer = null, policies = null;
 
       if (docs.coiFile) {
         // Work coming up means the additional insured answer matters as much
@@ -423,12 +448,17 @@ export const handler = async (event) => {
         limits = r.policies
           ? { eachOccurrence: r.policies.eachOccurrence ?? null, aggregate: r.policies.aggregate ?? null }
           : null;
+        // The agency that issued it, and the individual policy dates, both of
+        // which the verification email quotes back so the agent confirms rather
+        // than looks up.
+        producer = r.producer || null;
+        policies = r.policies || null;
         if (parseError) report.errors.push({ sub: sub.name, file: docs.coiFile.name, error: parseError });
       }
 
       const cs     = coiState(expiry, today, !!docs.coiFile);
       const hasW9  = !!docs.w9File;
-      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, confidence, limitsOk, limits, readError: parseError });
+      state.set(sub.id, { coiState: cs, coiExpiry: expiry, hasW9, additionalInsured, confidence, limitsOk, limits, insuredName, producer, policies, readError: parseError });
 
       // Only write when something actually changed, to keep Notion's edit
       // history meaningful rather than a wall of no-op touches.
@@ -564,6 +594,63 @@ export const handler = async (event) => {
           reason: `the certificate is current but the limits are short of the 1,000,000 each occurrence and 2,000,000 aggregate Six Arrows requires. It reads ${l.eachOccurrence ?? 'unknown'} each occurrence and ${l.aggregate ?? 'unknown'} aggregate.`,
           task: job.taskName, start: job.start,
         });
+      }
+
+      // ── Verify with the issuing agency ──────────────────────────────────
+      // Cole: it is worth bugging them to make sure we are covered. A
+      // certificate is a PDF; a date on one can be edited in a minute. Most
+      // arrive from an agency already, but "most" is not a control.
+      //
+      // Keyed on the sub and the expiry we read, so one certificate is verified
+      // once however many times the sweep runs, and a newly issued certificate
+      // with a different date gets its own check.
+      if (st.coiState === 'ok' && st.coiExpiry) {
+        const agency = st.producer || {};
+        const already = verifiedAlready.has(`${subId}|${st.coiExpiry}`);
+
+        if (!already) {
+          const vSubject = buildVerificationSubject({ insuredName: st.insuredName || sub.name });
+          const vBody    = buildVerificationBody({
+            agencyContact:     agency.contact,
+            insuredName:       st.insuredName || sub.name,
+            policyExpiry:      st.policies?.generalLiability || st.coiExpiry,
+            workersCompExpiry: st.policies?.workersComp || null,
+            eachOccurrence:    st.limits?.eachOccurrence ?? null,
+            aggregate:         st.limits?.aggregate ?? null,
+            additionalInsured: st.additionalInsured,
+            receivedOn:        null,
+          });
+          const canVerify = doSend && q.verify === '1' && !!agency.email;
+
+          report.actions.push({
+            sub: sub.name,
+            action: canVerify ? 'verify' : 'verify_pending',
+            reason: `certificate expiring ${st.coiExpiry} has not been confirmed with the agency that issued it.`,
+            agency: agency.name || null,
+            to: agency.email || null,
+            subject: vSubject,
+            preview: canVerify ? undefined : vBody,
+            note: agency.email
+              ? (canVerify ? undefined : 'Add verify=1 alongside send=1 to send this.')
+              : `no agency email was printed on the certificate${agency.name ? ` (issued by ${agency.name})` : ''}, so this one needs looking up by hand.`,
+          });
+
+          if (canVerify) {
+            try {
+              const sent = await sendGmail({ to: agency.email, subject: vSubject, body: vBody });
+              await supabase('compliance_requests', { method: 'POST', body: {
+                sub_id: subId, sub_name: sub.name, to_email: agency.email,
+                doc_needs: 'coi_verification', coi_state: st.coiState, coi_expiry: st.coiExpiry,
+                project: job.project, task_id: job.taskId, task_name: job.taskName,
+                start_date: job.start, action: 'verification', attempt: 1,
+                subject: vSubject, body: vBody, gmail_thread_id: sent?.threadId || null,
+              } });
+              verifiedAlready.add(`${subId}|${st.coiExpiry}`);
+            } catch (err) {
+              report.errors.push({ sub: sub.name, error: `verification email failed: ${err.message}` });
+            }
+          }
+        }
       }
 
       // Current, correctly named, and Six Arrows is only the holder. Cole has

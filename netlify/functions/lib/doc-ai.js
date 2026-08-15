@@ -105,6 +105,10 @@ Answer with a JSON object and nothing else. No preamble, no code fence.
 {
   "insured_name": string or null,
   "insured_address": string or null,
+  "producer_name": string or null,
+  "producer_email": string or null,
+  "producer_phone": string or null,
+  "producer_contact": string or null,
   "certificate_holder": string or null,
   "six_arrows_is_holder": true or false,
   "additional_insured": "yes" or "no" or "unclear",   // general liability only
@@ -123,6 +127,8 @@ Answer with a JSON object and nothing else. No preamble, no code fence.
 }
 
 insured_name is the NAMED INSURED box, meaning the subcontractor. It is not the agency or broker at the top left, and it is not the holder.
+
+The PRODUCER is that agency or broker at the top left, the people who issued this certificate. producer_name is the firm. producer_email and producer_phone are their contact details if the form prints them, and producer_contact is the individual named if there is one. Report only what is printed. Six Arrows verifies certificates with the issuing agency, so a wrong address here sends a query to a stranger.
 
 The limit fields come from the LIMITS column on the general liability row. Report them as plain numbers with no commas or dollar sign, so $1,000,000 is 1000000. EACH OCCURRENCE and GENERAL AGGREGATE are separate lines and must not be swapped. If a line is blank or unreadable, use null rather than guessing.
 
@@ -379,6 +385,17 @@ export async function readCertificate({ bytes, file = {} }) {
     return Number.isFinite(n) && n >= 10_000 ? Math.round(n) : null;
   };
 
+  // The issuing agency. Six Arrows verifies certificates with them rather than
+  // taking a forwarded PDF at face value, so these are worth pulling off every
+  // certificate even though nothing else reads them.
+  const producer = {
+    name:    cleanStr(d.producer_name, 200),
+    email:   /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(d.producer_email || '').trim())
+               ? String(d.producer_email).trim().toLowerCase() : null,
+    phone:   cleanStr(d.producer_phone, 40),
+    contact: cleanStr(d.producer_contact, 120),
+  };
+
   const policies = {
     generalLiability: cleanDate(d.general_liability_expiry),
     workersComp:      cleanDate(d.workers_comp_expiry),
@@ -426,6 +443,7 @@ export async function readCertificate({ bytes, file = {} }) {
     additionalInsuredEvidence: cleanStr(d.additional_insured_evidence, 300),
     sixArrowsIsHolder: !!d.six_arrows_is_holder,
     certificateHolder: cleanStr(d.certificate_holder),
+    producer,
     policies,
     limitsOk,
     issueDate: cleanDate(d.issue_date),

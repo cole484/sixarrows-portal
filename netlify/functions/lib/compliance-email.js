@@ -239,6 +239,73 @@ export function buildCorrectionBody({ contactName, insuredName, expiry }) {
   return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// ── Verifying a certificate with the agency that issued it ────────────────
+//
+// Cole: it is worth bugging them to make sure we are covered.
+//
+// The exposure this closes is real and simple. A certificate of insurance is a
+// PDF. Anyone can edit a date on one, and a builder who takes a forwarded
+// document at face value finds out at the worst possible moment. Six Arrows
+// already receives most certificates directly from agencies, but not all, and
+// "most" is not a control.
+//
+// Written to be answered in one line. An agency processes these constantly, so
+// every fact they would otherwise have to look up is already in the message and
+// all that is left is yes or no. The one thing it must not do is imply the
+// subcontractor is suspected of anything: this goes out on every certificate,
+// not on the ones that look wrong, and an agent who reads it as an accusation
+// will mention it to their client.
+export function buildVerificationSubject({ insuredName }) {
+  return insuredName
+    ? `Certificate verification: ${insuredName}`
+    : 'Certificate verification';
+}
+
+export function buildVerificationBody({
+  agencyContact, insuredName, policyExpiry, workersCompExpiry,
+  eachOccurrence, aggregate, additionalInsured, receivedOn,
+}) {
+  const first = firstName(agencyContact);
+  const L = [];
+
+  L.push(first ? `Hi ${first},` : 'Hi,');
+  L.push('');
+  L.push(`We received a certificate of insurance for ${insuredName || 'a subcontractor of ours'}${receivedOn ? ` on ${fmtDate(receivedOn)}` : ''} and we verify these with the issuing agency as a matter of course. Could you confirm the following is accurate?`);
+  L.push('');
+
+  // Everything read off the document, so the agent is checking rather than
+  // retrieving. Only what was actually read appears: a blank line invites a
+  // correction, an invented one invites a phone call.
+  if (insuredName)       L.push(`  Named insured: ${insuredName}`);
+  if (policyExpiry)      L.push(`  General liability expires: ${fmtDate(policyExpiry)}`);
+  if (workersCompExpiry) L.push(`  Workers compensation expires: ${fmtDate(workersCompExpiry)}`);
+  if (typeof eachOccurrence === 'number') L.push(`  Each occurrence: ${money(eachOccurrence)}`);
+  if (typeof aggregate === 'number')      L.push(`  General aggregate: ${money(aggregate)}`);
+  L.push(`  Six Arrows Construction named as an additional insured on general liability: ${additionalInsured === 'yes' ? 'yes' : 'we read it as no'}`);
+  L.push('');
+
+  // The correction ask rides along, because an agency that has to reissue would
+  // rather learn it now than in a second email a day later.
+  if (additionalInsured !== 'yes') {
+    L.push('If that last line is wrong, we would rather know. If it is right, please add us and reissue:');
+    L.push('');
+    L.push(SIX_ARROWS_ADDRESS);
+    L.push('');
+  }
+
+  L.push('A one line reply is plenty. Thanks for the help.');
+  L.push('');
+  L.push('Thanks,');
+  L.push(FROM_NAME);
+  L.push('Six Arrows Construction');
+
+  return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function money(n) {
+  return typeof n === 'number' ? `$${n.toLocaleString('en-US')}` : null;
+}
+
 function joinList(items) {
   if (items.length === 1) return items[0];
   if (items.length === 2) return `${items[0]} and ${items[1]}`;

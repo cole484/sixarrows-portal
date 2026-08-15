@@ -123,6 +123,7 @@ export function toCertificate(row) {
     certificateHolder: row.certificate_holder || null,
     policies:          row.policies || {},
     limitsOk:          (row.policies && row.policies.limitsOk) || 'unknown',
+    producer:          (row.policies && row.policies.producer) || null,
     notes:             row.notes || null,
     error:             row.error || null,
     cached:            row.created_at || true,
@@ -143,7 +144,10 @@ export function certificateRow(file, result) {
     six_arrows_is_holder: !!result.sixArrowsIsHolder,
     // limitsOk rides inside policies so this needs no further migration. It is
     // derived from the two numbers stored beside it, so it cannot drift.
-    policies:             { ...(result.policies || {}), limitsOk: result.limitsOk || 'unknown' },
+    // producer rides inside policies for the same reason limitsOk does: it
+    // needs no migration and it is derived from the same read, so the two
+    // cannot drift apart.
+    policies:             { ...(result.policies || {}), limitsOk: result.limitsOk || 'unknown', producer: result.producer || null },
     confidence:           result.confidence || 'none',
     notes:                result.notes || null,
     error:                result.error || null,
