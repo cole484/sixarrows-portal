@@ -516,8 +516,15 @@ async function cleanupDuplicates(apply) {
   for (const [, group] of byKey) {
     if (group.length < 2) continue;
     report.groups++;
-    // Ascending by created_at, so the first is the original.
-    const [keep, ...extra] = group;
+    // The NEWEST is kept, not the oldest, and that took getting wrong once to
+    // see. Two copies of one document arise two ways: an accidental re-upload,
+    // where both are identical and it makes no difference which survives, and a
+    // reprocess after a fix, where the newer one carries the better name. An
+    // "Unmatched" file superseded by one named for the sub who actually owns it
+    // is the second case, and keeping the older copy would have thrown away the
+    // correction.
+    const ordered = [...group].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    const [keep, ...extra] = ordered;
     report.kept.push({ file: keep.drive_file_name, driveFileId: keep.drive_file_id, uploadedAt: keep.created_at });
 
     for (const dup of extra) {

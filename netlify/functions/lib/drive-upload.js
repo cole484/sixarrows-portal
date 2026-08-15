@@ -27,15 +27,25 @@ const FILES  = 'https://www.googleapis.com/drive/v3/files';
 // certificate for the same sub has to sit beside the first rather than replace
 // it. Without the date they would be "Artisan Electrical.pdf" and "Artisan
 // Electrical (1).pdf", and the second tells nobody anything.
-// An unmatched document takes the sender's domain as a suffix. Without it the
-// two that arrived on the first real run would both have been filed as
-// "Unmatched COI 2026-08-14.pdf": one from an insurance agency and one from
-// KEMI. drive.file cannot overwrite, so they would have sat side by side under
-// one name with nothing to tell them apart, which is worse than not filing
-// them. "Unmatched COI 2026-08-14 lipca.pdf" at least says where to look.
+// Where the document came from, as one word, appended to every filename.
+//
+// This started as a tiebreaker for unmatched documents and became general once
+// the first real batch showed why. Home Pro Pest Control sent two certificates
+// on the same day: general liability from their agency, workers compensation
+// from KEMI. Both are theirs, both are correct, and both wanted the identical
+// filename. That is not an edge case; a sub carrying GL and WC from different
+// carriers is the normal arrangement, and Six Arrows judges the controlling
+// expiry as the earlier of the two, so losing one gets the answer wrong.
+//
+// Consumer mail domains are skipped because they identify nothing. A sub
+// replying from gmail gets a clean name; a certificate from an agency carries
+// the agency's name, which is the useful thing to see in a folder listing.
+const NO_TAG = /^(gmail|googlemail|yahoo|ymail|outlook|hotmail|live|msn|aol|icloud|me|comcast|att|verizon|bellsouth|charter|twc|windstream)$/i;
+
 function senderTag(fromEmail) {
   const domain = String(fromEmail || '').split('@')[1] || '';
   const label = domain.split('.').filter(p => !/^(com|net|org|co|us|inc)$/i.test(p)).pop() || '';
+  if (NO_TAG.test(label)) return '';
   return label.replace(/[^a-z0-9]/gi, '').slice(0, 20);
 }
 
@@ -46,7 +56,7 @@ export function documentName({ subName, kind, receivedOn, sourceName, fromEmail 
     .trim();
   const ext = (String(sourceName || '').match(/\.([a-z0-9]{2,5})$/i) || [, 'pdf'])[1].toLowerCase();
   const day = String(receivedOn || '').slice(0, 10) || 'undated';
-  const tag = subName ? '' : (senderTag(fromEmail) ? ` ${senderTag(fromEmail)}` : '');
+  const tag = senderTag(fromEmail) ? ` ${senderTag(fromEmail)}` : '';
   return `${clean} ${kind === 'w9' ? 'W9' : 'COI'} ${day}${tag}.${ext}`;
 }
 
