@@ -764,7 +764,26 @@ export const handler = async (event) => {
 
         const sends   = history.map(h => ({ sent_at: h.created_at, attempt: h.attempt }));
         const decided = nextAction({ history: sends, startDate: job.start, today, what: 'endorsement' });
-        if (!decided) continue;      // already asked, not due again yet
+
+        // Nothing goes out today, which is not the same as nothing being
+        // outstanding. The ladder holds on a weekend and between follow-ups, and
+        // the first version of this returned silently when it did: the endorsement
+        // was missing, the report said nothing at all about it, and a Saturday
+        // run read as a clean bill of health.
+        if (!decided) {
+          report.actions.push({
+            sub: sub.name, action: 'waiting',
+            reason:
+              'the certificate is current but Six Arrows is the certificate holder rather than an additional insured on the general liability policy. ' +
+              (sends.length
+                ? `${sends.length} request${sends.length > 1 ? 's have' : ' has'} gone out about it, most recently ${String(history[0].created_at).slice(0, 10)}, and the next follow-up is not due yet.`
+                : 'Nothing has gone out yet: the ladder does not send on a weekend.'),
+            agency: agency.name || null,
+            to: to || null,
+            task: job.taskName, start: job.start,
+          });
+          continue;
+        }
 
         if (decided.action === 'escalate') {
           report.actions.push({
@@ -904,7 +923,22 @@ export const handler = async (event) => {
 
       const sends   = history.filter(h => h.action === 'send').map(h => ({ sent_at: h.created_at, attempt: h.attempt }));
       const decided = nextAction({ history: sends, startDate: job.start, today });
-      if (!decided) continue;
+
+      // Same rule as the endorsement above: the ladder holding is not the same
+      // as nothing being outstanding, and a report that goes quiet on a Saturday
+      // reads as a clean bill of health.
+      if (!decided) {
+        report.actions.push({
+          sub: sub.name, action: 'waiting',
+          reason: `${docNeeds === 'w9' ? 'a W9 is' : docNeeds === 'coi' ? 'a certificate is' : 'a certificate and a W9 are'} still outstanding. ` +
+            (sends.length
+              ? `${sends.length} request${sends.length > 1 ? 's have' : ' has'} gone out, most recently ${String(sends[0].sent_at).slice(0, 10)}, and the next follow-up is not due yet.`
+              : 'Nothing has gone out yet: the ladder does not send on a weekend.'),
+          to: sub.email || null,
+          task: job.taskName, start: job.start,
+        });
+        continue;
+      }
 
       const record = {
         sub_id: subId, sub_name: sub.name, to_email: sub.email || null,
