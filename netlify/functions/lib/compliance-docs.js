@@ -255,9 +255,21 @@ async function lookupRead(fileId, file, opts) {
 
 // The local pass. Free, instant, and right about two thirds of the time: it
 // works on a PDF with a real text layer and fails on everything else.
+// Takes a COPY of the bytes, and that is not a micro-optimisation in reverse.
+//
+// pdfjs, under unpdf, takes ownership of the typed array it is handed and
+// detaches the underlying ArrayBuffer. After this function runs, the caller's
+// `bytes` has length zero. When the reader tried the text pass first and fell
+// back to Claude, Claude was handed an empty document and the API answered "PDF
+// cannot be empty", which was then recorded as a fact about the certificate.
+//
+// It only ever failed one way round, which is what made it so hard to see: a
+// run that reads with Claude first works perfectly, so the background reader was
+// always fine and only the sweep's own syncOnly path broke. Three good
+// certificates were filed as unreadable by this.
 async function textPass(bytes) {
   const { extractText } = await import('unpdf');
-  const { text } = await extractText(bytes, { mergePages: true });
+  const { text } = await extractText(bytes.slice(), { mergePages: true });
   const raw = String(text || '');
 
   // A scanned certificate is a picture of a document: pdfjs finds almost no
