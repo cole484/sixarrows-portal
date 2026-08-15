@@ -244,7 +244,7 @@ export function isTransientFailure(status, body = '') {
 // quotes were recorded that way before the allowance was raised, and matching
 // on the wording is what lets those rows heal on the next run rather than
 // needing to be found and cleared by hand.
-const TRANSIENT_TEXT = /credit balance|billing|quota|insufficient|rate.?limit|overloaded|could not reach|ran out of room|not with usable JSON|Claude API (5\d\d|429|401|403)/i;
+const TRANSIENT_TEXT = /credit balance|billing|quota|insufficient|rate.?limit|overloaded|could not reach|ran out of room|not with usable JSON|cannot be empty|empty body|zero bytes|Claude API (5\d\d|429|401|403)/i;
 export function errorLooksTransient(text) {
   return !!text && TRANSIENT_TEXT.test(String(text));
 }
@@ -284,6 +284,12 @@ function cleanStr(v, max = 200) {
 async function ask(prompt, bytes, mediaType, kind, maxTokens = 2000) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY is not set, so documents cannot be read automatically.' };
+  // A zero byte document is a broken download, never a document. Sending it
+  // gets "PDF cannot be empty" back, which reads like a fact about the file and
+  // is not one, so it is caught here and marked transient.
+  if (!bytes || !bytes.length) {
+    return { ok: false, transient: true, error: 'the file downloaded as zero bytes, so there was nothing to read. This is a download problem rather than a problem with the document.' };
+  }
   const cap = kind === 'pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES;
   if (bytes.length > cap) {
     const mb = (bytes.length / 1048576).toFixed(1);

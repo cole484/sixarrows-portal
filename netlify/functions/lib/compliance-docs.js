@@ -52,7 +52,15 @@ export async function listFolder(folderId, apiKey) {
 async function downloadFile(fileId, apiKey) {
   const res = await fetch(`${DRIVE_FILES}/${fileId}?alt=media&key=${apiKey}`);
   if (!res.ok) throw new Error(`Drive download ${fileId}: ${res.status}`);
-  return new Uint8Array(await res.arrayBuffer());
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  // Drive occasionally answers 200 with nothing in it, most often for a file
+  // created moments earlier. Passing that on produced "PDF cannot be empty"
+  // from the reader, which was then written down as a fact about the document
+  // and overwrote a perfectly good earlier read. An empty body is a fact about
+  // the moment, so it is raised as an error and the caller treats it as
+  // transient rather than cacheable.
+  if (!bytes.length) throw new Error(`Drive download ${fileId}: 200 with an empty body, so nothing was read. This usually resolves on its own.`);
+  return bytes;
 }
 
 // ── Name matching ─────────────────────────────────────────────────────────
@@ -309,7 +317,9 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
   try {
     bytes = await downloadFile(fileId, apiKey);
   } catch (err) {
-    return { expiry: null, confidence: 'none', method: 'none', error: err.message };
+    // Never cached: a download that failed says nothing about whether the
+    // document is readable.
+    return { expiry: null, confidence: 'none', method: 'none', error: err.message, transient: true };
   }
 
   const isPdf = file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name || '');
