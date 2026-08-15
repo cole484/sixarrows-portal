@@ -191,46 +191,113 @@ export function buildBody({ contactName, coiState, coiExpiry, needsW9, attempt =
 // an ACORD form and mean completely different things. Holder means they sent us
 // a copy. Additional insured means we are covered under their policy.
 //
-// This was reported as `review` and deliberately never sent until Cole approved
-// the wording, because telling a subcontractor their paperwork is wrong on the
-// strength of one automated read is the kind of message that damages a
-// relationship if it is wrong.
+// The wording that used to live here addressed the subcontractor. It is gone
+// rather than kept beside its replacement, because two approved versions of the
+// same message saying different things is how the wrong one goes out. Cole's
+// decision is that this goes to the agency: the sub cannot add an additional
+// insured to their own policy, and asking them to is asking them to forward an
+// email. See buildAgencyCorrectionBody below, and buildAgentContactBody for the
+// certificates that print no agency email at all.
+
+// ── Asking the AGENCY for the endorsement ─────────────────────────────────
 //
-// Two things it deliberately does not do. It does not say the sub did anything
-// wrong: nine times out of ten their agent issued a holder-only certificate
-// because that is the default, and the sub has never seen the distinction. And
-// it does not ask the sub to fix it, because they cannot. Only the agent can
-// reissue, so the message is written to be forwarded.
-export function buildCorrectionSubject() {
-  return 'Correction needed on insurance certificate';
+// Cole: the correction emails should go out to the insurance agent themselves,
+// and we do a follow-up sequence if we do not get it back.
+//
+// This is the version that actually gets the job done. The subcontractor cannot
+// add an additional insured to their own policy; only the agency that issued it
+// can. Sending the sub a correction notice makes them a messenger and adds a
+// hop where the request usually dies. The agency does this all day.
+//
+// Two things it must not do. It must not read as an accusation: a holder-only
+// certificate is the default on most agency systems and nobody did anything
+// wrong. And it must not ask them to look anything up. Everything an agent needs
+// to find the policy is in the message.
+export function buildAgencyCorrectionSubject({ insuredName }) {
+  return insuredName
+    ? `Additional insured endorsement needed: ${insuredName}`
+    : 'Additional insured endorsement needed';
 }
 
-export function buildCorrectionBody({ contactName, insuredName, expiry }) {
+const ENDORSEMENT_WORDING = [
+  '    Six Arrows Construction is named as an additional insured',
+  '    on the general liability policy.',
+];
+
+export function buildAgencyCorrectionBody({ agencyContact, insuredName, expiry, attempt = 1 }) {
+  const first = firstName(agencyContact);
+  const who   = insuredName || 'a subcontractor of ours';
+  const L = [];
+
+  L.push(first ? `Hi ${first},` : 'Hi,');
+  L.push('');
+
+  if (attempt === 1) {
+    L.push(`Six Arrows Construction is the certificate holder on the certificate of insurance you issued for ${who}. We need one change to it.`);
+    L.push('');
+    L.push('We are listed as the certificate holder but not as an additional insured on the general liability policy. We require both from every subcontractor we work with. Could you reissue with us added?');
+    L.push('');
+    L.push('The wording:');
+    L.push('');
+    L.push(...ENDORSEMENT_WORDING);
+    L.push('');
+    L.push(SIX_ARROWS_ADDRESS);
+    L.push('');
+    // Says plainly that nothing needs renewing, which is the reply this
+    // otherwise gets back: "that policy is current".
+    L.push(expiry
+      ? `The policy runs to ${fmtDate(expiry)}, so this should be a reissue rather than anything new. Sending it straight back to this email is fine.`
+      : 'This should be a reissue rather than anything new. Sending it straight back to this email is fine.');
+  } else {
+    L.push(`Following up on the additional insured endorsement for ${who}. We have not received the reissued certificate yet.`);
+    L.push('');
+    L.push(...ENDORSEMENT_WORDING);
+    L.push('');
+    L.push(SIX_ARROWS_ADDRESS);
+    L.push('');
+    L.push('If it has already gone out, let me know and I will track it down on our end.');
+  }
+
+  L.push('');
+  L.push('Thanks,');
+  L.push(FROM_NAME);
+  L.push('Six Arrows Construction');
+
+  return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ── Asking the sub for their agent's email ────────────────────────────────
+//
+// Approved by Cole for the case the certificates themselves created: plenty of
+// ACORD forms print the agency's name and a phone number and no email at all.
+// Glass & Thompson is one of them.
+//
+// Six Arrows does not place outbound calls to chase paperwork, and this is not
+// a message the sub can act on themselves, so the ask is narrow: give us the
+// address and we will do the rest. It says what the correction is, so a sub who
+// would rather forward it to their agent can, which is the outcome we actually
+// want anyway.
+export function buildAgentContactSubject() {
+  return 'Your insurance agent\'s email address';
+}
+
+export function buildAgentContactBody({ contactName, agencyName, agencyPhone }) {
   const first = firstName(contactName);
   const L = [];
 
   L.push(first ? `Hi ${first},` : 'Hi,');
   L.push('');
-  L.push('Thanks for sending the certificate over. There is one correction we need before we can put it on file.');
+  L.push('One correction is needed on your certificate of insurance. Six Arrows Construction is listed as the certificate holder but not as an additional insured on the general liability policy, and we need both. Your agent has to reissue it, so there is nothing for you to do on your end.');
   L.push('');
-  L.push('Six Arrows Construction is listed as the certificate holder, but not as an additional insured on the general liability policy. We need both. Your agent can reissue it with that added.');
+  L.push(agencyName
+    ? `The certificate lists ${agencyName}${agencyPhone ? ` at ${agencyPhone}` : ''} but no email address. What is the best email for them?`
+    : 'The certificate does not print an email address for your agency. What is the best email for them?');
   L.push('');
-  L.push('The wording to give them:');
+  L.push('I will take it from there. If it is easier to forward this to them yourself, the wording they need is:');
   L.push('');
-  L.push('    Six Arrows Construction is named as an additional insured');
-  L.push('    on the general liability policy.');
+  L.push(...ENDORSEMENT_WORDING);
   L.push('');
   L.push(SIX_ARROWS_ADDRESS);
-  L.push('');
-  // The expiry tells them nothing needs renewing, which heads off the most
-  // common reply: "that certificate is current, I just sent it".
-  if (expiry) {
-    L.push(`Everything else looks right, and the policy runs to ${fmtDate(expiry)}, so this should just be a reissue rather than anything new.`);
-  } else {
-    L.push('Everything else looks right, so this should just be a reissue rather than anything new.');
-  }
-  L.push('');
-  L.push('Forward this along to them if it is easier, and let me know if you hit a snag.');
   L.push('');
   L.push('Thanks,');
   L.push(FROM_NAME);
@@ -317,12 +384,17 @@ function joinList(items) {
 //
 // history: prior sends for this sub + doc set, newest first,
 //          [{ sent_at, attempt }]
+// what:    what is being chased, for the escalation reason only. The same ladder
+//          runs for a missing certificate and for an endorsement that has not
+//          come back, and "the document is still missing" is the wrong sentence
+//          for the second one: we hold the certificate, it is the correction we
+//          are waiting on.
 // Every interval is measured in business days. See ESCALATION above for why.
-export function nextAction({ history = [], startDate, today = new Date().toISOString().slice(0, 10) }) {
+export function nextAction({ history = [], startDate, today = new Date().toISOString().slice(0, 10), what = 'document' }) {
   const sent = history.length;
 
   if (sent >= ESCALATION.maxEmails) {
-    return { action: 'escalate', reason: `already sent ${sent} requests with no document` };
+    return { action: 'escalate', reason: `already sent ${sent} requests and the ${what} has not come back` };
   }
 
   // Escalation is a decision, not an email, so it stands on a weekend. Sending
@@ -346,7 +418,7 @@ export function nextAction({ history = [], startDate, today = new Date().toISOSt
     return { action: 'escalate', reason: `${sinceFirst} business days since the first request` };
   }
   if (daysTo != null && daysTo <= ESCALATION.escalateWithin) {
-    return { action: 'escalate', reason: `work starts in ${daysTo} business day(s) and the document is still missing` };
+    return { action: 'escalate', reason: `work starts in ${daysTo} business day(s) and the ${what} is still missing` };
   }
 
   if (!canSendToday) return null;

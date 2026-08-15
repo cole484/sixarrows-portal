@@ -34,11 +34,16 @@
 //                            certificate is a PDF and anyone can edit a date on
 //                            one, so the only real check is with the people who
 //                            issued it. Asked once per certificate, not per run.
-//   GET /?corrections=1      with send=1, also email subs whose certificate is
-//                            current but names Six Arrows as the holder rather
-//                            than as an additional insured. Behind its own
-//                            switch because it is the only message that tells a
-//                            sub their paperwork is wrong.
+//   GET /?corrections=1      with send=1, chase the additional insured
+//                            endorsement when a certificate is current but
+//                            names Six Arrows as the holder only. This goes to
+//                            the AGENCY, because a sub cannot add an additional
+//                            insured to their own policy. When the certificate
+//                            prints no agency email, the sub is asked for that
+//                            address and nothing else. Follows up on the same
+//                            business day ladder as a document request. Behind
+//                            its own switch because it is the only message that
+//                            says somebody's paperwork is wrong.
 //   GET /?maxWrites=20       ceiling on Notion writebacks in one run
 //   GET /?budgetMs=18000     give up and return a partial report after this
 //
@@ -64,7 +69,9 @@
 import { supabase } from './lib/supabase-client.js';
 import { sendGmail, gmailConfigured, senderAddress } from './lib/gmail.js';
 import {
-  buildSubject, buildBody, buildCorrectionSubject, buildCorrectionBody,
+  buildSubject, buildBody,
+  buildAgencyCorrectionSubject, buildAgencyCorrectionBody,
+  buildAgentContactSubject, buildAgentContactBody,
   buildVerificationSubject, buildVerificationBody, nextAction, FROM_EMAIL,
 } from './lib/compliance-email.js';
 import {
@@ -715,42 +722,117 @@ export const handler = async (event) => {
         }
       }
 
-      // Current, correctly named, and Six Arrows is only the holder. Cole has
-      // approved this wording, so it can send, but behind its own switch rather
-      // than the general one: it is the only message that tells a sub their
-      // paperwork is wrong, and the read it rests on is a single automated look
-      // at a form where holder and additional insured sit two lines apart.
+      // Current, correctly named, and Six Arrows is only the holder.
+      //
+      // Cole's call on where this goes: to the agency, not to the sub. The sub
+      // cannot add an additional insured to their own policy, so sending it to
+      // them makes them a messenger and adds the hop where this request usually
+      // dies. The agency does this all day. When the certificate prints no
+      // agency email, which plenty of them do not, the sub is asked for the
+      // address instead and that is all they are asked for.
+      //
+      // Behind its own switch rather than the general one, because it is the
+      // only message that says somebody's paperwork is wrong and it rests on one
+      // automated look at a form where holder and additional insured sit two
+      // lines apart.
       //
       // 'unclear' deliberately does NOT send. That is the reader saying it could
       // not tell, and asking somebody to fix something on that basis is how this
       // system would lose a subcontractor's trust.
       if (st.coiState === 'ok' && st.additionalInsured === 'no') {
-        const subject = buildCorrectionSubject();
-        const body    = buildCorrectionBody({ contactName: sub.contact, expiry: st.coiExpiry });
-        const canSend = doSend && q.corrections === '1' && !!sub.email;
+        const agency  = st.producer || {};
+        const insured = st.insuredName || sub.name;
+        // To the agency when we can reach them, otherwise to the sub for the
+        // one thing only they can give us.
+        const toAgency = !!agency.email;
+        const to       = toAgency ? agency.email : (sub.email || null);
+
+        // The ladder, driven off what has already gone out for this correction.
+        // Same intervals as a document request, and for the same reason: an
+        // agency does not reissue on a Saturday either.
+        let history = [];
+        try {
+          history = await supabase('compliance_requests', {
+            select: 'created_at,attempt,action,to_email,gmail_thread_id',
+            filters: [{ col: 'sub_id', op: 'eq', val: subId }, { col: 'action', op: 'eq', val: 'correction' }],
+            order: 'created_at.desc', limit: 10,
+          });
+        } catch (err) {
+          report.errors.push({ sub: sub.name, error: `could not read correction history: ${err.message}` });
+          continue;                  // never re-send blind
+        }
+
+        const sends   = history.map(h => ({ sent_at: h.created_at, attempt: h.attempt }));
+        const decided = nextAction({ history: sends, startDate: job.start, today, what: 'endorsement' });
+        if (!decided) continue;      // already asked, not due again yet
+
+        if (decided.action === 'escalate') {
+          report.actions.push({
+            sub: sub.name, action: 'escalate',
+            reason: `${decided.reason}. Six Arrows is still the certificate holder rather than an additional insured${agency.name ? `, and ${agency.name} has been asked` : ''}.`,
+            task: job.taskName, start: job.start,
+          });
+          if (doSend) {
+            try {
+              await supabase('compliance_requests', { method: 'POST', body: {
+                sub_id: subId, sub_name: sub.name, to_email: to,
+                doc_needs: 'coi_additional_insured', coi_state: st.coiState, coi_expiry: st.coiExpiry,
+                project: job.project, task_id: job.taskId, task_name: job.taskName,
+                start_date: job.start, action: 'escalate', attempt: decided.attempt || sends.length,
+                error: decided.reason,
+              } });
+            } catch (e) { report.errors.push({ sub: sub.name, error: e.message }); }
+          }
+          continue;
+        }
+
+        const subject = toAgency
+          ? buildAgencyCorrectionSubject({ insuredName: insured })
+          : buildAgentContactSubject();
+        const body = toAgency
+          ? buildAgencyCorrectionBody({
+              agencyContact: agency.contact, insuredName: insured,
+              expiry: st.coverage?.generalLiability?.expiry || st.coiExpiry,
+              attempt: decided.attempt,
+            })
+          : buildAgentContactBody({
+              contactName: sub.contact, agencyName: agency.name, agencyPhone: agency.phone,
+            });
+
+        const canSend = doSend && q.corrections === '1' && !!to;
 
         report.actions.push({
           sub: sub.name,
           action: canSend ? 'correction' : 'review',
-          reason: 'the certificate is current but Six Arrows is the certificate holder rather than an additional insured on the general liability policy.',
-          to: sub.email || null,
+          attempt: decided.attempt,
+          reason: toAgency
+            ? `the certificate is current but Six Arrows is the certificate holder rather than an additional insured on the general liability policy. Only ${agency.name || 'the issuing agency'} can reissue it.`
+            : `the certificate is current but Six Arrows is the certificate holder rather than an additional insured on the general liability policy, and ${agency.name ? `${agency.name} printed no email address on it` : 'no agency email is printed on it'}. Asking the subcontractor for their agent's address.`,
+          to,
+          toKind: toAgency ? 'agency' : 'subcontractor',
+          agency: agency.name || null,
           subject,
           preview: canSend ? undefined : body,
           task: job.taskName, start: job.start,
-          note: sub.email
+          note: to
             ? (canSend ? undefined : 'Add corrections=1 alongside send=1 to send this.')
-            : 'no email address on the subcontractor record, so this cannot be sent.',
+            : 'no agency email on the certificate and no email address on the subcontractor record, so this cannot be sent.',
         });
 
         if (canSend) {
           try {
-            const sent = await sendGmail({ to: sub.email, subject, body });
+            // Follow-ups thread onto the first one, so the agency sees the
+            // original ask rather than a message with no context.
+            const threadId = history.find(h => h.gmail_thread_id && h.to_email === to)?.gmail_thread_id || undefined;
+            const sent = await sendGmail({ to, subject, body, threadId });
             await supabase('compliance_requests', { method: 'POST', body: {
-              sub_id: subId, sub_name: sub.name, to_email: sub.email,
-              doc_needs: 'coi_additional_insured', coi_state: st.coiState, coi_expiry: st.coiExpiry,
+              sub_id: subId, sub_name: sub.name, to_email: to,
+              doc_needs: toAgency ? 'coi_additional_insured' : 'agent_email',
+              coi_state: st.coiState, coi_expiry: st.coiExpiry,
               project: job.project, task_id: job.taskId, task_name: job.taskName,
-              start_date: job.start, action: 'correction', attempt: 1,
-              subject, body, gmail_thread_id: sent?.threadId || null,
+              start_date: job.start, action: 'correction', attempt: decided.attempt,
+              subject, body, sent: true,
+              gmail_message_id: sent?.id || null, gmail_thread_id: sent?.threadId || null,
             } });
           } catch (err) {
             report.errors.push({ sub: sub.name, error: `correction email failed: ${err.message}` });
