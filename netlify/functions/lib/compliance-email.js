@@ -183,6 +183,62 @@ export function buildBody({ contactName, coiState, coiExpiry, needsW9, attempt =
   return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// ── Asking for a corrected certificate ────────────────────────────────────
+//
+// The case this covers: the certificate is current, the limits may be fine, and
+// Six Arrows is named as the certificate HOLDER but not as an ADDITIONAL
+// INSURED on the general liability policy. Those two look almost identical on
+// an ACORD form and mean completely different things. Holder means they sent us
+// a copy. Additional insured means we are covered under their policy.
+//
+// This was reported as `review` and deliberately never sent until Cole approved
+// the wording, because telling a subcontractor their paperwork is wrong on the
+// strength of one automated read is the kind of message that damages a
+// relationship if it is wrong.
+//
+// Two things it deliberately does not do. It does not say the sub did anything
+// wrong: nine times out of ten their agent issued a holder-only certificate
+// because that is the default, and the sub has never seen the distinction. And
+// it does not ask the sub to fix it, because they cannot. Only the agent can
+// reissue, so the message is written to be forwarded.
+export function buildCorrectionSubject() {
+  return 'Correction needed on insurance certificate';
+}
+
+export function buildCorrectionBody({ contactName, insuredName, expiry }) {
+  const first = firstName(contactName);
+  const L = [];
+
+  L.push(first ? `Hi ${first},` : 'Hi,');
+  L.push('');
+  L.push('Thanks for sending the certificate over. There is one correction we need before we can put it on file.');
+  L.push('');
+  L.push('Six Arrows Construction is listed as the certificate holder, but not as an additional insured on the general liability policy. We need both. Your agent can reissue it with that added.');
+  L.push('');
+  L.push('The wording to give them:');
+  L.push('');
+  L.push('    Six Arrows Construction is named as an additional insured');
+  L.push('    on the general liability policy.');
+  L.push('');
+  L.push(SIX_ARROWS_ADDRESS);
+  L.push('');
+  // The expiry tells them nothing needs renewing, which heads off the most
+  // common reply: "that certificate is current, I just sent it".
+  if (expiry) {
+    L.push(`Everything else looks right, and the policy runs to ${fmtDate(expiry)}, so this should just be a reissue rather than anything new.`);
+  } else {
+    L.push('Everything else looks right, so this should just be a reissue rather than anything new.');
+  }
+  L.push('');
+  L.push('Forward this along to them if it is easier, and let me know if you hit a snag.');
+  L.push('');
+  L.push('Thanks,');
+  L.push(FROM_NAME);
+  L.push('Six Arrows Construction');
+
+  return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function joinList(items) {
   if (items.length === 1) return items[0];
   if (items.length === 2) return `${items[0]} and ${items[1]}`;

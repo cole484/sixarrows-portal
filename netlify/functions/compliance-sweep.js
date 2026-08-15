@@ -29,6 +29,11 @@
 //                            read cleanly. Opens nothing. This is the call to
 //                            make when certificates report as unreadable and
 //                            it is not obvious why.
+//   GET /?corrections=1      with send=1, also email subs whose certificate is
+//                            current but names Six Arrows as the holder rather
+//                            than as an additional insured. Behind its own
+//                            switch because it is the only message that tells a
+//                            sub their paperwork is wrong.
 //   GET /?maxWrites=20       ceiling on Notion writebacks in one run
 //   GET /?budgetMs=18000     give up and return a partial report after this
 //
@@ -47,7 +52,7 @@
 
 import { supabase } from './lib/supabase-client.js';
 import { sendGmail, gmailConfigured, senderAddress } from './lib/gmail.js';
-import { buildSubject, buildBody, nextAction, FROM_EMAIL } from './lib/compliance-email.js';
+import { buildSubject, buildBody, buildCorrectionSubject, buildCorrectionBody, nextAction, FROM_EMAIL } from './lib/compliance-email.js';
 import {
   listFolder, matchSub, readCoiExpiry, readW9Identity, coiState,
   COI_FOLDER_ID, W9_FOLDER_ID,
@@ -561,12 +566,57 @@ export const handler = async (event) => {
         });
       }
 
+      // Current, correctly named, and Six Arrows is only the holder. Cole has
+      // approved this wording, so it can send, but behind its own switch rather
+      // than the general one: it is the only message that tells a sub their
+      // paperwork is wrong, and the read it rests on is a single automated look
+      // at a form where holder and additional insured sit two lines apart.
+      //
+      // 'unclear' deliberately does NOT send. That is the reader saying it could
+      // not tell, and asking somebody to fix something on that basis is how this
+      // system would lose a subcontractor's trust.
       if (st.coiState === 'ok' && st.additionalInsured === 'no') {
+        const subject = buildCorrectionSubject();
+        const body    = buildCorrectionBody({ contactName: sub.contact, expiry: st.coiExpiry });
+        const canSend = doSend && q.corrections === '1' && !!sub.email;
+
+        report.actions.push({
+          sub: sub.name,
+          action: canSend ? 'correction' : 'review',
+          reason: 'the certificate is current but Six Arrows is the certificate holder rather than an additional insured on the general liability policy.',
+          to: sub.email || null,
+          subject,
+          preview: canSend ? undefined : body,
+          task: job.taskName, start: job.start,
+          note: sub.email
+            ? (canSend ? undefined : 'Add corrections=1 alongside send=1 to send this.')
+            : 'no email address on the subcontractor record, so this cannot be sent.',
+        });
+
+        if (canSend) {
+          try {
+            const sent = await sendGmail({ to: sub.email, subject, body });
+            await supabase('compliance_requests', { method: 'POST', body: {
+              sub_id: subId, sub_name: sub.name, to_email: sub.email,
+              doc_needs: 'coi_additional_insured', coi_state: st.coiState, coi_expiry: st.coiExpiry,
+              project: job.project, task_id: job.taskId, task_name: job.taskName,
+              start_date: job.start, action: 'correction', attempt: 1,
+              subject, body, gmail_thread_id: sent?.threadId || null,
+            } });
+          } catch (err) {
+            report.errors.push({ sub: sub.name, error: `correction email failed: ${err.message}` });
+          }
+        }
+        continue;
+      }
+
+      if (st.coiState === 'ok' && st.additionalInsured === 'unclear') {
         report.actions.push({
           sub: sub.name, action: 'review',
-          reason: 'the certificate is current but the reader could not find Six Arrows listed as additionally insured. Confirm, then ask their agent for a corrected certificate.',
+          reason: 'the certificate is current but the reader could not tell whether Six Arrows is an additional insured on general liability. Not emailing on an unclear read.',
           task: job.taskName, start: job.start,
         });
+        continue;
       }
 
       // Every sub with work coming up gets the full AI read, so a low
