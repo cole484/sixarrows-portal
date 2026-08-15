@@ -457,11 +457,19 @@ export const handler = async (event) => {
       // the additional insured answer matters as much as the date, and only the
       // AI reader can see the ADDL INSD column. Everyone else gets the cheap
       // pass, which escalates on its own if it cannot read the document.
+      //
+      // More than one certificate forces the AI reader too, whatever the
+      // schedule says. The cheap pass returns a date and cannot say which policy
+      // it belongs to, and with two documents in play that is the whole
+      // question: an unplaced date is either a second coverage or a superseded
+      // copy, and treating it as the wrong one is how a lapsed workers
+      // compensation policy hides behind a current liability certificate.
+      const needsAttribution = coiFiles.length > 1;
       const reads = [];
       for (const f of coiFiles) {
         if (outOfTime()) break;
         const r = await readCoiExpiry(f.id, gKey, f, {
-          ai: upcoming.has(sub.id), force, cache, cacheOnly,
+          ai: upcoming.has(sub.id) || needsAttribution, force, cache, cacheOnly,
         });
         if (r.method === 'none' && !r.expiry) notRead++;
         reads.push({ file: f, read: r });
@@ -538,6 +546,10 @@ export const handler = async (event) => {
         // with no employees carries no workers compensation and is not out of
         // compliance for it.
         missingCoverage: cov.missingCoverage,
+        // Files whose date the cheap pass found but could not place, expiring
+        // sooner than the answer above. Until one of these is opened properly,
+        // the date above is not settled.
+        needsAttribution: cov.needsAttribution,
         // The two questions worth answering when a state looks wrong: did a
         // file get matched at all, and if so could its expiry be read?
         coiFile: cov.sources.controlling || null,
@@ -751,6 +763,27 @@ export const handler = async (event) => {
         report.actions.push({
           sub: sub.name, action: 'review',
           reason: 'the certificate is current but the reader could not tell whether Six Arrows is an additional insured on general liability. Not emailing on an unclear read.',
+          task: job.taskName, start: job.start,
+        });
+        continue;
+      }
+
+      // Their liability certificate is current and the thing that lapsed is an
+      // older workers compensation certificate sitting beside it. The approved
+      // wording says their certificate of insurance has expired, and to a sub
+      // who sent a current one in August that reads as though nobody opened it.
+      // So this goes to a person with both dates named, and the sub hears
+      // nothing automatic.
+      const glCurrent = st.coverage?.generalLiability?.expiry && st.coverage.generalLiability.expiry >= today;
+      if (st.coiState === 'expired' && glCurrent) {
+        const wc = st.coverage?.workersComp;
+        report.actions.push({
+          sub: sub.name, action: 'review',
+          reason:
+            `general liability is current to ${st.coverage.generalLiability.expiry} on ${st.coverage.generalLiability.from}, ` +
+            `but the only workers compensation certificate on file expired ${wc?.expiry || st.coiExpiry}` +
+            `${wc?.from ? ` on ${wc.from}` : ''}. They need a current workers compensation certificate, not a liability one, ` +
+            `and the standard email would tell them their insurance has expired when the certificate they last sent is current.`,
           task: job.taskName, start: job.start,
         });
         continue;

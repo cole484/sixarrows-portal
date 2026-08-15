@@ -66,7 +66,8 @@ export function mergeCoverage(entries = []) {
     expiry: null, confidence: 'none', additionalInsured: null,
     insuredName: null, producer: null, limits: null, limitsOk: null,
     policies: null, coverage: { generalLiability: null, workersComp: null },
-    missingCoverage: [], sources: {}, files: usable.map(e => e.file?.name).filter(Boolean),
+    missingCoverage: [], needsAttribution: [],
+    sources: {}, files: usable.map(e => e.file?.name).filter(Boolean),
     combined: false, readVia: null, readError: null, notes: null,
     cacheDecision: null, retryBecause: null,
   };
@@ -133,6 +134,19 @@ export function mergeCoverage(entries = []) {
     if (!wcDate) missingCoverage.push('workersComp');
   }
 
+  // A document the text pass dated but could not place, sitting next to one that
+  // was properly read, and expiring sooner than the date we are about to call
+  // controlling. It is either a second coverage or a superseded copy, and
+  // nothing here can tell which, so it is named rather than guessed at. Home Pro
+  // is exactly this: a small workers compensation certificate with a text layer,
+  // dated by the cheap pass, quietly outranked by the liability certificate.
+  const needsAttribution = expiry
+    ? withDate
+        .filter(e => !attributed(e) && e.read.expiry && e.read.expiry < expiry)
+        .map(e => e.file?.name)
+        .filter(Boolean)
+    : [];
+
   // Every read that failed, named by its file, so a sub whose good certificate
   // was found still reports the one that could not be opened.
   const failures = usable
@@ -148,6 +162,12 @@ export function mergeCoverage(entries = []) {
   }
   if (unattributed) {
     notes.push('The date came from the text pass, which cannot say which policy it belongs to.');
+  }
+  if (needsAttribution.length) {
+    notes.push(
+      `${needsAttribution.join(' and ')} expires sooner than that and has only been dated by the text pass, ` +
+      `which cannot say which policy the date belongs to. Read it with the AI reader before trusting the date above.`
+    );
   }
   if (usable.length > 1) {
     notes.push(`${usable.length} certificates are on file for this subcontractor.`);
@@ -173,6 +193,7 @@ export function mergeCoverage(entries = []) {
       workersComp:      wcDate ? { expiry: wcDate, from: wc.file?.name || null } : null,
     },
     missingCoverage,
+    needsAttribution,
     sources: {
       generalLiability: gl?.file?.name || null,
       workersComp:      wc?.file?.name || null,
