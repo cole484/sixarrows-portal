@@ -7,6 +7,8 @@
 //   GET /?apply=1             actually upload to Drive and record it
 //   GET /?max=25              how many messages to look at
 //   GET /?days=30             how far back to search
+//   GET /?only=<text>         only attachments whose filename contains this
+//   GET /?force=1             ignore what has already been filed and redo it
 //   GET /?diag=1              what the Google token can actually do
 //   GET /?diag=1&labels=1     list Gmail labels
 //   GET /?diag=1&q=<search>   preview messages a query would reach
@@ -296,6 +298,12 @@ async function runWatcher(q) {
   // Four of five documents are identified from the envelope and never reach it.
   setReadBudget(Math.min(Number(q.readLimit) || 6, 20));
   const days  = Math.min(Math.max(Number(q.days) || DEFAULT_DAYS, 1), 365);
+  // force redoes work already done, which means uploading a second copy of
+  // anything still in Drive. Paired with only= it is how a single document gets
+  // reprocessed after a fix; used alone with apply it duplicates everything, so
+  // the report says so rather than leaving it to be discovered.
+  const force = q.force === '1';
+  const only  = String(q.only || '').toLowerCase();
   const max   = Math.min(Number(q.max) || DEFAULT_MAX, 50);
   const token = process.env.NOTION_TOKEN;
   const started = Date.now();
@@ -305,6 +313,8 @@ async function runWatcher(q) {
     applied: apply,
     searchedBack: `${days} days`,
     searched: QUERIES(days).map(x => x.why),
+    only: only || null,
+    forced: force,
     found: 0, alreadyFiled: 0, filed: 0, skipped: 0,
     documents: [], errors: [], truncated: false,
   };
@@ -344,7 +354,9 @@ async function runWatcher(q) {
     try { msg = await getMessage(id); }
     catch (err) { report.errors.push({ messageId: id, error: err.message }); continue; }
 
-    const docs = msg.attachments.filter(looksLikeDocument);
+    const docs = msg.attachments
+      .filter(looksLikeDocument)
+      .filter(a => !only || String(a.filename || '').toLowerCase().includes(only));
     if (!docs.length) continue;
 
     let match = matchDocument({ message: msg, threadsBySub, subs });
@@ -352,7 +364,7 @@ async function runWatcher(q) {
     for (const att of docs) {
       report.found++;
       const key = attachmentKey(msg.id, att.filename, att.size);
-      if (seenRes.seen.has(key)) { report.alreadyFiled++; continue; }
+      if (!force && seenRes.seen.has(key)) { report.alreadyFiled++; continue; }
 
       const kind = documentKind({ filename: att.filename, subject: msg.subject, body: msg.text });
       const entry = {
@@ -467,6 +479,9 @@ async function runWatcher(q) {
   }
 
   report.elapsedMs = Date.now() - started;
+  if (force && apply) {
+    report.warning = 'force ignores what was already filed, so anything still in Drive now has a second copy. Run cleanupDuplicates=1 to check.';
+  }
   report.next = apply
     ? 'Filed documents are in Drive. Run compliance-sweep to read them and update Notion.'
     : 'Dry run. Nothing downloaded, uploaded or recorded. Add apply=1 to file these.';
