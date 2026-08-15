@@ -20,6 +20,7 @@
 // that do are the scans and phone photos that used to land on somebody's desk.
 
 import { readCertificate, readW9, anthropicConfigured, errorLooksTransient } from './doc-ai.js';
+import { googleAccessToken } from './gmail.js';
 import { getRead, putRead, toCertificate, certificateRow, w9Row, cacheKey } from './doc-cache.js';
 
 const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files';
@@ -49,17 +50,47 @@ export async function listFolder(folderId, apiKey) {
   return out;
 }
 
+// Two credentials, because no single one can read every file in these folders.
+//
+// The API key reads anything shared "anyone with the link", which is how the
+// documents Cole uploaded by hand are shared and the only reason a plain key
+// works at all. It cannot read a file the agent created through OAuth, and the
+// way that failure presents is the trap: a 200 with an empty body rather than a
+// 403, so the file lists fine, downloads as nothing, and the certificate is
+// recorded as unreadable.
+//
+// The OAuth token is the mirror image. Its scope is drive.file, so it reads
+// every file this app uploaded and none of the ones it did not.
+//
+// Together they cover the folder. The key goes first because it costs no token
+// exchange and answers for most of the documents.
 async function downloadFile(fileId, apiKey) {
-  const res = await fetch(`${DRIVE_FILES}/${fileId}?alt=media&key=${apiKey}`);
-  if (!res.ok) throw new Error(`Drive download ${fileId}: ${res.status}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
+  let res = await fetch(`${DRIVE_FILES}/${fileId}?alt=media&key=${apiKey}`);
+  let bytes = res.ok ? new Uint8Array(await res.arrayBuffer()) : new Uint8Array();
+
+  if (!bytes.length) {
+    try {
+      const token = await googleAccessToken();
+      const alt = await fetch(`${DRIVE_FILES}/${fileId}?alt=media&supportsAllDrives=true`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (alt.ok) bytes = new Uint8Array(await alt.arrayBuffer());
+    } catch { /* fall through to the error below, which names both attempts */ }
+  }
+
+  if (!res.ok && !bytes.length) throw new Error(`Drive download ${fileId}: ${res.status} with the API key, and OAuth could not read it either.`);
   // Drive occasionally answers 200 with nothing in it, most often for a file
   // created moments earlier. Passing that on produced "PDF cannot be empty"
   // from the reader, which was then written down as a fact about the document
   // and overwrote a perfectly good earlier read. An empty body is a fact about
   // the moment, so it is raised as an error and the caller treats it as
   // transient rather than cacheable.
-  if (!bytes.length) throw new Error(`Drive download ${fileId}: 200 with an empty body, so nothing was read. This usually resolves on its own.`);
+  if (!bytes.length) {
+    throw new Error(
+      `Drive download ${fileId}: the API key got an empty body and OAuth returned nothing either. ` +
+      `If this file was uploaded by the agent, it may not have been given the folder's link sharing: run inbox-watch?reshare=1&apply=1.`
+    );
+  }
   return bytes;
 }
 
