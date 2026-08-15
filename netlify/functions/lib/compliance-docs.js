@@ -318,6 +318,7 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
   let best = null;
   let exhausted = false;
   let transient = false;
+  const attempts = [];
   for (const step of order) {
     if (step === 'text' && !isPdf) continue;
     if (step === 'ai'   && !canAi) continue;
@@ -334,10 +335,34 @@ export async function readCoiExpiry(fileId, apiKey, file = {}, opts = {}) {
     if (result.budgetExhausted) { exhausted = true; continue; }
     if (result.transient)        { transient = true; }
 
-    // Keep the first attempt's reason if the second one also fails, since the
-    // first is usually the more informative of the two.
+    attempts.push({ step, error: result.error || null, expiry: result.expiry || null });
+
     if (!best) best = result;
     if (result.expiry) { best = result; break; }
+  }
+
+  // Every layer that ran, in the recorded reason.
+  //
+  // This used to keep only the first attempt's message, on the theory that it
+  // was the more informative one. It is not, and the difference matters: a
+  // scanned certificate that Claude also failed on was filed as "no selectable
+  // text in this PDF, so it is a scan or a photo", which reads as though
+  // nothing with eyes had looked at it. Goodnight's certificate sat in that
+  // state and the message sent us looking for a reader that had already tried
+  // and already failed.
+  //
+  // Recording that Claude ran also makes the row reusable, so a document Claude
+  // genuinely cannot read stops being re-read at full price on every sweep.
+  if (best && !best.expiry && attempts.length > 1) {
+    best = {
+      ...best,
+      method: attempts.some(a => a.step === 'ai') ? 'ai' : best.method,
+      error: attempts
+        .filter(a => a.error)
+        .map(a => `${a.step === 'ai' ? 'the AI reader' : 'the text pass'}: ${a.error}`)
+        .join(' Then '),
+      attempts,
+    };
   }
 
   // One layer failing for a reason that was not about the document taints the
