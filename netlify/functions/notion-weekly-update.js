@@ -394,35 +394,55 @@ function weatherSensitiveTasks(thisWeek) {
   return thisWeek.filter(t => WEATHER_SENSITIVE.test(`${t.trade || ''} ${t.name || ''}`));
 }
 
-async function weatherLine(addr, tasks, thisWeek, T) {
+// Fetch structured weather data — days[], sensitiveTasks[], place, error.
+// Consumed by both the LLM polisher (structured input) and the deterministic
+// renderer (fallback string). Keeps all HTTP calls / geocoding in one place
+// so failures produce a clean error string once, not scattered messages.
+async function weatherData(addr, tasks, thisWeek, T) {
   if (!addr.address) {
-    // Distinguish the failure modes so admin can act without guessing.
     if (addr.projectsDbError) {
-      return `Weather: could not read the Projects Notion database (${(addr.projectsDbError || '').slice(0, 120)}). Share it with the Six Arrows portal integration (··· → Connections in Notion), or fill Job Site Location on any task as a fallback.`;
+      return { error: `could not read the Projects Notion database (${(addr.projectsDbError || '').slice(0, 120)}). Share it with the Six Arrows portal integration (··· → Connections in Notion), or fill Job Site Location on any task as a fallback.` };
     }
     if (addr.projectsDbEntries > 0) {
-      return `Weather: this project isn't matching an entry in the Projects Notion database, and no task has Job Site Location filled. Add a row with a Project Name starting with the same word as this client.`;
+      return { error: `this project isn't matching an entry in the Projects Notion database, and no task has Job Site Location filled. Add a row with a Project Name starting with the same word as this client.` };
     }
-    return 'Weather: no address available. Add this project to the Projects Notion database (or fill Job Site Location on any task).';
+    return { error: 'no address available. Add this project to the Projects Notion database (or fill Job Site Location on any task).' };
   }
-  const sensitive = weatherSensitiveTasks(thisWeek);
   let geo;
   try { geo = await geocode(addr.address); }
-  catch (e) { return `Weather: could not resolve address "${addr.address}" — ${e.message}.`; }
+  catch (e) { return { error: `could not resolve address "${addr.address}" — ${e.message}.` }; }
 
   let days;
   try { days = await forecastMonFri(geo.lat, geo.lon, T); }
-  catch (e) { return `Weather: forecast lookup failed — ${e.message}.`; }
+  catch (e) { return { error: `forecast lookup failed — ${e.message}.` }; }
 
-  const bad = days.map(d => ({ ...d, adj: weatherAdj(d) })).filter(d => d.adj);
+  const sensitive = weatherSensitiveTasks(thisWeek).map(t => ({
+    name:      t.name,
+    startDate: t.startDate,
+    endDate:   t.endDate,
+    trade:     t.trade || '',
+  }));
+
+  return {
+    place:            geo.place,
+    address:          addr.address,
+    matchedQuery:     geo.matchedQuery,
+    days:             days.map(d => ({ ...d, adj: weatherAdj(d), day: dayLabel(d.date) })),
+    sensitiveTasks:   sensitive,
+    error:            null,
+  };
+}
+
+// Deterministic fallback renderer used when Claude polish is skipped or fails.
+function renderWeatherLine(w) {
+  if (w.error) return 'Weather: ' + w.error;
+  const bad = (w.days || []).filter(d => d.adj);
   if (!bad.length) return 'Dry week ahead — no weather risk to this week\'s work.';
-  if (!sensitive.length) {
-    return `${bad.map(d => `${dayLabel(d.date)} ${d.adj}`).join(', ')} — no weather-sensitive tasks scheduled, mostly indoor work.`;
+  if (!w.sensitiveTasks.length) {
+    return `${bad.map(d => `${d.day} ${d.adj}`).join(', ')} — no weather-sensitive tasks scheduled, mostly indoor work.`;
   }
-
-  // Match bad days to trades that would slip
-  const trades = Array.from(new Set(sensitive.map(t => (t.trade || t.name).split(/[—-]/)[0].trim()).filter(Boolean))).slice(0, 3);
-  const badDays = bad.map(d => `${dayLabel(d.date)} (${d.adj})`).join(', ');
+  const trades = Array.from(new Set(w.sensitiveTasks.map(t => (t.trade || t.name).split(/[—-]/)[0].trim()).filter(Boolean))).slice(0, 3);
+  const badDays = bad.map(d => `${d.day} (${d.adj})`).join(', ');
   return `${badDays} — could slow or push ${trades.join(' / ') || 'weather-sensitive work'} this week.`;
 }
 function dayLabel(iso) {
@@ -510,6 +530,156 @@ function buildBody(clientName, T, buckets, weather) {
   return chunks.join('\n');
 }
 
+// ── Claude polish (Cole's voice) ────────────────────────────────────────
+// Takes the same bucketed data the deterministic renderer uses and asks
+// Claude to compose a natural-voice update. Claude is told to use ONLY
+// the provided data — nothing invented — and to match Cole's phrasing
+// patterns from prior weeks. Falls back to the deterministic renderer if
+// the API errors, so we never ship nothing.
+//
+// Uses ANTHROPIC_API_KEY (already set in Netlify for other functions).
+// Model: claude-sonnet-4-5. About $0.05 per client per run.
+async function polishWithClaude(client, T, buckets, weather) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY not set — cannot polish');
+
+  const headerDate = T.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  // Distill each bucket into compact JSON — trim fields Claude doesn't need
+  const distill = t => {
+    const o = { name: t.name };
+    if (t.status)          o.status          = t.status;
+    if (t.startDate)       o.start           = t.startDate;
+    if (t.endDate)         o.end             = t.endDate;
+    if (t.trade)           o.trade           = t.trade;
+    if (t.phase)           o.phase           = t.phase;
+    if (t.clientNote)      o.clientNote      = t.clientNote;
+    if (t.defOfDone)       o.defOfDone       = t.defOfDone;
+    if (t.isLongLead)      o.longLead        = true;
+    if (t.isMilestone)     o.milestone       = true;
+    if (t.approvalStatus)  o.approvalStatus  = t.approvalStatus;
+    if (t.approvalNotes)   o.approvalNotes   = t.approvalNotes;
+    if (t.decisionDeadline)o.decisionDeadline= t.decisionDeadline;
+    if (t.decisionOwner)   o.decisionOwner   = t.decisionOwner;
+    return o;
+  };
+
+  const payload = {
+    clientName:       client.client_name,
+    weekOf:           headerDate,
+    place:            weather.place || null,
+    tasks: {
+      thisWeek:          buckets.thisWeek.map(distill),
+      inProgress:        buckets.inProgress.map(distill),
+      recentlyCompleted: buckets.recentlyCompleted.map(distill),
+      comingUp:          buckets.comingUp.slice(0, 12).map(distill),
+      decisionsNeeded:   buckets.decisionsNeeded.map(distill),
+      longLeadBlockers:  buckets.potentialBlockers.filter(t => t.isLongLead).map(distill),
+    },
+    weather: weather.error
+      ? { error: weather.error }
+      : {
+          place: weather.place,
+          days:  (weather.days || []).map(d => ({
+            day:        d.day,
+            tempHigh:   d.tempMax,
+            tempLow:    d.tempMin,
+            precipProb: d.precipProb,
+            precipIn:   d.precipSum,
+            adj:        d.adj || 'clear',
+          })),
+          sensitiveTasks: weather.sensitiveTasks,
+        },
+  };
+
+  const systemPrompt = `You are drafting the weekly customer construction update for Six Arrows Construction, in Cole Borders' voice. Cole reviews these before texting them to customers.
+
+VOICE
+- Warm, plain, specific — never fluffy. No jargon.
+- Text-message friendly: short lines, no tables, no markdown headers beyond the section labels I give you.
+- Cole phrases things like:
+  * "Framing — walls, floors, and roof structure wrapped 8/14."
+  * "Roof dry-in and roofing install — finishing up Tue 8/18"
+  * "Plumbing rough-in (main + basement walls) — starts Mon 8/17, runs through 8/31"
+  * "Cabinet order goes in — 8/17–8/21"
+  * "Post-framing selections lockdown — still pending. Items to lock: cabinet style, wood species, finish, and hardware; tile selections including layouts."
+
+STRICT DATA RULES
+- Use ONLY the source data provided. NEVER invent tasks, dates, notes, prices, or details.
+- If a task has no clientNote, don't add one.
+- If defOfDone is missing, omit the "What done looks like:" sub-line entirely.
+- If a whole section has zero items, OMIT the section header — do not write "No items" or leave a blank header.
+- Do not add closing signatures or greetings.
+
+STRUCTURE (in this exact order, omit any empty section)
+<Client Name> — Weekly Update — <Sun, Mon D>
+
+Scheduled this week
+- <task natural sentence with date/range and clientNote woven in>
+  - What done looks like: <defOfDone verbatim, only if provided>
+
+In progress
+- <task with status/context if useful>
+
+Recently completed
+- <task with clientNote or a brief factual note>
+
+Coming up next (2–4 weeks)
+- <task with approx timing>
+
+Decisions we need from you
+- <item with deadline and owner if present>
+(If several decisions are tied together, feel free to combine into a single short paragraph — Cole often does this for a "selections lockdown" moment.)
+
+Heads up on long-lead items
+<Prose paragraph — ONLY when longLeadBlockers has entries. Name them, note the lead-time pressure.>
+
+Weather watch (<City>)
+<If weather.error is set, print exactly "Weather: <error>" as the whole section.>
+<Otherwise: one line per Mon–Fri day with conditions/high/precip in Cole's voice, then a sentence connecting weather to any sensitiveTasks scheduled this week. State impact factually — do not estimate delay days.>
+
+DATE PHRASING
+- Refer to dates naturally: "8/14", "Mon 8/17", "8/17–8/31", "wrapped 8/14", "starts Mon 8/17", "targeting 8/26", "finishing up Tue 8/18".
+- Don't say "date range" or use ISO dates.
+
+OUTPUT the update text only. No preamble, no explanation, no code fences.`;
+
+  const userContent = `SOURCE DATA (JSON):
+${JSON.stringify(payload, null, 2)}
+
+Write the update now, in Cole's voice, following every rule above.`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  let res;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:  'POST',
+      headers: {
+        'Content-Type':       'application/json',
+        'x-api-key':          key,
+        'anthropic-version':  '2023-06-01',
+      },
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-5',
+        max_tokens: 2000,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: userContent }],
+      }),
+      signal: controller.signal,
+    });
+  } finally { clearTimeout(timer); }
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Anthropic ${res.status}: ${errText.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  const text = (j.content?.[0]?.text || '').trim();
+  if (!text) throw new Error('Anthropic returned empty text');
+  return text;
+}
+
 // ── Supabase helpers ────────────────────────────────────────────────────
 function sbHeaders() {
   return {
@@ -552,7 +722,7 @@ async function saveDraft(clientId, title, body, targetDateIso) {
 }
 
 // ── Per-client generation ───────────────────────────────────────────────
-async function generateForClient(client, T) {
+async function generateForClient(client, T, { raw = false } = {}) {
   const map    = fieldMap(client.notion_timeline_db_id);
   const pages  = await notionQueryAll(client.notion_timeline_db_id);
   const tasks  = pages.map(p => normalizeTask(p, map)).filter(t => t.name);
@@ -568,9 +738,26 @@ async function generateForClient(client, T) {
   }
 
   const address = await resolveAddress(client.client_name, tasks);
-  const weather = await weatherLine(address, tasks, buckets.thisWeek, T);
+  const weather = await weatherData(address, tasks, buckets.thisWeek, T);
 
-  const body    = buildBody(client.client_name, T, buckets, weather);
+  // Try Claude polish for Cole's-voice output; fall back to deterministic
+  // renderer if the API errors OR the caller asked for raw output (?raw=1).
+  let body;
+  let voice = 'raw';
+  let polishError = null;
+  if (!raw) {
+    try {
+      body  = await polishWithClaude(client, T, buckets, weather);
+      voice = 'claude';
+    } catch (e) {
+      polishError = (e && e.message) ? e.message : String(e);
+      console.warn(`polishWithClaude(${client.id}) failed, using raw:`, polishError);
+    }
+  }
+  if (!body) {
+    body = buildBody(client.client_name, T, buckets, renderWeatherLine(weather));
+  }
+
   const title   = `Weekly Update — ${T.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   const dateIso = T.toISOString().slice(0, 10);
 
@@ -580,6 +767,8 @@ async function generateForClient(client, T) {
     title,
     body,
     date:        dateIso,
+    voice,
+    polishError,
     stats: {
       thisWeek:          buckets.thisWeek.length,
       inProgress:        buckets.inProgress.length,
@@ -612,6 +801,7 @@ export const handler = async (event) => {
 
   const q       = event.queryStringParameters || {};
   const dryRun  = q.dryRun === '1';
+  const raw     = q.raw    === '1';    // skip Claude polish, force deterministic
   const oneOnly = q.clientId;
   const T       = nextMonday();
 
@@ -623,7 +813,7 @@ export const handler = async (event) => {
     const results = [];
     for (const c of clients) {
       try {
-        const r = await generateForClient(c, T);
+        const r = await generateForClient(c, T, { raw });
         if (r.skipped) { results.push(r); continue; }
         if (!dryRun) {
           const saved = await saveDraft(c.id, r.title, r.body, r.date);
