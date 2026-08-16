@@ -285,22 +285,51 @@ async function resolveAddress(clientName, tasks) {
 // strips a US-style street address down to progressively simpler queries
 // and returns the first one that hits — since we only need weather for
 // the general area, city-level precision is plenty.
-function addressAttempts(address) {
-  const parts = (address || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (parts.length <= 1) return [address];
-
-  const attempts = [address];                                   // as-is
-  attempts.push(parts.slice(1).join(', '));                     // drop street
-
-  // Strip trailing zip code from the last chunk (e.g. "KY 42347" → "KY")
-  const last     = parts[parts.length - 1];
-  const noZipTail = last.replace(/\s+\d[\d\s-]*$/, '').trim();
-  if (noZipTail && noZipTail !== last) {
-    attempts.push(parts.slice(0, -1).concat(noZipTail).join(', '));
-    attempts.push(parts.slice(1, -1).concat(noZipTail).join(', '));
+// Extract a "City, ST" pair from any US-style address, even when the
+// commas are missing or in weird places. Finds the 2-letter state code
+// at the end (with or without ZIP after it), then walks backward through
+// the words picking up the city — stopping at a street suffix ("St",
+// "Ln", "Cir", etc.) or a numeric token so a jammed-together address
+// like "914 Faulkirk Cir Elizabethtown, KY 42701" still yields
+// "Elizabethtown, KY" for geocoding.
+function extractCityState(addr) {
+  const stateMatch = String(addr || '').match(/[,\s]+([A-Z]{2})\b(?:\s+\d[\d\s-]*)?\s*$/);
+  if (!stateMatch) return null;
+  const state       = stateMatch[1];
+  const beforeState = addr.substring(0, stateMatch.index);
+  const streetSuffixes = /^(st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|cir|circle|ln|lane|ct|court|way|pl|place|pkwy|parkway|hwy|highway|trl|trail|ter|terrace|sq|square|loop|run|xing|crossing)$/i;
+  const words = beforeState.trim().split(/\s+/).map(w => w.replace(/[.,]/g, '')).filter(Boolean);
+  const city = [];
+  for (let i = words.length - 1; i >= 0; i--) {
+    const w = words[i];
+    if (streetSuffixes.test(w)) break;   // hit a street-type word
+    if (/^\d/.test(w))         break;    // hit a house / apartment number
+    city.unshift(w);
+    if (city.length >= 3) break;         // cities almost never exceed 3 words
   }
-  // Last-ditch: just the city (second-to-last chunk if it looks city-y)
-  if (parts.length >= 2) attempts.push(parts[parts.length - 2]);
+  return city.length ? `${city.join(' ')}, ${state}` : null;
+}
+
+function addressAttempts(address) {
+  const attempts = [address];
+
+  // Primary smart attempt: city + state extracted regardless of comma placement.
+  // Usually the fastest hit for Open-Meteo since it only understands place names.
+  const cityState = extractCityState(address);
+  if (cityState) attempts.push(cityState);
+
+  // Comma-split fallbacks for well-formatted addresses
+  const parts = (address || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    attempts.push(parts.slice(1).join(', '));                   // drop street
+    const last      = parts[parts.length - 1];
+    const noZipTail = last.replace(/\s+\d[\d\s-]*$/, '').trim();
+    if (noZipTail && noZipTail !== last) {
+      attempts.push(parts.slice(0, -1).concat(noZipTail).join(', '));
+      attempts.push(parts.slice(1, -1).concat(noZipTail).join(', '));
+    }
+    attempts.push(parts[parts.length - 2]);                     // just second-to-last chunk
+  }
 
   return [...new Set(attempts.map(s => s && s.trim()).filter(Boolean))];
 }
