@@ -44,6 +44,10 @@
 //                            business day ladder as a document request. Behind
 //                            its own switch because it is the only message that
 //                            says somebody's paperwork is wrong.
+//   GET /?docRequests=0      with send=1, send the endorsement chases and
+//                            nothing else. For a run authorised for one
+//                            specific thing: document requests are still
+//                            reported, and held.
 //   GET /?maxWrites=20       ceiling on Notion writebacks in one run
 //   GET /?budgetMs=18000     give up and return a partial report after this
 //
@@ -187,6 +191,13 @@ export const handler = async (event) => {
   const only     = (q.sub || '').trim().toLowerCase();   // narrow the report
   const isCron   = event.httpMethod === 'POST' && String(event.body || '').includes('next_run');
   const doSend   = isCron || q.send === '1';
+  // Send the endorsement chases and nothing else. send=1 means "send what is
+  // due", which is right on a cron and too broad for a run authorised for one
+  // specific thing: Cole approved the two corrections and explicitly did not
+  // want the document requests going out, because those three subs are booked
+  // and the paperwork is being handled another way. Relying on the lookahead
+  // window to keep them out is luck, not a control.
+  const doDocRequests = q.docRequests !== '0';
   const today    = new Date().toISOString().slice(0, 10);
 
   // How many documents this run may open with Claude. Cached reads are free
@@ -973,13 +984,18 @@ export const handler = async (event) => {
       record.subject = subject;
       record.body    = body;
 
+      const canSendDoc = doSend && doDocRequests;
+
       report.actions.push({
-        sub: sub.name, action: 'send', attempt: decided.attempt,
+        sub: sub.name, action: canSendDoc ? 'send' : 'review', attempt: decided.attempt,
         to: sub.email, task: job.taskName, start: job.start, subject,
-        preview: doSend ? undefined : body,
+        preview: canSendDoc ? undefined : body,
+        note: doSend && !doDocRequests
+          ? 'Due, and held: this run was called with docRequests=0, so document requests are reported and not sent.'
+          : undefined,
       });
 
-      if (!doSend) continue;
+      if (!canSendDoc) continue;
 
       try {
         const threadId = history.find(h => h.gmail_thread_id)?.gmail_thread_id || undefined;
