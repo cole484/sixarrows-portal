@@ -325,8 +325,14 @@ async function forecastMonFri(lat, lon, T) {
   const start = new Date(T);
   const end   = new Date(T); end.setDate(end.getDate() + 4);
   const iso = d => d.toISOString().slice(0, 10);
+  // Open-Meteo defaults to Celsius + millimeters. Force Fahrenheit + inches
+  // so weatherAdj's tempMin<=32 "freezing" check and precipSum>=0.25
+  // threshold actually match U.S. weather expectations. Without these,
+  // a warm summer day in Kentucky (~24°C) reads as freezing and 6mm of
+  // spitting rain reads as heavy.
   const url  = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
              + `&daily=weathercode,precipitation_sum,precipitation_probability_max,temperature_2m_min,temperature_2m_max`
+             + `&temperature_unit=fahrenheit&precipitation_unit=inch`
              + `&timezone=America%2FChicago&start_date=${iso(start)}&end_date=${iso(end)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Forecast ${res.status}`);
