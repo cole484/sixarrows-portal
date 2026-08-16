@@ -279,14 +279,46 @@ async function resolveAddress(clientName, tasks) {
 }
 
 // ── Weather (Open-Meteo — free, no key) ─────────────────────────────────
+// Open-Meteo's free geocoding only accepts place names (city / town /
+// county), not full street addresses. A "106 Reynolds Ln, Hartford, KY"
+// returns zero results but "Hartford, KY" resolves cleanly. This helper
+// strips a US-style street address down to progressively simpler queries
+// and returns the first one that hits — since we only need weather for
+// the general area, city-level precision is plenty.
+function addressAttempts(address) {
+  const parts = (address || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return [address];
+
+  const attempts = [address];                                   // as-is
+  attempts.push(parts.slice(1).join(', '));                     // drop street
+
+  // Strip trailing zip code from the last chunk (e.g. "KY 42347" → "KY")
+  const last     = parts[parts.length - 1];
+  const noZipTail = last.replace(/\s+\d[\d\s-]*$/, '').trim();
+  if (noZipTail && noZipTail !== last) {
+    attempts.push(parts.slice(0, -1).concat(noZipTail).join(', '));
+    attempts.push(parts.slice(1, -1).concat(noZipTail).join(', '));
+  }
+  // Last-ditch: just the city (second-to-last chunk if it looks city-y)
+  if (parts.length >= 2) attempts.push(parts[parts.length - 2]);
+
+  return [...new Set(attempts.map(s => s && s.trim()).filter(Boolean))];
+}
+
 async function geocode(address) {
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(address)}&count=1&language=en&format=json`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Geocode ${res.status}`);
-  const j = await res.json();
-  const hit = (j.results || [])[0];
-  if (!hit) throw new Error('No geocode result');
-  return { lat: hit.latitude, lon: hit.longitude, place: `${hit.name}, ${hit.admin1 || hit.country_code || ''}`.trim() };
+  const tried = [];
+  for (const q of addressAttempts(address)) {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
+    tried.push(q);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;                          // 404 / 500 → try next
+      const j = await res.json();
+      const hit = (j.results || [])[0];
+      if (hit) return { lat: hit.latitude, lon: hit.longitude, place: `${hit.name}, ${hit.admin1 || hit.country_code || ''}`.trim(), matchedQuery: q };
+    } catch { /* network glitch — try next */ }
+  }
+  throw new Error(`No geocode result (tried: ${tried.join(' | ')})`);
 }
 
 async function forecastMonFri(lat, lon, T) {
