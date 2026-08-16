@@ -21,7 +21,14 @@ import { respond, corsHeaders } from './lib/supabase-client.js';
 
 const NOTION_API      = 'https://api.notion.com/v1';
 const NOTION_VERSION  = '2022-06-28';
-const PROJECTS_DB_ID  = '222b7d0a-9152-4441-8ca7-4b4e7e855771';   // per spec §3
+// The spec §3 listed '222b7d0a-9152-4441-8ca7-4b4e7e855771' as the "Projects
+// DB collection ID," but that's actually Notion's data source ID for the
+// underlying collection — the classic /v1/databases/{id}/query endpoint
+// requires the DATABASE id, which is different. The database's Notion URL
+// (https://app.notion.com/p/91227653d2564858956b22cfa429634e) reveals the
+// real id. Both point to the same rows in the UI, but the databases endpoint
+// 404s when passed the collection id.
+const PROJECTS_DB_ID  = '91227653-d256-4858-956b-22cfa429634e';
 
 const SB_URL   = () => process.env.SUPABASE_URL;
 const SB_KEY   = () => process.env.SUPABASE_ANON_KEY;
