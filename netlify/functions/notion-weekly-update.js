@@ -225,36 +225,50 @@ function byDeadline(a, b) {
 }
 
 // ── Address (spec §3 + §5) ───────────────────────────────────────────────
+// Returns a shape that carries enough diagnostic context to build a useful
+// error message when the address can't be resolved. Historical silent
+// "add this project's address..." messages were misleading — usually the
+// Projects DB just wasn't shared with the portal's Notion integration,
+// but the fallback message implied the address was literally missing.
 let _projectsAddressCache = null;
 async function fetchProjectAddresses() {
   if (_projectsAddressCache) return _projectsAddressCache;
+  const cache = { table: {}, error: null };
   try {
     const pages = await notionQueryAll(PROJECTS_DB_ID);
-    _projectsAddressCache = {};
     pages.forEach(p => {
       const name = prop(p, 'Project Name');
       const addr = prop(p, 'Project Address');
-      if (name && addr) _projectsAddressCache[name.toLowerCase().trim()] = addr;
+      if (name && addr) cache.table[name.toLowerCase().trim()] = addr;
     });
   } catch (e) {
-    console.warn('Projects DB fetch failed:', e.message);
-    _projectsAddressCache = {};
+    cache.error = (e && e.message) ? e.message : 'unknown error';
+    console.warn('Projects DB fetch failed:', cache.error);
   }
-  return _projectsAddressCache;
+  _projectsAddressCache = cache;
+  return cache;
 }
 
 async function resolveAddress(clientName, tasks) {
-  const table = await fetchProjectAddresses();
-  // Match by loose contains — "Kandaswamy Family" ~ "Kandaswamy (Senthil & Vidhya)"
-  const cn = (clientName || '').toLowerCase().trim();
-  for (const [projName, addr] of Object.entries(table)) {
-    if (cn.includes(projName.split(' ')[0]) || projName.includes(cn.split(' ')[0])) return addr;
+  const { table, error } = await fetchProjectAddresses();
+  if (!error) {
+    const cn = (clientName || '').toLowerCase().trim();
+    for (const [projName, addr] of Object.entries(table)) {
+      if (cn.includes(projName.split(' ')[0]) || projName.includes(cn.split(' ')[0])) {
+        return { address: addr, source: 'projects_db' };
+      }
+    }
   }
   // Fallback: first non-empty Job Site Location on tasks
   for (const t of tasks) {
-    if (t.jobSiteLocation) return t.jobSiteLocation;
+    if (t.jobSiteLocation) return { address: t.jobSiteLocation, source: 'job_site_location' };
   }
-  return null;
+  return {
+    address:          null,
+    source:           null,
+    projectsDbError:  error,
+    projectsDbEntries: Object.keys(table).length,
+  };
 }
 
 // ── Weather (Open-Meteo — free, no key) ─────────────────────────────────
@@ -306,12 +320,21 @@ function weatherSensitiveTasks(thisWeek) {
   return thisWeek.filter(t => WEATHER_SENSITIVE.test(`${t.trade || ''} ${t.name || ''}`));
 }
 
-async function weatherLine(address, tasks, thisWeek, T) {
-  if (!address) return 'Weather: add this project\'s address to the Projects database (or fill Job Site Location) to enable the forecast.';
+async function weatherLine(addr, tasks, thisWeek, T) {
+  if (!addr.address) {
+    // Distinguish the failure modes so admin can act without guessing.
+    if (addr.projectsDbError) {
+      return `Weather: could not read the Projects Notion database (${(addr.projectsDbError || '').slice(0, 120)}). Share it with the Six Arrows portal integration (··· → Connections in Notion), or fill Job Site Location on any task as a fallback.`;
+    }
+    if (addr.projectsDbEntries > 0) {
+      return `Weather: this project isn't matching an entry in the Projects Notion database, and no task has Job Site Location filled. Add a row with a Project Name starting with the same word as this client.`;
+    }
+    return 'Weather: no address available. Add this project to the Projects Notion database (or fill Job Site Location on any task).';
+  }
   const sensitive = weatherSensitiveTasks(thisWeek);
   let geo;
-  try { geo = await geocode(address); }
-  catch (e) { return `Weather: could not resolve address "${address}" — ${e.message}.`; }
+  try { geo = await geocode(addr.address); }
+  catch (e) { return `Weather: could not resolve address "${addr.address}" — ${e.message}.`; }
 
   let days;
   try { days = await forecastMonFri(geo.lat, geo.lon, T); }
