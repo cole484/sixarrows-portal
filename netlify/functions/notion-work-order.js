@@ -12,6 +12,7 @@
 // Returns a merged work order object the admin UI can render to HTML.
 
 import { templateTitleForTrade, TRADES_WITHOUT_TEMPLATE } from './lib/trade-aliases.js';
+import { supabase } from './lib/supabase-client.js';
 
 const NOTION_API     = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -118,8 +119,53 @@ export const handler = async (event) => {
   const token = process.env.NOTION_TOKEN;
   if (!token) return { statusCode: 500, headers: corsH, body: JSON.stringify({ error: 'NOTION_TOKEN not set' }) };
 
-  const taskId = event.queryStringParameters?.taskId;
-  if (!taskId) return { statusCode: 400, headers: corsH, body: JSON.stringify({ error: 'taskId required' }) };
+  // Two ways in, and they are for different people.
+  //
+  // ?taskId= is ours: the admin UI and the send endpoint, which already know
+  // the Notion page id.
+  //
+  // ?t= is the subcontractor's. It is the only thing they ever hold, per Cole's
+  // rule that a work order is reachable by token link and no sub ever logs in.
+  // Resolving it here rather than in a separate call is what makes the open
+  // trackable: the page loads once, and that load is the event.
+  const linkToken = String(event.queryStringParameters?.t || '').trim();
+  let taskId = event.queryStringParameters?.taskId;
+  let link   = null;
+
+  if (linkToken) {
+    try {
+      const rows = await supabase('work_order_links', {
+        select: '*', filters: [{ col: 'token', op: 'eq', val: linkToken }], limit: 1,
+      });
+      link = rows[0] || null;
+    } catch (err) {
+      return { statusCode: 500, headers: corsH, body: JSON.stringify({ error: `could not resolve that link: ${err.message}` }) };
+    }
+    if (!link) {
+      return { statusCode: 404, headers: corsH, body: JSON.stringify({
+        error: 'This work order link is not one of ours. Check the address, or ask us to send it again.',
+      }) };
+    }
+    if (link.revoked) {
+      return { statusCode: 410, headers: corsH, body: JSON.stringify({
+        error: 'This work order has been replaced. We will send you the current one.',
+      }) };
+    }
+    taskId = link.task_id;
+
+    // Recorded before the Notion fetch, deliberately. A sub who opened the link
+    // and met an error still opened it, and that is the fact the follow-up
+    // ladder needs: somebody who has seen the work order and not answered is a
+    // different problem from somebody who never got it.
+    try {
+      await supabase('work_order_events', { method: 'POST', body: {
+        token: linkToken, kind: 'opened', actor: 'subcontractor',
+        meta: { userAgent: String(event.headers?.['user-agent'] || '').slice(0, 200) },
+      } });
+    } catch { /* a missed open costs a nudge, never the work order itself */ }
+  }
+
+  if (!taskId) return { statusCode: 400, headers: corsH, body: JSON.stringify({ error: 'taskId or t (link token) required' }) };
 
   const debug = event.queryStringParameters?.debug === '1';
 
@@ -394,6 +440,10 @@ export const handler = async (event) => {
         notes:    outNotes,
         scorecard,
         warnings: outWarnings,
+        // Handed back so the page submits with it and the send can be closed
+        // out against the link it arrived on.
+        linkToken: linkToken || null,
+        taskId,
       }),
     };
 

@@ -993,10 +993,12 @@ async function submitForm() {
   if (!name) return;
 
   const params = new URLSearchParams(window.location.search);
-  const taskId = params.get('taskId');
+  const taskId = window.WO_TASK_ID || params.get('taskId');
+  const linkToken = window.WO_LINK_TOKEN || params.get('t');
 
   const payload = {
     taskId,
+    linkToken,
     committedStart:    document.getElementById('startDate').value,
     committedEnd:      document.getElementById('endDate').value,
     workingDays:       parseInt(document.getElementById('workingDays').value, 10) || null,
@@ -1149,17 +1151,24 @@ function clientShortName(projectName) {
 async function loadWorkOrder() {
   const params = new URLSearchParams(window.location.search);
   const taskId = params.get('taskId');
+  // ?t= is what a subcontractor gets. It identifies the send rather than the
+  // task, so opening it is a trackable event and nothing about our Notion
+  // workspace travels in a text message.
+  const linkToken = params.get('t');
 
   // Always update Issued date to today.
   bindText('bind-issued-date', 'Issued: ' + new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}));
 
-  if (!taskId) {
-    // No taskId → show sample/default content (already in HTML). Done.
+  if (!taskId && !linkToken) {
+    // Neither → show sample/default content (already in HTML). Done.
     return;
   }
 
   try {
-    const res = await fetch('/.netlify/functions/notion-work-order?taskId=' + encodeURIComponent(taskId));
+    const query = linkToken
+      ? 't=' + encodeURIComponent(linkToken)
+      : 'taskId=' + encodeURIComponent(taskId);
+    const res = await fetch('/.netlify/functions/notion-work-order?' + query);
     const data = await res.json();
     if (data.error) {
       document.getElementById('root') || document.body.insertAdjacentHTML('afterbegin',
@@ -1174,6 +1183,11 @@ async function loadWorkOrder() {
 
 function renderData(data) {
   const { workOrder, schedule, project, sub, warnings } = data;
+
+  // A subcontractor arriving by token has no taskId in their URL, so the
+  // resolved one is kept here for the submission to use.
+  window.WO_TASK_ID    = data.taskId    || null;
+  window.WO_LINK_TOKEN = data.linkToken || null;
 
   // ── Header / hero ────────────────────────────────────────────────────
   bindText('bind-trade', workOrder.trade);

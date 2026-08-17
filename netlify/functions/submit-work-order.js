@@ -25,6 +25,9 @@
 // Body (JSON):
 //   {
 //     taskId:            notion page id
+//     linkToken:         the work order link this arrived on, when the sub
+//                        came in by token rather than by taskId. Closes out
+//                        the send so the follow-up ladder stops.
 //     committedStart:    "YYYY-MM-DD"
 //     committedEnd:      "YYYY-MM-DD"
 //     workingDays:       number | null
@@ -180,6 +183,28 @@ export const handler = async (event) => {
     // resubmit; the Notion write is idempotent, so a retry is harmless.
     console.error('submit-work-order: commitment insert failed:', err);
     return reply(500, { error: 'Could not record your submission. Please try again.' });
+  }
+
+  // Close out the send this arrived on. The commitment above is the record of
+  // what was agreed; this is what stops the follow-up ladder, and without it a
+  // sub who signed on Tuesday gets nudged on Wednesday, which is worse than
+  // never nudging at all.
+  //
+  // Deliberately after the commitment insert and deliberately not fatal. A sub
+  // who has signed has signed, and losing the tracking event costs one unwanted
+  // reminder rather than the submission itself.
+  if (payload.linkToken) {
+    try {
+      await supabase('work_order_events', { method: 'POST', body: {
+        token:   payload.linkToken,
+        kind:    'submitted',
+        actor:   'subcontractor',
+        message: commitmentText,
+        meta:    { commitment_id: commitmentId, committed_start: payload.committedStart, committed_end: payload.committedEnd },
+      } });
+    } catch (err) {
+      console.error('submit-work-order: could not record the submitted event:', err);
+    }
   }
 
   return reply(200, {
