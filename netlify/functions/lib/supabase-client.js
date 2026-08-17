@@ -26,9 +26,27 @@ export async function supabase(table, options = {}) {
   const params = new URLSearchParams();
   if (method === 'GET' || method === 'DELETE') {
     params.set('select', select);
-    filters.forEach(f => params.set(`${f.col}`, `${f.op}.${f.val}`));
     if (order) params.set('order', order);
     if (limit) params.set('limit', limit);
+  }
+
+  // Filters go on every method that has a WHERE clause, which is everything
+  // except an insert.
+  //
+  // They used to be applied to GET and DELETE only, which is safe for a POST
+  // and quietly catastrophic for a PATCH: PostgREST takes an unfiltered PATCH
+  // to mean every row in the table. The first caller to pass filters with a
+  // PATCH would have updated the lot. Nothing had yet, because every other
+  // update in this codebase builds its own URL, which is how it stayed hidden.
+  if (method !== 'POST') {
+    filters.forEach(f => params.set(`${f.col}`, `${f.op}.${f.val}`));
+  }
+
+  // A PATCH or DELETE with no filter at all is almost always a bug rather than
+  // an intention, and the consequence is the whole table. Refuse it here rather
+  // than let PostgREST be literal about it.
+  if ((method === 'PATCH' || method === 'DELETE') && !filters.length) {
+    throw new Error(`Supabase ${method} ${table}: refusing an unfiltered ${method}, which would affect every row. Pass a filter.`);
   }
 
   const qs = params.toString();
