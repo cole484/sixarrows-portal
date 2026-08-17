@@ -29,6 +29,33 @@ const COMPANY = 'Six Arrows Construction';
 //      segments and reads as a mailshot.
 const OPT_OUT = 'Reply STOP to opt out.';
 
+// No em dashes anywhere is a rule about what Six Arrows sends, not about what
+// Six Arrows types, and the difference matters here: every one of these
+// sentences is assembled from Notion fields, and Notion is full of them. The
+// first real draft came out as "Johnson — Build Timeline" in the subject line
+// of a message to a subcontractor. So the rule is enforced on the way out
+// rather than trusted to hold upstream.
+function clean(s) {
+  return String(s ?? '')
+    .replace(/\s*[—–]\s*/g, ', ')     // em and en dash
+    .replace(/[‘’]/g, "'")            // smart quotes, which mangle in SMS
+    .replace(/[“”]/g, '"')
+    .replace(/…/g, '...')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
+// "Johnson — Build Timeline" is what the Notion database is called. What the
+// subcontractor should read is "Johnson". A project name in these messages is
+// there to tell a sub which of our jobs this is, and our internal noun for the
+// timeline is not that.
+function projectLabel(name) {
+  const s = clean(name);
+  if (!s) return null;
+  const cut = s.split(/,\s*(?:build\s+)?timeline\b/i)[0];
+  return (cut || s).replace(/[,\s]+$/, '');
+}
+
 function shortDate(iso) {
   if (!iso) return null;
   const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
@@ -58,7 +85,7 @@ function money(n) {
 // project name to a sub who works for four builders: "106 Reynolds Ln" is a
 // place they can drive to and "Johnson" is a name in our system.
 function place({ project }) {
-  return project?.address || project?.name || null;
+  return clean(project?.address) || projectLabel(project?.name) || null;
 }
 
 // ── The text ──────────────────────────────────────────────────────────────
@@ -68,7 +95,7 @@ function place({ project }) {
 // link. The detail is on the page and in the email, and a sub who wants it
 // taps through.
 export function buildSms({ workOrder, schedule, project, link, attempt = 1, purpose = 'work_order' }) {
-  const what  = workOrder?.taskName || workOrder?.trade || 'work';
+  const what  = clean(workOrder?.taskName || workOrder?.trade || 'work');
   const where = place({ project });
   const when  = shortDate(schedule?.startDate);
 
@@ -94,15 +121,15 @@ export function buildSms({ workOrder, schedule, project, link, attempt = 1, purp
 // cannot carry: the price we believe is agreed, where it came from, and what we
 // need back. A sub who prints one thing before starting a job prints this.
 export function buildEmailSubject({ workOrder, schedule, project }) {
-  const what = workOrder?.taskName || workOrder?.trade || 'work';
+  const what = clean(workOrder?.taskName || workOrder?.trade || 'work');
   const when = shortDate(schedule?.startDate);
-  const proj = project?.name;
-  return `Work order: ${what}${proj ? `, ${proj}` : ''}${when ? ` (starts ${when})` : ''}`;
+  const proj = projectLabel(project?.name);
+  return clean(`Work order: ${what}${proj ? `, ${proj}` : ''}${when ? ` (starts ${when})` : ''}`);
 }
 
 export function buildEmailBody({ workOrder, schedule, project, sub, link, attempt = 1, purpose = 'work_order' }) {
   const first = firstName(sub?.contactName) || firstName(sub?.name);
-  const what  = workOrder?.taskName || workOrder?.trade || 'the work';
+  const what  = clean(workOrder?.taskName || workOrder?.trade || 'the work');
   const where = place({ project });
   const start = longDate(schedule?.startDate);
   const L = [];
@@ -164,11 +191,11 @@ export function buildEmailBody({ workOrder, schedule, project, sub, link, attemp
 // never place an AI voice call as first contact, and these are relationships he
 // cannot easily replace.
 export function buildEscalationNote({ workOrder, schedule, project, sub, sends, link }) {
-  const what  = workOrder?.taskName || workOrder?.trade || 'work';
+  const what  = clean(workOrder?.taskName || workOrder?.trade || 'work');
   const start = schedule?.startDate;
   const L = [];
 
-  L.push(`${sub?.name || 'This subcontractor'} has not come back on the work order for ${what}${project?.name ? ` (${project.name})` : ''}.`);
+  L.push(`${sub?.name || 'This subcontractor'} has not come back on the work order for ${what}${projectLabel(project?.name) ? ` (${projectLabel(project.name)})` : ''}.`);
   L.push('');
   for (const s of sends || []) {
     L.push(`  ${String(s.created_at).slice(0, 10)}  ${s.channel === 'sms' ? 'text' : 'email'} to ${s.to_address}${s.kind === 'opened' ? '' : ''}`);
