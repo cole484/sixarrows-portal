@@ -72,6 +72,9 @@ netlify/functions/
   sheet-sab-budget-sync.js  # SAB-phase budget category import from sheets
   sheet-billing-sync.js     # construction-phase billing detail
   drive-photos.js           # build photos pulled from Drive folders
+  work-order-send.js        # Tier 2. Mints a token link, drafts both messages,
+                            #   refuses a task the gate has blocked, and sends
+                            #   only on a POST that a person made.
   roadmap-vendors.js        # vendor defaults + per-client overrides + stop settings
   product-meta.js           # design book auto image fetch (OG/JSON-LD + Microlink fallback)
   selections-export.js      # CSV export of every selection
@@ -121,6 +124,10 @@ netlify/functions/
                             #   earliest across them. Additional insured and the
                             #   limits come off the general liability document.
   lib/compliance-email.js   # the approved wording for compliance emails
+  lib/sms.js                # Twilio send. E.164 or refuse, never guess, and
+                            #   nothing before 8am or after 6pm Central
+  lib/work-order-messages.js # what a sub receives: the text, the email, and
+                            #   the escalation note that goes to Cole instead
   lib/gmail.js              # OAuth2 refresh-token send, returns threadId
   lib/slack.js              # digest delivery (not wired up yet)
   lib/trade-aliases.js      # timeline trade names to Trade Template titles
@@ -340,6 +347,36 @@ Rules that matter:
   held, so a Saturday run listed nothing and read as a clean bill of health.
   Outstanding work now comes back as `waiting` with what is missing and when the
   next message is due.
+
+## Work orders (Tier 2)
+
+Send and track. A work order reaches a subcontractor as a **token link**, never
+a Notion page id, because the token is what makes the rest possible: who it went
+to, whether they opened it, and whether the silence afterwards means they are
+thinking about it or never got it.
+
+- **`work_order_links`** is one row per link, **`work_order_events`** is the
+  append-only log (drafted, approved, sent, opened, submitted, cancelled). The
+  current state is the newest event; nothing is overwritten.
+- **Both channels are drafted every time.** Twilio's carrier registration takes
+  10 to 15 days, and the email half works today, so a work order never waits on
+  paperwork at a phone company.
+- **Sending requires a POST.** A URL that sends when fetched eventually sends by
+  accident: a link preview, a scanner, a browser prefetching the address bar.
+- **The gate is asked over HTTP, not reimplemented.** Two copies of "is this
+  ready" drift, and the day they disagree is the day a work order goes out for
+  a task with no scope on it. `force=1` overrides, and says so.
+- **Opening is recorded before the Notion fetch**, so a sub who opened the link
+  and met an error still counts as having opened it.
+- **Submitting closes out the send**, which is what stops the follow-up ladder.
+  A sub who signed on Tuesday getting chased on Wednesday is worse than never
+  chasing.
+- **Notion punctuation is stripped on the way out.** Every sentence is assembled
+  from Notion fields, and the first real draft read "Johnson — Build Timeline"
+  in a subject line to a sub. The no em dashes rule is about what Six Arrows
+  sends, so it is enforced at the boundary rather than trusted upstream.
+- Twilio setup, including the registration that gates real texting:
+  `docs/twilio-setup.md`. `work-order-send?diag=1` answers whether it works.
 
 ## Quotes we already hold
 

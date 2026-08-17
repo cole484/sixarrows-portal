@@ -238,10 +238,28 @@ It has not yet successfully read a single real certificate, because every
 attempt so far has hit an empty Anthropic API credit balance. Whether it reads
 Six Arrows' actual documents accurately is genuinely unknown.
 
+### Tier 2, in progress
+
+**Token links and the send path** (`work-order-send.js`,
+`lib/work-order-messages.js`, `lib/sms.js`,
+`supabase/add-work-order-sends.sql`). A task that passes the gate becomes a
+token link, both messages drafted, nothing sent until a person POSTs approval.
+Opening the link records an open; submitting closes out the send. Proven end to
+end on Johnson's termite treatment: refused by the gate, forced, prepared,
+opened, cancelled.
+
+**Twilio** is set up and the credentials are proven against Twilio's API. The
+number is +1 270 770 4730. The A2P campaign is in carrier review, which takes 10
+to 15 days, so real texting starts when that clears; email works today and both
+channels are always drafted, so nothing waits on it.
+
+Still to build in this tier: the follow-up drafts on silence, and the approval
+surface. Approval today is a POST, which works and is not something Cole should
+be doing from a terminal.
+
 ### Not started
 
-- Tier 2 in full: token links, outbound texts in Lindsey's voice, follow-up on
-  silence
+- Tier 2's remainder: follow-up on silence, and somewhere to tap approve
 - Tier 3: writeback of payment schedules, filing signed PDFs to Drive,
   escalation of non-responders
 - The report card
