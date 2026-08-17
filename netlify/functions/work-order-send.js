@@ -21,6 +21,10 @@
 //                                  Revokes the old one.
 //   GET  /?token=<t>               everything known about one link
 //   GET  /?queue=1                 every link drafted and not yet resolved
+//   POST { token, action: "cancel", reason }
+//                                  call it off. Revokes the link so a sub who
+//                                  opens it later is told rather than left
+//                                  committing to a scope that has moved.
 //   POST { token, channel }        send it. Approval is a POST because a link
 //                                  that sends when it is fetched is a link that
 //                                  eventually sends by accident: a preview
@@ -176,15 +180,38 @@ export const handler = async (event) => {
       const token   = String(body.token || '').trim();
       const channel = String(body.channel || '').trim().toLowerCase();
       const actor   = String(body.actor || 'cole').slice(0, 60);
+      const cancelling = String(body.action || '').toLowerCase() === 'cancel';
       if (!token) return reply(400, { error: 'token required' });
-      if (!['sms', 'email'].includes(channel)) return reply(400, { error: 'channel must be "sms" or "email"' });
+      // A cancel names no channel: it calls off the whole thing.
+      if (!cancelling && !['sms', 'email'].includes(channel)) {
+        return reply(400, { error: 'channel must be "sms" or "email"' });
+      }
 
       const links = await supabase('work_order_links', {
         select: '*', filters: [{ col: 'token', op: 'eq', val: token }], limit: 1,
       });
       const link = links[0];
-      if (!link)         return reply(404, { error: 'no such work order link' });
-      if (link.revoked)  return reply(409, { error: 'this link was revoked. Prepare a new one.' });
+      if (!link) return reply(404, { error: 'no such work order link' });
+
+      // Called off. A job that moves or goes to somebody else leaves a live
+      // link with a stale scope on it, and the sub who opens it three days
+      // later has no way to know. Revoking says so in their face rather than
+      // letting them commit to work that is not theirs any more.
+      //
+      // Checked before the revoked guard below, so cancelling twice is a
+      // no-op rather than an error.
+      if (cancelling) {
+        await supabase('work_order_links', {
+          method: 'PATCH', filters: [{ col: 'token', op: 'eq', val: token }], body: { revoked: true },
+        });
+        await record({
+          token, kind: 'cancelled', actor,
+          error: String(body.reason || '').slice(0, 300) || null,
+        });
+        return reply(200, { cancelled: true, token, reason: body.reason || null });
+      }
+
+      if (link.revoked) return reply(409, { error: 'this link was revoked. Prepare a new one.' });
 
       const events = await eventsFor(token);
 
