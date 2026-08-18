@@ -44,7 +44,11 @@ const LADDER = {
   escalateAfter:    4,   // business days of silence since the first send
 };
 
-const PORTAL_PATH = '/portal/work-order.html';
+// The site's publish directory IS portal/, so portal/work-order.html is served
+// at the root. Writing the repository path into the URL produced a link that
+// 404s, and the only person who would ever have found that is a subcontractor
+// tapping a text message.
+const PORTAL_PATH = '/work-order.html';
 
 function siteBase(event) {
   return process.env.URL || `https://${event.headers?.host || 'sparkly-baklava-bb8c92.netlify.app'}`;
@@ -91,7 +95,13 @@ export const handler = async (event) => {
       order: 'created_at.desc', limit: 200,
     });
     report.links = links.length;
-    if (!links.length) return reply(200, report);
+    if (!links.length) {
+      // Said out loud rather than returned as an empty object. A report with no
+      // summary on it reads as something that failed halfway, and the whole
+      // point of this endpoint is that quiet has to be legible.
+      report.summary = `No live work order links in the last ${days} days, so there is nothing to follow up.`;
+      return reply(200, report);
+    }
 
     // One query for every event across every link, rather than one per link.
     // The same lesson the compliance sweep learned the hard way: a round trip

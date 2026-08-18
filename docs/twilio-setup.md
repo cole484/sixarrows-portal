@@ -83,12 +83,12 @@ outright, so this is not optional and it is not fast.
 
    > Six Arrows Construction: work order for underslab plumbing at 106 Reynolds
    > Ln, starting 8/24. Scope, dates and payment terms here:
-   > https://sparkly-baklava-bb8c92.netlify.app/portal/work-order.html?t=ab12cd34
+   > https://sparkly-baklava-bb8c92.netlify.app/work-order.html?t=ab12cd34
    > Reply STOP to opt out.
 
    > Six Arrows Construction: following up on the work order for underslab
    > plumbing. Let us know your dates when you get a chance:
-   > https://sparkly-baklava-bb8c92.netlify.app/portal/work-order.html?t=ab12cd34
+   > https://sparkly-baklava-bb8c92.netlify.app/work-order.html?t=ab12cd34
 
 6. Submit and wait. Twilio emails when the campaign is approved
 

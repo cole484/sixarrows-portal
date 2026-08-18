@@ -48,7 +48,11 @@ import { buildSms, buildEmailSubject, buildEmailBody } from './lib/work-order-me
 // that the call stays quick.
 const GATE_WINDOW_DAYS = 180;
 
-const PORTAL_PATH = '/portal/work-order.html';
+// The site's publish directory IS portal/, so portal/work-order.html is served
+// at the root. Writing the repository path into the URL produced a link that
+// 404s, and the only person who would ever have found that is a subcontractor
+// tapping a text message.
+const PORTAL_PATH = '/work-order.html';
 
 // Twelve characters of randomness. Not a secret in the cryptographic sense,
 // but a subcontractor's work order is not a public document either, and this is
