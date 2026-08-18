@@ -300,10 +300,18 @@ export const handler = async (event) => {
         });
         if (!links[0] || links[0].revoked) continue;
 
-        for (const channel of ['sms', 'email']) {
-          const draft = events.find(e => e.kind === 'drafted' && e.channel === channel);
-          if (!draft) continue;
-          if (events.some(e => e.kind === 'sent' && e.channel === channel)) continue;
+        // A draft is waiting unless something went out on that channel AFTER it
+        // was written. Suppressing on any send at all hid the follow-up text on
+        // a link whose work order had already been texted, which is every link
+        // that ever needs a follow-up. Newest draft per channel and purpose,
+        // because re-preparing should not stack two of the same message.
+        const seen = new Set();
+        for (const draft of events.filter(e => e.kind === 'drafted')) {
+          const key = `${draft.channel}|${draft.purpose || 'work_order'}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const channel = draft.channel;
+          if (events.some(e => e.kind === 'sent' && e.channel === channel && e.created_at > draft.created_at)) continue;
           waiting.push({
             token, channel,
             sub: links[0].sub_name, contact: links[0].contact_name,
