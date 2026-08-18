@@ -160,7 +160,7 @@ export const handler = async (event) => {
         const note = buildEscalationNote({
           workOrder: { taskName: link.task_name, trade: link.trade },
           schedule:  { startDate: link.starts_on },
-          project:   { name: link.project_name },
+          project:   { name: link.project_name, address: link.job_address },
           sub:       { name: link.sub_name, phone: link.to_phone },
           sends:     sends.map(s => ({ created_at: s.created_at, channel: s.channel, to_address: s.to_address })),
           link:      url,
@@ -215,7 +215,9 @@ export const handler = async (event) => {
       const wo = {
         workOrder: { taskName: link.task_name, trade: link.trade },
         schedule:  { startDate: link.starts_on },
-        project:   { name: link.project_name },
+        // The address as it was when the work order went out, so this message
+        // names the job exactly the way the first one did.
+        project:   { name: link.project_name, address: link.job_address },
         sub:       { name: link.sub_name, contactName: link.contact_name },
       };
       const smsBody = buildSms({ ...wo, link: url, purpose: 'nudge', attempt: nudges.length + 2 });

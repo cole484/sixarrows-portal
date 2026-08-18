@@ -402,6 +402,10 @@ export const handler = async (event) => {
       await supabase('work_order_links', { method: 'POST', body: {
         token, task_id: taskId,
         project_name: wo.project?.name || null,
+        // Copied so a follow-up two days later names the job the same way the
+        // first message did. Without it the nudge fell back to the project name
+        // and said "at Johnson" where the work order said "at 106 Reynolds Ln".
+        job_address: wo.project?.address || null,
         trade: wo.workOrder?.trade || null,
         task_name: wo.workOrder?.taskName || null,
         starts_on: wo.schedule?.startDate || null,

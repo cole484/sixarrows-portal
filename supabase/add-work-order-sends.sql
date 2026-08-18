@@ -109,3 +109,16 @@ create policy "anon_revoke" on work_order_links for update using (true) with che
 -- policy, the same as compliance_requests and work_order_commitments.
 create policy "anon_insert" on work_order_events for insert with check (true);
 create policy "anon_select" on work_order_events for select using (true);
+
+-- ─────────────────────────────────────────────────────────────
+--  Added after the first real follow-up draft
+-- ─────────────────────────────────────────────────────────────
+-- The job address, copied onto the link at mint time.
+--
+-- Without it a follow-up had nothing to name the place with and fell back to
+-- the project name, so the first message read "at 106 Reynolds Ln" and the
+-- nudge two days later read "at Johnson". Same job, two names, and the sub is
+-- the one who has to work out they are the same. A location is copied rather
+-- than looked up for the same reason as everything else on this row: it should
+-- say what we told them, not what Notion says today.
+alter table work_order_links add column if not exists job_address text;
