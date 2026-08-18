@@ -75,6 +75,9 @@ netlify/functions/
   work-order-send.js        # Tier 2. Mints a token link, drafts both messages,
                             #   refuses a task the gate has blocked, and sends
                             #   only on a POST that a person made.
+  work-order-followups.js   # notices a work order that got no answer. Drafts
+                            #   nudges for approval, escalates to Cole after
+                            #   two of them or four business days of silence.
   roadmap-vendors.js        # vendor defaults + per-client overrides + stop settings
   product-meta.js           # design book auto image fetch (OG/JSON-LD + Microlink fallback)
   selections-export.js      # CSV export of every selection
@@ -375,8 +378,20 @@ thinking about it or never got it.
   from Notion fields, and the first real draft read "Johnson — Build Timeline"
   in a subject line to a sub. The no em dashes rule is about what Six Arrows
   sends, so it is enforced at the boundary rather than trusted upstream.
+- **The link is `/work-order.html?t=...`, not `/portal/...`.** The publish
+  directory IS `portal/`, so it is the site root. The repository path in a URL
+  404s, and the only person who would find that is a sub tapping a text.
+- **Silence is read, not just noticed.** `work-order-followups.js` counts
+  business days and says whether the sub opened it and did not commit, or never
+  opened it at all. Those need different responses. Nudges go to the approval
+  queue; the escalation goes to Cole and sends, because it is the system saying
+  a relationship needs a phone call rather than an outbound to a sub.
+- **The approval surface is `/work-orders.html`.** Both channels for one job in
+  one card, quiet hours shown before somebody taps send.
 - Twilio setup, including the registration that gates real texting:
-  `docs/twilio-setup.md`. `work-order-send?diag=1` answers whether it works.
+  `docs/twilio-setup.md`. `work-order-send?diag=1` answers whether it works,
+  including whether the number is in the Messaging Service sender pool: an
+  empty pool fails exactly like a campaign still in review.
 
 ## Quotes we already hold
 
