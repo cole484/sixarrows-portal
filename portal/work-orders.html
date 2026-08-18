@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work Orders - Six Arrows Construction</title>
+<style>
+/* Staff-facing, so it matches the admin surfaces rather than the sub-facing
+   work order. Brand palette, no framework, same as every other page here. */
+:root{
+  --dark:#2e2e2e; --green:#757f69; --cream:#ebe9de;
+  --paper:#fbfaf7; --line:#e0ddd3; --muted:#6f6c64;
+  --warn:#8a5a2b; --bad:#7a3030; --good:#3f5f3a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--dark);
+  font-family:'Work Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:15px;line-height:1.5;}
+header{background:var(--dark);color:var(--cream);padding:18px 20px;}
+h1{margin:0;font-size:14px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;}
+.sub{margin:4px 0 0;font-size:13px;opacity:.75;}
+main{max-width:920px;margin:0 auto;padding:20px 16px 64px;}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:18px;}
+button{font:inherit;border:1px solid var(--dark);background:var(--dark);color:var(--cream);
+  padding:8px 14px;border-radius:3px;cursor:pointer;}
+button.ghost{background:transparent;color:var(--dark);}
+button:disabled{opacity:.45;cursor:default;}
+.note{background:#fdf6e6;border:1px solid #e6d7ae;color:var(--warn);
+  padding:10px 12px;border-radius:3px;font-size:14px;margin-bottom:16px;}
+.card{background:#fff;border:1px solid var(--line);border-radius:4px;padding:16px;margin-bottom:14px;}
+.card h2{margin:0 0 2px;font-size:16px;}
+.meta{color:var(--muted);font-size:13px;margin-bottom:12px;}
+.chan{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0 6px;}
+.tag{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  border:1px solid var(--line);border-radius:2px;padding:2px 7px;color:var(--muted);}
+.tag.sms{border-color:var(--green);color:var(--green);}
+.tag.nudge{border-color:var(--warn);color:var(--warn);}
+pre.msg{white-space:pre-wrap;word-break:break-word;background:#faf9f5;border:1px solid var(--line);
+  border-radius:3px;padding:11px 12px;margin:0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;}
+.subject{font-size:13px;font-weight:600;margin:0 0 6px;}
+.row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;}
+.result{font-size:13px;}
+.ok{color:var(--good);} .err{color:var(--bad);}
+.empty{color:var(--muted);padding:26px 0;text-align:center;}
+a{color:var(--green);}
+</style>
+</head>
+<body>
+<header>
+  <h1>Work orders waiting to send</h1>
+  <p class="sub" id="hint">Loading.</p>
+</header>
+<main>
+  <div class="bar">
+    <button class="ghost" id="refresh">Refresh</button>
+    <button class="ghost" id="checkFollowups">Check for silent subs</button>
+  </div>
+  <div id="hold"></div>
+  <div id="list"><p class="empty">Loading.</p></div>
+</main>
+
+<script>
+const FN = '/.netlify/functions/';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function load() {
+  const list = document.getElementById('list');
+  list.innerHTML = '<p class="empty">Loading.</p>';
+  let data;
+  try {
+    const res = await fetch(FN + 'work-order-send?queue=1');
+    data = await res.json();
+  } catch (e) {
+    list.innerHTML = '<p class="empty err">Could not load the queue: ' + esc(e.message) + '</p>';
+    return;
+  }
+
+  document.getElementById('hint').textContent =
+    data.waiting === 1 ? '1 message waiting for you' : data.waiting + ' messages waiting for you';
+
+  // Quiet hours are a real reason a send will be refused, so say so before
+  // somebody taps a button and reads the refusal as a bug.
+  document.getElementById('hold').innerHTML = data.hold
+    ? '<div class="note">' + esc(data.hold) + ' Sends will be held until 8am.</div>' : '';
+
+  if (!data.drafts || !data.drafts.length) {
+    list.innerHTML = '<p class="empty">Nothing waiting. Prepare a work order from the scheduling gate.</p>';
+    return;
+  }
+
+  // One card per link, both channels inside it, so a text and an email for the
+  // same job read as one decision rather than two.
+  const byToken = new Map();
+  for (const d of data.drafts) {
+    if (!byToken.has(d.token)) byToken.set(d.token, []);
+    byToken.get(d.token).push(d);
+  }
+
+  list.innerHTML = '';
+  for (const [token, drafts] of byToken) {
+    const first = drafts[0];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<h2>' + esc(first.sub || 'Unassigned') + '</h2>' +
+      '<p class="meta">' + esc(first.task || '') +
+        (first.project ? ' &middot; ' + esc(first.project) : '') +
+        (first.starts ? ' &middot; starts ' + esc(first.starts) : '') +
+        (first.contact ? ' &middot; ' + esc(first.contact) : '') +
+      '</p>' +
+      drafts.map(d =>
+        '<div class="chan">' +
+          '<span class="tag ' + (d.channel === 'sms' ? 'sms' : '') + '">' + esc(d.channel) + '</span>' +
+          (d.purpose === 'nudge' ? '<span class="tag nudge">follow up</span>' : '') +
+          '<span class="meta" style="margin:0">to ' + esc(d.to) + '</span>' +
+        '</div>' +
+        (d.subject ? '<p class="subject">' + esc(d.subject) + '</p>' : '') +
+        '<pre class="msg">' + esc(d.message) + '</pre>' +
+        '<div class="row">' +
+          '<button data-token="' + esc(token) + '" data-channel="' + esc(d.channel) + '">Send this ' +
+            (d.channel === 'sms' ? 'text' : 'email') + '</button>' +
+          '<span class="result"></span>' +
+        '</div>'
+      ).join('') +
+      '<div class="row"><a href="' + esc(first.url) + '" target="_blank" rel="noopener">Open the work order as they will see it</a></div>' +
+      '<div class="row"><button class="ghost" data-cancel="' + esc(token) + '">Call this one off</button><span class="result"></span></div>';
+    list.appendChild(card);
+  }
+
+  list.querySelectorAll('button[data-token]').forEach(b => b.addEventListener('click', () => send(b)));
+  list.querySelectorAll('button[data-cancel]').forEach(b => b.addEventListener('click', () => cancel(b)));
+}
+
+async function post(body) {
+  const res = await fetch(FN + 'work-order-send', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  return { ok: res.ok, data: await res.json() };
+}
+
+async function send(btn) {
+  const out = btn.parentElement.querySelector('.result');
+  btn.disabled = true;
+  out.className = 'result';
+  out.textContent = 'Sending.';
+  try {
+    const { ok, data } = await post({ token: btn.dataset.token, channel: btn.dataset.channel, actor: 'cole' });
+    if (ok && data.sent) {
+      out.className = 'result ok';
+      out.textContent = 'Sent to ' + data.to + '.';
+      btn.textContent = 'Sent';
+      setTimeout(load, 1200);
+    } else {
+      out.className = 'result err';
+      out.textContent = data.error || 'It did not send.';
+      btn.disabled = false;
+    }
+  } catch (e) {
+    out.className = 'result err';
+    out.textContent = e.message;
+    btn.disabled = false;
+  }
+}
+
+async function cancel(btn) {
+  // A confirm, because this is the one button here that cannot be undone: the
+  // link stops working for the sub the moment it is pressed.
+  const reason = prompt('Calling this work order off revokes the link. Why?');
+  if (reason === null) return;
+  const out = btn.parentElement.querySelector('.result');
+  btn.disabled = true;
+  out.textContent = 'Cancelling.';
+  const { ok, data } = await post({ token: btn.dataset.cancel, action: 'cancel', reason, actor: 'cole' });
+  out.className = 'result ' + (ok ? 'ok' : 'err');
+  out.textContent = ok ? 'Called off.' : (data.error || 'Could not cancel it.');
+  if (ok) setTimeout(load, 900);
+}
+
+document.getElementById('refresh').addEventListener('click', load);
+document.getElementById('checkFollowups').addEventListener('click', async e => {
+  const b = e.currentTarget;
+  b.disabled = true;
+  b.textContent = 'Checking.';
+  try {
+    const res  = await fetch(FN + 'work-order-followups?apply=1');
+    const data = await res.json();
+    document.getElementById('hold').innerHTML =
+      '<div class="note">' + esc(data.summary || 'Checked.') + '</div>';
+    await load();
+  } catch (err) {
+    document.getElementById('hold').innerHTML = '<div class="note">' + esc(err.message) + '</div>';
+  }
+  b.disabled = false;
+  b.textContent = 'Check for silent subs';
+});
+
+load();
+</script>
+</body>
+</html>
