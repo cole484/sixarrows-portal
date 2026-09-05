@@ -234,8 +234,16 @@ async function loadState() {
           p.sabPhases.forEach((ph,pi) => {
             ph.steps.forEach((st,si) => {
               const notionStep = data.steps[`${pi}-${si}`];
-              if (notionStep?.complete) {
-                getStepAllItems(st).forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = true; });
+              if (!notionStep) return;
+              const items = getStepAllItems(st);
+              if (notionStep.complete) {
+                items.forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = true; });
+              } else if (notionStep.checkedCount > 0 && items.length > 0) {
+                // Project Notion partial progress onto client items. Notion tells us
+                // HOW MANY are checked but not which ones, so mark the first N —
+                // enough to show progress in the portal and update the readiness bar.
+                const n = Math.min(notionStep.checkedCount, items.length);
+                for (let ii = 0; ii < n; ii++) TS[`${pi}-${si}-${ii}`] = true;
               }
             });
           });
