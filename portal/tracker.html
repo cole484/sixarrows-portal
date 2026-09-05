@@ -205,50 +205,20 @@ async function loadState() {
   }
   try { const t = localStorage.getItem(SK+'tab_'+p.id); if (t !== null) activeTab = parseInt(t); } catch(e) {}
 
-  // 2. Fetch live Notion data — Notion is authoritative, always overrides localStorage
+  // 2. Fetch live Notion data — Notion is authoritative for structure AND state.
+  //    Every step and every checkbox comes from the client's Notion page, so a
+  //    project with a different tracker template shows exactly what is on the page.
   const notionPageId = p.notionTrackerPageId;
-  const isRemodel    = p.projectType === 'remodel';
   if (notionPageId) {
     try {
-      const url = isRemodel
-        ? `/.netlify/functions/notion-tracker?pageId=${notionPageId}&dynamic=1`
-        : `/.netlify/functions/notion-tracker?pageId=${notionPageId}`;
+      const url = `/.netlify/functions/notion-tracker?pageId=${notionPageId}&dynamic=1`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-
-        if (isRemodel && data.dynamic && data.phases) {
-          // ── REMODEL MODE: store Notion structure directly ──
+        if (data.dynamic && data.phases) {
           notionDynamicData = data;
           try { localStorage.setItem(SK+'dynamic_'+p.id, JSON.stringify(data)); } catch(e) {}
           updateBadgesFromDynamic(data);
-          rerender();
-
-        } else if (!isRemodel && data.steps) {
-          // ── NEW BUILD MODE: apply Notion completion to TS ──
-          p.sabPhases.forEach((ph,pi) => {
-            ph.steps.forEach((st,si) => {
-              getStepAllItems(st).forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = false; });
-            });
-          });
-          p.sabPhases.forEach((ph,pi) => {
-            ph.steps.forEach((st,si) => {
-              const notionStep = data.steps[`${pi}-${si}`];
-              if (!notionStep) return;
-              const items = getStepAllItems(st);
-              if (notionStep.complete) {
-                items.forEach((_,ii) => { TS[`${pi}-${si}-${ii}`] = true; });
-              } else if (notionStep.checkedCount > 0 && items.length > 0) {
-                // Project Notion partial progress onto client items. Notion tells us
-                // HOW MANY are checked but not which ones, so mark the first N —
-                // enough to show progress in the portal and update the readiness bar.
-                const n = Math.min(notionStep.checkedCount, items.length);
-                for (let ii = 0; ii < n; ii++) TS[`${pi}-${si}-${ii}`] = true;
-              }
-            });
-          });
-          saveState();
-          updateBadges(data);
           rerender();
         }
       }
@@ -287,10 +257,7 @@ function updateBadgesFromDynamic(data) {
 
 function updateBadges(notionData) {
   if (!p.badges) return;
-  if (p.projectType === 'remodel') {
-    if (notionDynamicData) updateBadgesFromDynamic(notionDynamicData);
-    return;
-  }
+  if (notionDynamicData) { updateBadgesFromDynamic(notionDynamicData); return; }
   // Derive from local TS first (always available), supplement with Notion readiness
   const readiness = notionData?.readiness ?? buildReadinessPct(p, TS);
   // phase done = all non-isFinal steps checked in TS
@@ -346,13 +313,16 @@ function rerender() {
   // Always re-evaluate badges from current TS before rendering
   updateBadges(null);
 
-  const isRemodel = p.projectType === 'remodel';
-  const dynData   = notionDynamicData;
+  // Notion is authoritative for every client (new build and remodel alike) once
+  // dynamic data has arrived. Fall back to local sabPhases only on first paint
+  // before the fetch returns, or if the client has no Notion page id set.
+  const dynData    = notionDynamicData;
+  const useDynamic = !!(dynData && dynData.phases);
 
   // ── Readiness % ──
-  const pct     = isRemodel && dynData ? dynData.readiness : buildReadinessPct(p, TS);
-  const total   = isRemodel && dynData ? dynData.totalItems : sabTotalItems(p);
-  const checked = isRemodel && dynData ? dynData.checkedItems : sabCheckedItems(p, TS);
+  const pct     = useDynamic ? dynData.readiness    : buildReadinessPct(p, TS);
+  const total   = useDynamic ? dynData.totalItems   : sabTotalItems(p);
+  const checked = useDynamic ? dynData.checkedItems : sabCheckedItems(p, TS);
 
   // Live sidebar
   const sbPct  = document.getElementById('sb-pct');
@@ -369,7 +339,7 @@ function rerender() {
   document.getElementById('br-status').textContent = pct<34?'Getting started':pct<67?'Making progress':pct<100?'Almost build ready':'Build Ready ✦';
 
   // ── Phase tabs ──
-  if (isRemodel && dynData?.phases) {
+  if (useDynamic) {
     document.getElementById('phase-tabs').innerHTML = dynData.phases.map((ph, pi) => {
       const active = pi === activeTab;
       return `<button class="phase-tab ${active?'active':''} ${ph.complete?'done':''}" onclick="switchTab(${pi})">
@@ -400,7 +370,7 @@ function rerender() {
   renderPace();
 
   // Steps
-  if (isRemodel && dynData?.phases) {
+  if (useDynamic) {
     renderDynamicSteps(dynData);
   } else {
     renderSteps();
@@ -409,10 +379,9 @@ function rerender() {
 
 function renderYAH() {
   const el = document.getElementById('yah-wrap');
-  const isRemodel = p.projectType === 'remodel';
 
-  if (isRemodel && notionDynamicData?.phases) {
-    // ── Remodel mode: find first incomplete step across all phases ──
+  if (notionDynamicData?.phases) {
+    // Notion-driven view: find first incomplete step across all phases.
     let activePhase = null, activeStep = null, activePi = 0, activeSi = 0;
     outer: for (let pi = 0; pi < notionDynamicData.phases.length; pi++) {
       const ph = notionDynamicData.phases[pi];
@@ -972,8 +941,7 @@ function maybeScrollToActiveStep() {
   requestAnimationFrame(() => {
     setTimeout(() => {
       let target = null;
-      const isRemodel = p.projectType === 'remodel';
-      if (isRemodel && notionDynamicData?.phases) {
+      if (notionDynamicData?.phases) {
         outer: for (let pi = 0; pi < notionDynamicData.phases.length; pi++) {
           const ph = notionDynamicData.phases[pi];
           for (let si = 0; si < ph.steps.length; si++) {
@@ -1055,9 +1023,10 @@ mountLayout('tracker','SAB™ Tracker',`
   <div id="step-list"></div>
 `,TS);
 
-// For remodel clients with no cached dynamic data yet, show a loading state
-// until the async Notion fetch in loadState() completes and calls rerender()
-if (p.projectType === 'remodel' && !notionDynamicData) {
+// Every project pulls its tracker from Notion now. Show a loading state until
+// the async fetch in loadState() completes and calls rerender(). If the client
+// has no Notion page id, fall through to the local sabPhases fallback.
+if (p.notionTrackerPageId && !notionDynamicData) {
   document.getElementById('step-list').innerHTML = `
     <div style="padding:2rem;text-align:center">
       <div style="font-size:13px;color:var(--charcoal-4);margin-bottom:8px">Loading your project tracker…</div>
