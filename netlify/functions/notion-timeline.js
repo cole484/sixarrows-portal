@@ -202,9 +202,17 @@ export const handler = async (event) => {
 
     const schema = detectSchema(rawPages);
 
-    // Re-query with correct sort for this schema
+    // Re-query with correct sort for this schema. Start Date is authoritative
+    // for the order the client sees, because a date is a fact about when the
+    // task happens; Sequence # is manual and drifts as dates get shuffled.
+    // Sequence # rides along as a tiebreaker so two tasks that share a day
+    // stay in the intended order. Notion returns null-dated rows last on an
+    // ascending sort, so a task with no date sinks to the bottom on its own.
     const sorts = schema === 'new'
-      ? [{ property: 'Sequence #', direction: 'ascending' }]
+      ? [
+          { property: 'Start Date', direction: 'ascending' },
+          { property: 'Sequence #', direction: 'ascending' },
+        ]
       : [{ property: 'Start Date', direction: 'ascending' }];
 
     const pages = await queryDatabase(dbId, token, sorts);
