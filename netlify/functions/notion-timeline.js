@@ -210,7 +210,7 @@ export const handler = async (event) => {
     // ascending sort, so a task with no date sinks to the bottom on its own.
     const sorts = schema === 'new'
       ? [
-          { property: 'Start Date', direction: 'ascending' },
+          { property: 'Start',      direction: 'ascending' },
           { property: 'Sequence #', direction: 'ascending' },
         ]
       : [{ property: 'Start Date', direction: 'ascending' }];
