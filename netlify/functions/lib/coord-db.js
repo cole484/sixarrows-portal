@@ -15,8 +15,13 @@ export function db() {
   if (!process.env.COORD_DATABASE_URL) throw new Error('COORD_DATABASE_URL is not configured');
   if (!pool) {
     const url = process.env.COORD_DATABASE_URL;
+    // TLS is set below. An sslmode in the URL would override it: node-postgres
+    // reads sslmode=require as full verification, which Supabase's pooler
+    // certificate chain does not pass without its CA bundle.
+    const u = new URL(url);
+    u.searchParams.delete('sslmode');
     pool = new pg.Pool({
-      connectionString: url,
+      connectionString: u.toString(),
       max: 2,
       ssl: /localhost|127\.0\.0\.1|\/var\/tmp/.test(url) ? false : { rejectUnauthorized: false },
     });
