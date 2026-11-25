@@ -48,7 +48,8 @@ export async function tx(fn) {
 // is not configured rather than falling back to anything.
 export function authorized(event) {
   const want = process.env.COORD_TOKEN || '';
-  const got = (event.headers?.authorization || event.headers?.Authorization || '').replace(/^Bearer\s+/i, '');
+  let got = (event.headers?.authorization || event.headers?.Authorization || '').replace(/^Bearer\s+/i, '');
+  try { got = decodeURIComponent(got); } catch { /* not encoded: compare as sent */ }
   if (!want || !got) return false;
   const a = Buffer.from(want), b = Buffer.from(got);
   return a.length === b.length && timingSafeEqual(a, b);

@@ -213,8 +213,10 @@ table.narrow { min-width: 640px }
   async function load() {
     if (!passcode) return renderLogin();
     let r;
-    try { r = await fetch(API + "coord-board", { headers: { Authorization: "Bearer " + passcode }, cache: "no-store" }); }
-    catch (e) { return renderError("Couldn't reach the coordinator. Check your connection and reload."); }
+    try { r = await fetch(API + "coord-board", { headers: { Authorization: "Bearer " + encodeURIComponent(passcode) }, cache: "no-store" }); }
+    catch (e) { return renderError(navigator.onLine === false
+      ? "You're offline. Reconnect and reload."
+      : "The coordinator didn't answer. Reload in a minute. If this keeps happening, enter the passcode again.", true); }
     if (r.status === 401) { forget(); return renderLogin("That passcode didn't work."); }
     const body = await r.json().catch(() => ({}));
     if (!r.ok) return renderError(body.error || "The coordinator returned an error.");
@@ -229,7 +231,7 @@ table.narrow { min-width: 640px }
     if (busy) return false;
     busy = true;
     try {
-      const r = await fetch(API + "coord-edit", { method: "POST", headers: { Authorization: "Bearer " + passcode, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const r = await fetch(API + "coord-edit", { method: "POST", headers: { Authorization: "Bearer " + encodeURIComponent(passcode), "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const body = await r.json().catch(() => ({}));
       if (r.status === 401) { forget(); renderLogin("Your passcode has changed. Enter it again."); return false; }
       if (!r.ok) { toast(body.error || "That didn't save.", true); return false; }
@@ -259,7 +261,14 @@ table.narrow { min-width: 640px }
     f.addEventListener("submit", (e) => { e.preventDefault(); passcode = inp.value.trim(); try { localStorage.setItem(KEY, passcode); } catch (x) {} load(); });
     m.append(f); inp.focus();
   }
-  function renderError(text) { const m = $("#main"); m.replaceChildren(el("div", "empty", text)); }
+  function renderError(text, offerLogin) {
+    const m = $("#main"); const box = el("div", "empty"); box.append(el("p", null, text));
+    const again = el("button", "primary", "Enter the passcode again"); again.type = "button";
+    again.addEventListener("click", () => { forget(); renderLogin(); });
+    const reload = el("button", null, "Reload"); reload.type = "button"; reload.addEventListener("click", () => load());
+    const row = el("div", "actions"); row.append(reload); if (offerLogin !== false) row.append(again);
+    box.append(row); m.replaceChildren(box);
+  }
 
   function current() {
     const jobs = RES.snapshot.jobs.map((j) => ({ key: slug(j.job), job: j }));
