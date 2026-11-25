@@ -6,6 +6,11 @@ import { authorized, db, json } from './lib/coord-db.js';
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'GET') return json(405, { error: 'GET only' });
+  // ?health=1 answers only whether the coordinator database is reachable: no data, no passcode
+  if ((event.queryStringParameters || {}).health === '1') {
+    try { await db().query('select 1'); return json(200, { database: 'reachable', passcode_configured: !!process.env.COORD_TOKEN }); }
+    catch (e) { return json(503, { database: 'unreachable', reason: String(e.message).replace(/postgres(ql)?:\/\/[^@]*@/g, 'postgresql://***@').slice(0, 200) }); }
+  }
   if (!process.env.COORD_TOKEN) return json(500, { error: 'COORD_TOKEN is not configured' });
   if (!authorized(event)) return json(401, { error: 'Wrong or missing passcode' });
   try {
