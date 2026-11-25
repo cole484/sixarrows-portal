@@ -256,12 +256,12 @@
 <body>
 <div class="vs-root" id="vs-root"></div>
 
+<script src="lib/admin-auth.js"></script>
 <script type="module">
 import { CATEGORIES, WAVES } from './lib/parse-selections.js';
 
 // ── Config ───────────────────────────────────────────────────
 const FN = '/.netlify/functions';
-const ADMIN_PASS = 'sa_admin_2026';   // matches portal/admin.html
 const CLUSTER_PX = 30;                // screen-space overlap threshold
 const MIN_ZOOM = 0.15, MAX_ZOOM = 8;
 
@@ -351,11 +351,11 @@ function clusterPins(pins, plan) {
 
 // ── Data loading ─────────────────────────────────────────────
 async function loadClients() {
-  // admin-clients is gated on the ADMIN_PASSWORD env var, which may
-  // differ from the page password. A 401 is not fatal: the client key
-  // still arrives in the query string from admin.html.
+  // admin-clients is gated on the ADMIN_PASSWORD env var; the password
+  // typed at login is sent as the Bearer token. A failure is not fatal:
+  // the client key still arrives in the query string from admin.html.
   const res = await fetch(`${FN}/admin-clients?all=1`, {
-    headers: { 'Authorization': `Bearer ${ADMIN_PASS}` },
+    headers: SAAdminAuth.header(),
   }).catch(() => null);
 
   if (res && res.ok) {
@@ -1081,8 +1081,8 @@ root.addEventListener('click', async (ev) => {
   switch (action) {
     case 'login': {
       const pw = $('#vs-pw')?.value || '';
-      if (pw !== ADMIN_PASS) { toast('Wrong password', true); return; }
-      sessionStorage.setItem('sa_admin_auth', ADMIN_PASS);
+      const r = await SAAdminAuth.login(pw);
+      if (!r.ok) { toast(r.message || 'Wrong password', true); return; }
       VS.authed = true;
       await boot();
       break;
@@ -1270,8 +1270,11 @@ async function boot() {
   requestAnimationFrame(() => { resetView(); applyTransform(); });
 }
 
-VS.authed = sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS;
-if (VS.authed) boot(); else render();
+SAAdminAuth.resume().then(r => {
+  VS.authed = r.ok;
+  if (VS.authed) boot();
+  else { render(); if (r.message) toast(r.message, true); }
+});
 </script>
 </body>
 </html>

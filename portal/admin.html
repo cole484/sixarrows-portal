@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="style.css"/>
 <script src="data.js"></script>
 <script src="app.js"></script>
+<script src="lib/admin-auth.js"></script>
 <style>
 /* ── Admin shell ── */
 .admin-shell { display:flex; min-height:100vh; }
@@ -133,7 +134,8 @@
 //  SIX ARROWS ADMIN PANEL
 // ════════════════════════════════════════════════════════
 
-const ADMIN_PASS = 'sa_admin_2026';
+// No admin password lives in this page. It is typed at login, checked by
+// the server (admin-clients?ping=1), and kept in sessionStorage for the tab.
 // Supabase direct access for admin operations
 const SUPABASE_DIRECT_URL = 'https://mtvcahscwpralmlqlnzg.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10dmNhaHNjd3ByYWxtbHFsbnpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTY4ODEsImV4cCI6MjA5MDM5Mjg4MX0.givpTh-YxG16vYZmn0KLBCPG0ivxYbjh-i8Q87eCNnk';
@@ -160,7 +162,8 @@ function setTrackerState(p, TS) {
 
 // ── Auth ─────────────────────────────────────────────────
 async function checkAdminAuth() {
-  if (sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS) {
+  const r = await SAAdminAuth.resume();
+  if (r.ok) {
     adminAuthed = true;
     await loadAllClientsFromSupabase();
     // Validate stored project still exists, else fall back to first
@@ -172,6 +175,13 @@ async function checkAdminAuth() {
     return;
   }
   renderAdminLogin();
+  if (r.message) showLoginError(r.message);
+}
+
+function showLoginError(text) {
+  const err = document.getElementById('admin-err');
+  if (!err) return;
+  err.style.display = 'block'; err.textContent = text;
 }
 
 // Load all client data from Supabase into PROJECTS
@@ -348,9 +358,11 @@ function renderAdminLogin() {
 }
 
 async function attemptAdminLogin() {
-  const pw = document.getElementById('admin-pw').value;
-  if (pw === ADMIN_PASS) {
-    sessionStorage.setItem('sa_admin_auth', ADMIN_PASS);
+  const input = document.getElementById('admin-pw');
+  const pw = input.value;
+  input.disabled = true;
+  const r = await SAAdminAuth.login(pw);
+  if (r.ok) {
     adminAuthed = true;
     // Show a loading state immediately so the password screen doesn't
     // appear stuck while Supabase loads (~300-800ms on a fresh session).
@@ -362,8 +374,9 @@ async function attemptAdminLogin() {
     }
     renderAdmin();
   } else {
-    const err = document.getElementById('admin-err');
-    err.style.display = 'block'; err.textContent = 'Incorrect password.';
+    input.disabled = false;
+    input.focus();
+    showLoginError(r.message);
   }
 }
 

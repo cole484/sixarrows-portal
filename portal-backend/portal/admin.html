@@ -133,7 +133,17 @@
 //  SIX ARROWS ADMIN PANEL
 // ════════════════════════════════════════════════════════
 
-const ADMIN_PASS = 'sa_admin_2026';
+// No admin password lives in this page. It is typed at login, checked by
+// the server (admin-clients?ping=1 against ADMIN_PASSWORD), and kept in
+// sessionStorage for the tab.
+async function verifyAdminPassword(pw) {
+  if (!pw) return false;
+  try {
+    const res = await fetch('/.netlify/functions/admin-clients?ping=1',
+      { headers: { 'Authorization': 'Bearer ' + pw } });
+    return res.ok;
+  } catch (e) { return false; }
+}
 let adminAuthed  = false;
 let activeProject = Object.keys(PROJECTS)[0];
 let activeView    = 'tracker';
@@ -156,8 +166,8 @@ function setTrackerState(p, TS) {
 }
 
 // ── Auth ─────────────────────────────────────────────────
-function checkAdminAuth() {
-  if (sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS) {
+async function checkAdminAuth() {
+  if (await verifyAdminPassword(sessionStorage.getItem('sa_admin_auth') || '')) {
     adminAuthed = true; renderAdmin(); return;
   }
   renderAdminLogin();
@@ -188,10 +198,10 @@ function renderAdminLogin() {
   document.getElementById('admin-pw').addEventListener('keydown', e => { if(e.key==='Enter') attemptAdminLogin(); });
 }
 
-function attemptAdminLogin() {
+async function attemptAdminLogin() {
   const pw = document.getElementById('admin-pw').value;
-  if (pw === ADMIN_PASS) {
-    sessionStorage.setItem('sa_admin_auth', ADMIN_PASS);
+  if (await verifyAdminPassword(pw)) {
+    sessionStorage.setItem('sa_admin_auth', pw);
     adminAuthed = true; renderAdmin();
   } else {
     const err = document.getElementById('admin-err');

@@ -6,11 +6,21 @@
 // PUT    ?clientId=xxx  — update client fields
 // DELETE ?clientId=xxx  — delete client
 
+import { timingSafeEqual } from 'node:crypto';
 import { respond, corsHeaders } from './lib/supabase-client.js';
 
 const SB_URL = () => process.env.SUPABASE_URL;
 const SB_KEY = () => process.env.SUPABASE_ANON_KEY;
-const ADMIN_PASSWORD = () => process.env.ADMIN_PASSWORD || 'sa_admin_2026';
+// No fallback. The password used to default to a literal that was also
+// published in the admin pages, which handed client CRUD to anyone who
+// viewed source. If the env var is missing, refuse everything.
+const ADMIN_PASSWORD = () => process.env.ADMIN_PASSWORD || '';
+
+function passwordMatches(token, expected) {
+  const a = Buffer.from(String(token));
+  const b = Buffer.from(String(expected));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 function sbHeaders() {
   return {
@@ -48,14 +58,24 @@ export const handler = async (event) => {
     return { statusCode: 200, headers: corsHeaders(), body: '' };
   }
 
-  // Basic admin auth check
-  const authHeader = event.headers?.authorization || '';
-  const token = authHeader.replace('Bearer ', '');
-  if (token !== ADMIN_PASSWORD()) {
+  // Admin auth: Authorization: Bearer <ADMIN_PASSWORD>
+  const expected = ADMIN_PASSWORD();
+  if (!expected) {
+    return respond(500, { error: 'ADMIN_PASSWORD is not configured' });
+  }
+  const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  if (!token || !passwordMatches(token, expected)) {
     return respond(401, { error: 'Unauthorized' });
   }
 
   const params = event.queryStringParameters || {};
+
+  // ?ping=1 lets the admin pages check a typed password without
+  // pulling the client list. Reaching here means it was right.
+  if (event.httpMethod === 'GET' && params.ping === '1') {
+    return respond(200, { ok: true });
+  }
 
   // ── GET: list all or fetch one ─────────────────────────────
   if (event.httpMethod === 'GET') {

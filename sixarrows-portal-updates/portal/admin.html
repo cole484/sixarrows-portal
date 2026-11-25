@@ -133,7 +133,17 @@
 //  SIX ARROWS ADMIN PANEL
 // ════════════════════════════════════════════════════════
 
-const ADMIN_PASS = 'sa_admin_2026';
+// No admin password lives in this page. It is typed at login, checked by
+// the server (admin-clients?ping=1 against ADMIN_PASSWORD), and kept in
+// sessionStorage for the tab.
+async function verifyAdminPassword(pw) {
+  if (!pw) return false;
+  try {
+    const res = await fetch('/.netlify/functions/admin-clients?ping=1',
+      { headers: { 'Authorization': 'Bearer ' + pw } });
+    return res.ok;
+  } catch (e) { return false; }
+}
 // Supabase direct access for admin operations
 const SUPABASE_DIRECT_URL = 'https://mtvcahscwpralmlqlnzg.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10dmNhaHNjd3ByYWxtbHFsbnpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTY4ODEsImV4cCI6MjA5MDM5Mjg4MX0.givpTh-YxG16vYZmn0KLBCPG0ivxYbjh-i8Q87eCNnk';
@@ -160,7 +170,7 @@ function setTrackerState(p, TS) {
 
 // ── Auth ─────────────────────────────────────────────────
 async function checkAdminAuth() {
-  if (sessionStorage.getItem('sa_admin_auth') === ADMIN_PASS) {
+  if (await verifyAdminPassword(sessionStorage.getItem('sa_admin_auth') || '')) {
     adminAuthed = true;
     await loadAllClientsFromSupabase();
     // Validate stored project still exists, else fall back to first
@@ -321,10 +331,10 @@ function renderAdminLogin() {
   document.getElementById('admin-pw').addEventListener('keydown', e => { if(e.key==='Enter') attemptAdminLogin(); });
 }
 
-function attemptAdminLogin() {
+async function attemptAdminLogin() {
   const pw = document.getElementById('admin-pw').value;
-  if (pw === ADMIN_PASS) {
-    sessionStorage.setItem('sa_admin_auth', ADMIN_PASS);
+  if (await verifyAdminPassword(pw)) {
+    sessionStorage.setItem('sa_admin_auth', pw);
     adminAuthed = true; renderAdmin();
   } else {
     const err = document.getElementById('admin-err');
