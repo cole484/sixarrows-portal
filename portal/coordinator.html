@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Six Arrows Coordinator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a jobsite clipboard. A sticky bar picks the job; each job reads
+   today's actions first, then the eight-week gate board; approvals are their own view. */
+:root {
+  --bg: #f1f0ea; --surface: #ffffff; --sunk: #e8e7df; --ink: #2e2e2e; --muted: #676b61; --line: #d9d8ce;
+  --sage: #757f69; --sage-ink: #4f5844; --sage-wash: #e6e9e0;
+  --ok: #2e7a4c; --ok-wash: #e1efe6; --warn: #a76b12; --warn-wash: #f6ebd6; --bad: #b0412b; --bad-wash: #f6e2dc;
+  --na: #b5b7ad;
+  --f-head: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #1a1b19; --surface: #232521; --sunk: #2b2d28; --ink: #ecebe4; --muted: #a2a59a; --line: #393b35;
+  --sage: #9ba78b; --sage-ink: #c3cdb4; --sage-wash: #2e3429;
+  --ok: #6cc28f; --ok-wash: #1f3327; --warn: #e2a64a; --warn-wash: #3a2f1c; --bad: #ec8a74; --bad-wash: #3d2621;
+  --na: #5c5f56; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #1a1b19; --surface: #232521; --sunk: #2b2d28; --ink: #ecebe4; --muted: #a2a59a; --line: #393b35;
+  --sage: #9ba78b; --sage-ink: #c3cdb4; --sage-wash: #2e3429;
+  --ok: #6cc28f; --ok-wash: #1f3327; --warn: #e2a64a; --warn-wash: #3a2f1c; --bad: #ec8a74; --bad-wash: #3d2621;
+  --na: #5c5f56; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ink); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-head); font-weight: 600; letter-spacing: .01em; text-wrap: balance; margin: 0 }
+.mono, time, .date { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* bar */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--ink); color: var(--bg); }
+.bar .wrap { display: flex; align-items: center; gap: 20px; padding-block: 10px; flex-wrap: wrap; }
+.brand { font-family: var(--f-head); font-size: 20px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; display: flex; gap: 8px; align-items: baseline; }
+.brand small { font-weight: 500; font-size: 15px; opacity: .65; letter-spacing: .06em }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav a { color: inherit; text-decoration: none; font-family: var(--f-head); font-size: 17px; font-weight: 500; padding: 4px 12px; border-radius: 3px; opacity: .72; display: inline-flex; gap: 6px; align-items: center; }
+nav a:hover { opacity: 1 }
+nav a[aria-current="page"] { opacity: 1; background: var(--sage); color: #fff }
+nav a:focus-visible, button:focus-visible, textarea:focus-visible, .row:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px }
+.count { font-family: var(--f-mono); font-size: 12px; background: var(--bad); color: #fff; border-radius: 9px; padding: 0 6px; line-height: 18px; }
+.asof { margin-left: auto; font-size: 12px; opacity: .7 }
+
+main { padding-block: 22px 48px; display: grid; gap: 28px }
+.lede { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap }
+.lede h1 { font-size: 34px; line-height: 1.05 }
+.lede p { margin: 4px 0 0; color: var(--muted) }
+.v1 { font-size: 12.5px; color: var(--sage-ink); background: var(--sage-wash); padding: 6px 10px; border-radius: 3px; }
+
+/* stat strip */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--surface); border-radius: 4px; }
+.stat { padding: 12px 16px; display: grid; gap: 2px; min-width: 0 }
+.stat + .stat { border-left: 1px solid var(--line) }
+.stat label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted) }
+.stat b { font-family: var(--f-head); font-size: 28px; font-weight: 600; line-height: 1.1 }
+.stat span { font-size: 12.5px; color: var(--muted) }
+.stat.bad b { color: var(--bad) } .stat.ok b { color: var(--ok) }
+@media (max-width: 720px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)) } .stat:nth-child(3) { border-left: 0 } .stat:nth-child(n+3) { border-top: 1px solid var(--line) } }
+
+section > h2 { font-size: 22px; margin-bottom: 10px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap }
+section > h2 small { font-family: var(--f-body); font-size: 13px; font-weight: 400; color: var(--muted); letter-spacing: 0 }
+
+/* today */
+.today { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; min-width: 0 }
+.group h3 { font-size: 15px; text-transform: uppercase; letter-spacing: .07em; padding: 8px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; color: var(--sage-ink) }
+.group ul { list-style: none; margin: 0; padding: 4px 0 }
+.group li { padding: 7px 14px; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline }
+.group li + li { border-top: 1px dashed var(--line) }
+.group li .who { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted) }
+.group li.late .date { color: var(--bad); font-weight: 500 }
+.empty { color: var(--muted); padding: 14px; background: var(--surface); border: 1px dashed var(--line); border-radius: 4px }
+
+/* gate board */
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px }
+.chip { font: 500 12.5px var(--f-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 14px; padding: 3px 11px; cursor: pointer }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink) }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--surface) }
+table { border-collapse: collapse; width: 100%; min-width: 860px }
+th { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--sunk); white-space: nowrap }
+th.g { text-align: center; width: 62px }
+td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top }
+.row { cursor: pointer }
+.row:hover td { background: var(--sunk) }
+.task { font-weight: 500 }
+.task small { display: block; font-weight: 400; color: var(--muted); font-size: 12px }
+td.g { text-align: center }
+.dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle }
+.dot.green { background: var(--ok) } .dot.red { background: var(--bad) }
+.dot.unknown { background: transparent; border: 2px solid var(--warn) }
+.dot.not_applicable, .dot.none { background: transparent; border: 1px dashed var(--na); width: 12px; height: 12px }
+.status { font: 600 11.5px var(--f-body); padding: 2px 8px; border-radius: 3px; white-space: nowrap; display: inline-block }
+.s-ok { background: var(--ok-wash); color: var(--ok) } .s-warn { background: var(--warn-wash); color: var(--warn) }
+.s-bad { background: var(--bad-wash); color: var(--bad) } .s-plain { background: var(--sunk); color: var(--muted) }
+.detail td { background: var(--sunk); padding: 12px 16px 16px }
+.detail .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px }
+.detail h4 { margin: 0 0 4px; font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: .07em; color: var(--muted) }
+.detail ul { margin: 0; padding-left: 18px } .detail li { margin: 2px 0 }
+.reason-gate { font-weight: 600 }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 8px }
+.legend span { display: inline-flex; gap: 6px; align-items: center }
+
+/* approvals */
+.cards { display: grid; gap: 12px }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0 }
+.card header { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline }
+.card header b { font-family: var(--f-head); font-size: 19px; font-weight: 600 }
+.meta { font-size: 12.5px; color: var(--muted) }
+.kind { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: .07em; color: var(--sage-ink) }
+textarea { width: 100%; min-height: 76px; font: 14px/1.5 var(--f-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; resize: vertical }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+button { font: 600 13px var(--f-body); border-radius: 3px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink) }
+button.primary { background: var(--sage); border-color: var(--sage); color: #fff }
+button:disabled { opacity: .45; cursor: not-allowed }
+.decided { font-size: 13px; font-weight: 500 }
+.decided.approved { color: var(--ok) } .decided.skipped { color: var(--muted) }
+.notice { font-size: 12.5px; color: var(--warn) }
+
+footer { color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 14px; display: flex; gap: 16px; flex-wrap: wrap }
+footer a { color: var(--sage-ink) }
+@media (prefers-reduced-motion: no-preference) { .row td { transition: background .12s } }
+</style>
+<style>
+/* coordinator page additions: login, key, actions, toast */
+.login { max-width: 380px; margin: 8vh auto; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 24px; display: grid; gap: 10px }
+.login h1 { font-size: 30px } .login p { margin: 0; color: var(--muted) }
+.login label { font-weight: 600; font-size: 13px }
+input, select { font: 14px var(--f-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; min-width: 0 }
+input:focus-visible, select:focus-visible { outline: 2px solid var(--sage); outline-offset: 1px }
+.key { margin-bottom: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 8px 14px }
+.key summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--sage-ink) }
+.key dl { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 6px 14px; margin: 10px 0 4px; font-size: 13px }
+.key dt { font-weight: 600 } .key dd { margin: 0; color: var(--muted) }
+abbr[title] { text-decoration: none; cursor: help; border-bottom: 1px dotted var(--muted) }
+.edited { display: inline-block; margin-top: 3px; font-size: 11px; font-weight: 600; color: var(--sage-ink); background: var(--sage-wash); padding: 1px 6px; border-radius: 3px }
+.acts { display: grid; gap: 8px; align-content: start }
+.act { display: flex; gap: 6px; align-items: center; flex-wrap: wrap }
+.act-label { font-size: 12.5px; font-weight: 600; min-width: 96px }
+.act input[type=number] { width: 110px } .act input[type=text] { width: 140px } .act select { max-width: 230px }
+.act button { padding: 5px 11px }
+.tasklink { color: var(--ink); text-underline-offset: 3px }
+.todo { grid-template-columns: 1fr auto !important; align-items: center !important }
+.todo b { font-weight: 600 }
+.acts-inline .act-label { min-width: 0 }
+table.narrow { min-width: 640px }
+.linkish { background: none; border: 0; padding: 0; color: var(--sage-ink); text-decoration: underline; font-weight: 500; font-size: 12.5px }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 4px; font-size: 13.5px; max-width: calc(100vw - 32px); z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.18) }
+.toast.bad { background: var(--bad); color: #fff }
+@media (max-width: 720px) { .key dl { grid-template-columns: 1fr } .act-label { min-width: 0; width: 100% } }
+</style>
+</head>
+<body>
+<div class="bar"><div class="wrap">
+  <div class="brand">Six Arrows <small>Coordinator</small></div>
+  <nav id="nav" aria-label="Sections"></nav>
+  <div class="asof mono" id="asof"></div>
+</div></div>
+
+<main class="wrap" id="main">
+  <div class="empty">Loading…</div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  const API = "/.netlify/functions/";
+  const KEY = "sa-coord-passcode";
+  const $ = (s, r = document) => r.querySelector(s);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fmt = (iso) => { if (!iso) return ""; const [y, m, d] = iso.slice(0, 10).split("-").map(Number); return MON[m - 1] + " " + d; };
+  const fmtY = (iso) => iso ? fmt(iso) + ", " + iso.slice(0, 4) : "";
+  const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const slug = (name) => name.split(/[\s(]/)[0].toLowerCase().replace(/[^a-z0-9-]/g, "");
+
+  const GATES = [
+    ["sequence", "Seq", "Sequence", "Everything that has to happen before this task is done: earlier work, inspections, permits, and materials on site."],
+    ["scope", "Scope", "Scope", "This visit has its own written scope and definition of done, issued to the sub and acknowledged by them. A generic template does not count."],
+    ["booking", "Book", "Booking", "The sub has confirmed the dates. Asking is due at the trade's ideal lead time and late at its minimum."],
+    ["money", "Money", "Money", "There is an accepted price for this work, with payment terms, that matches the budget line."],
+    ["paperwork", "Papers", "Paperwork", "The sub's W-9 is on file and their insurance certificate is current through the last day of the work."],
+    ["site_ready", "Site", "Site ready", "The PM has released the site for this crew: access, area clear, weather and conditions are right."],
+  ];
+  const TYPES = {
+    work: ["Crew on site", "A sub's crew doing physical work at the house."],
+    external_gate: ["Inspection or permit", "Someone outside Six Arrows signs off: county inspections, permits, utility or engineer approvals. Called the day everything ahead of it is done, never booked ahead."],
+    external_request: ["Request", "Something we ask a utility or 811 for, ahead of when it is needed."],
+    material_order: ["Material order", "Something Six Arrows orders. It must be placed by its latest order date so it arrives before the work that needs it."],
+    decision: ["Client selection", "A choice the client makes, due by the date the order or work that depends on it needs it."],
+    admin_task: ["Office", "Office work with a date and an owner: permits paperwork, lien waivers, closeout."],
+    client_meeting: ["Client meeting", "A walkthrough or meeting with the client."],
+    pm_walk: ["PM walk", "A walkthrough by the PM, such as a pre-drywall or punch walk."],
+    milestone: ["Milestone", "A marker that a stage is complete."],
+  };
+  const STATE_TEXT = { green: "green", red: "not yet", unknown: "not known yet", not_applicable: "does not apply" };
+  const KIND = { booking_request: "Booking request", follow_up: "Follow-up", paperwork_request: "Paperwork request" };
+
+  let passcode = null, RES = null, filter = "all", busy = false;
+  try { passcode = localStorage.getItem(KEY); } catch (e) { passcode = null; }
+
+  // --------------------------------------------------------------- data
+  async function load() {
+    if (!passcode) return renderLogin();
+    let r;
+    try { r = await fetch(API + "coord-board", { headers: { Authorization: "Bearer " + passcode }, cache: "no-store" }); }
+    catch (e) { return renderError("Couldn't reach the coordinator. Check your connection and reload."); }
+    if (r.status === 401) { forget(); return renderLogin("That passcode didn't work."); }
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) return renderError(body.error || "The coordinator returned an error.");
+    if (!body.snapshot) return renderError("The coordinator hasn't run yet. It runs every weekday morning.");
+    RES = body;
+    $("#asof").textContent = "Calculated " + new Date(body.calculated_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    render();
+  }
+  function forget() { passcode = null; try { localStorage.removeItem(KEY); } catch (e) {} }
+
+  async function edit(payload, okText) {
+    if (busy) return false;
+    busy = true;
+    try {
+      const r = await fetch(API + "coord-edit", { method: "POST", headers: { Authorization: "Bearer " + passcode, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const body = await r.json().catch(() => ({}));
+      if (r.status === 401) { forget(); renderLogin("Your passcode has changed. Enter it again."); return false; }
+      if (!r.ok) { toast(body.error || "That didn't save.", true); return false; }
+      toast((okText || body.summary || "Saved") + ". The board recalculates within 30 minutes.");
+      await load();
+      return true;
+    } catch (e) { toast("That didn't save: no connection.", true); return false; }
+    finally { busy = false; }
+  }
+
+  function toast(text, bad) {
+    const t = $("#toast"); t.textContent = text; t.className = "toast" + (bad ? " bad" : ""); t.hidden = false;
+    clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 5000);
+  }
+
+  // -------------------------------------------------------------- views
+  function renderLogin(msg) {
+    $("#nav").replaceChildren(); $("#asof").textContent = "";
+    const m = $("#main"); m.replaceChildren();
+    const f = el("form", "login");
+    f.append(el("h1", null, "Coordinator"), el("p", null, "Enter the coordinator passcode. It stays on this device."));
+    if (msg) f.append(el("p", "notice", msg));
+    const lab = el("label", null, "Passcode"); lab.htmlFor = "passcode";
+    const inp = el("input"); inp.type = "password"; inp.id = "passcode"; inp.autocomplete = "current-password"; inp.required = true;
+    const b = el("button", "primary", "Open the board"); b.type = "submit";
+    f.append(lab, inp, b);
+    f.addEventListener("submit", (e) => { e.preventDefault(); passcode = inp.value.trim(); try { localStorage.setItem(KEY, passcode); } catch (x) {} load(); });
+    m.append(f); inp.focus();
+  }
+  function renderError(text) { const m = $("#main"); m.replaceChildren(el("div", "empty", text)); }
+
+  function current() {
+    const jobs = RES.snapshot.jobs.map((j) => ({ key: slug(j.job), job: j }));
+    return { jobs, view: (location.hash || "").slice(1) || (jobs[0] && jobs[0].key) };
+  }
+  const pendingMessages = () => RES.snapshot.proposals.filter((p) => p.kind === "message" && !RES.decided[p.id]);
+  const disagreements = () => RES.snapshot.jobs.flatMap((j) => (j.disagreements || []).map((d) => Object.assign({ job: j.job }, d)));
+  const editedTasks = () => new Set((RES.edits || []).map((e) => e.task_id).filter(Boolean));
+
+  function todoItems() {
+    const out = [];
+    RES.snapshot.jobs.forEach((j) => {
+      const t = j.today || {};
+      (t.orders || []).forEach((x) => out.push({ job: j.job, id: x.id, kind: "order", name: x.task, date: x.latest, late: x.level === "late", sub: "Order by" }));
+      (t.calls || []).forEach((x) => out.push({ job: j.job, id: x.id, kind: "call", name: x.task, date: x.since, sub: "Ready since", who: x.authority }));
+      (t.requests || []).forEach((x) => out.push({ job: j.job, id: x.id, kind: "request", name: x.task, date: x.due, sub: "Needed by", who: x.authority }));
+      (t.decisions || []).forEach((x) => out.push({ job: j.job, id: x.id, kind: "decision", name: x.task, date: x.latest, late: x.late, sub: "Client decides by" }));
+    });
+    return out.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  }
+
+  function render() {
+    const { jobs, view } = current();
+    const nav = $("#nav"); nav.replaceChildren();
+    const link = (href, label, count, title) => {
+      const a = el("a", null, label); a.href = "#" + href; if (title) a.title = title;
+      if (count) a.append(el("span", "count", String(count)));
+      if (view === href) a.setAttribute("aria-current", "page");
+      nav.append(a);
+    };
+    jobs.forEach(({ key, job }) => link(key, job.job.split(" (")[0]));
+    link("todo", "To do", todoItems().length, "Orders to place, inspections to call, decisions due");
+    link("messages", "Messages", pendingMessages().length, "Drafts to approve, edit or skip. Nothing is sent.");
+    link("notion", "Board vs Notion", disagreements().length, "Where a board edit and Notion say different things");
+    const m = $("#main"); m.replaceChildren();
+    if (view === "todo") renderTodo(m);
+    else if (view === "messages") renderMessages(m);
+    else if (view === "notion") renderNotion(m);
+    else { const v = jobs.find((j) => j.key === view) || jobs[0]; if (v) renderJob(m, v.job); }
+    m.append(footer());
+  }
+
+  function lede(main, title, sub) {
+    const l = el("div", "lede"); const left = el("div");
+    left.append(el("h1", null, title), el("p", null, sub));
+    l.append(left, el("div", "v1", "Side by side with Notion. Edits here are saved to the coordinator only. Nothing is sent."));
+    main.append(l);
+  }
+
+  // job
+  function renderJob(main, j) {
+    lede(main, j.job, "Lookahead " + fmt(j.run_date) + " to " + fmt(j.window_end) + ". Forecast finish " + fmtY(j.finish) + ".");
+    const t = j.today || {};
+    const todo = ["calls", "requests", "orders", "decisions", "bookings"].reduce((s, k) => s + (t[k] || []).length, 0);
+    const blocked = (j.board || []).filter((r) => statusOf(r).cls === "s-bad").length;
+    const stats = el("div", "stats");
+    stats.append(
+      stat("Booked out", j.weeks_booked_out >= 99 ? "All" : j.weeks_booked_out + " wks", "Weeks until the first crew task with no confirmed booking. Target 2, then 4, 6, 8.", j.weeks_booked_out >= 2 ? "ok" : "bad"),
+      stat("Forecast finish", fmt(j.finish), j.finish ? j.finish.slice(0, 4) : ""),
+      stat("Needs action today", String(todo), "Subs to book, orders, calls and client decisions", todo ? "bad" : "ok"),
+      stat("Blocked next 8 weeks", String(blocked), "Tasks with a gate that is not yet green", blocked ? "bad" : "ok"));
+    main.append(stats);
+    if ((t.bookings || []).length) {
+      const sec = el("section"); const h = el("h2", null, "Book a sub");
+      h.append(el("small", null, "Assign the sub, then mark it requested or booked. Open the task below."));
+      sec.append(h);
+      const g = el("div", "group"); const ul = el("ul");
+      t.bookings.forEach((x) => {
+        const li = el("li", x.late ? "late" : null);
+        const a = el("a", "tasklink", x.task); a.href = "#" + slug(j.job); a.addEventListener("click", (e) => { e.preventDefault(); openRow(x.id); });
+        li.append(a, el("span", "date", "starts " + fmt(x.start)), el("span", "who", x.sub ? x.sub + (x.late ? ": past the minimum lead time" : "") : "No sub assigned"));
+        ul.append(li);
+      });
+      g.append(ul); sec.append(g); main.append(sec);
+    }
+    main.append(renderBoard(j));
+    if ((j.problems || []).length) {
+      const ps = el("section"); ps.append(el("h2", null, "Schedule problems"));
+      const g = el("div", "group"); const ul = el("ul");
+      j.problems.forEach((p) => { const li = el("li"); li.append(el("span", null, p.task), el("span", "who", p.issues.join("; "))); ul.append(li); });
+      g.append(ul); ps.append(g); main.append(ps);
+    }
+  }
+
+  function stat(label, value, sub, tone) {
+    const s = el("div", "stat" + (tone ? " " + tone : "")); s.title = sub;
+    s.append(el("label", null, label), el("b", null, value), el("span", null, sub));
+    return s;
+  }
+
+  function statusOf(r) {
+    const g = r.gates || {}; const red = Object.keys(g).filter((k) => g[k].state === "red");
+    if (r.in_progress) return { text: "In progress", cls: "s-ok" };
+    if (r.type === "work") {
+      if (g.booking && g.booking.state === "green") return red.length ? { text: "Booked, not ready", cls: "s-warn" } : { text: "Ready", cls: "s-ok" };
+      if (g.booking && g.booking.reasons.some((x) => x.startsWith("requested"))) return { text: "Requested", cls: "s-warn" };
+      return red.length ? { text: "Blocked", cls: "s-bad" } : { text: "Not requested", cls: "s-plain" };
+    }
+    if (r.type === "external_gate") return r.ready_since ? { text: "Call now", cls: "s-warn" } : { text: "Waiting", cls: "s-plain" };
+    if (r.type === "material_order") return { text: r.latest_order ? "Order by " + fmt(r.latest_order) : "Not ordered", cls: "s-warn" };
+    if (r.type === "decision") return { text: r.decision_latest ? "Due " + fmt(r.decision_latest) : "Open", cls: "s-warn" };
+    return red.length ? { text: "Waiting", cls: "s-plain" } : { text: "Ready", cls: "s-ok" };
+  }
+
+  function renderBoard(j) {
+    const sec = el("section"); sec.id = "board";
+    const h = el("h2", null, "Gate board"); h.append(el("small", null, "Next 8 weeks. A task can start when every gate that applies is green. Select a task for reasons and actions."));
+    sec.append(h);
+    const key = el("details", "key"); key.append(el("summary", null, "What the columns and labels mean"));
+    const kg = el("dl");
+    GATES.forEach(([k, s, name, def]) => { kg.append(el("dt", null, s + " · " + name), el("dd", null, def)); });
+    Object.values(TYPES).forEach(([name, def]) => { kg.append(el("dt", null, name), el("dd", null, def)); });
+    [["green", "Green: done or in place"], ["red", "Not yet: select the task for why"], ["unknown", "Not known yet: information missing"], ["not_applicable", "Does not apply to this kind of task"]]
+      .forEach(([c, t]) => { const dt = el("dt"); dt.append(el("span", "dot " + c)); kg.append(dt, el("dd", null, t)); });
+    key.append(kg); sec.append(key);
+    const fl = el("div", "filters");
+    [["all", "Everything"], ["work", "Crew on site"], ["blocked", "Blocked only"], ["orders", "Orders and selections"]].forEach(([k, label]) => {
+      const b = el("button", "chip", label); b.type = "button"; b.setAttribute("aria-pressed", String(filter === k));
+      b.addEventListener("click", () => { filter = k; render(); }); fl.append(b);
+    });
+    sec.append(fl);
+    const box = el("div", "tablebox"); const table = el("table");
+    const tr = el("tr");
+    [["Task", "The task, its kind and trade"], ["Start", "Forecast start"], ["Sub", "Who is doing it"]].forEach(([x, tt]) => { const th = el("th", null, x); th.title = tt; tr.append(th); });
+    GATES.forEach(([k, s, name, def]) => { const th = el("th", "g"); const ab = el("abbr", null, s); ab.title = name + ": " + def; th.append(ab); tr.append(th); });
+    const thS = el("th", null, "Status"); tr.append(thS);
+    const thead = el("thead"); thead.append(tr); table.append(thead);
+    const tb = el("tbody"); const edited = editedTasks();
+    const rows = (j.board || []).filter((r) => filter === "work" ? r.type === "work" : filter === "blocked" ? statusOf(r).cls === "s-bad"
+      : filter === "orders" ? (r.type === "material_order" || r.type === "decision") : true);
+    rows.forEach((r) => {
+      const row = el("tr", "row"); row.tabIndex = 0; row.dataset.id = r.id;
+      const tdT = el("td", "task", r.name);
+      const meta = [TYPES[r.type] ? TYPES[r.type][0] : r.type, r.trade].filter(Boolean).join(" · ");
+      const small = el("small", null, meta); if (TYPES[r.type]) small.title = TYPES[r.type][1];
+      tdT.append(small);
+      if (edited.has(r.id)) tdT.append(el("span", "edited", "Edited · recalculating"));
+      row.append(tdT, el("td", "date", fmt(r.start)), el("td", null, r.sub || "None"));
+      GATES.forEach(([k, s, name]) => {
+        const td = el("td", "g"); const g = (r.gates || {})[k];
+        const d = el("span", "dot " + (g ? g.state : "not_applicable"));
+        d.title = name + ": " + (g ? (g.state === "green" ? "green" : (g.reasons.join("; ") || STATE_TEXT[g.state])) : "does not apply");
+        d.setAttribute("aria-label", d.title); td.append(d); row.append(td);
+      });
+      const st = statusOf(r); const tdS = el("td"); tdS.append(el("span", "status " + st.cls, st.text)); row.append(tdS);
+      const det = el("tr", "detail"); det.hidden = true; det.dataset.for = r.id;
+      const dtd = el("td"); dtd.colSpan = 10; det.append(dtd);
+      const toggle = () => { if (det.hidden && !dtd.firstChild) dtd.append(detail(r)); det.hidden = !det.hidden; };
+      row.addEventListener("click", toggle);
+      row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      tb.append(row, det);
+    });
+    if (!rows.length) { const er = el("tr"); const td = el("td", null, "Nothing matches this filter."); td.colSpan = 10; er.append(td); tb.append(er); }
+    table.append(tb); box.append(table); sec.append(box);
+    return sec;
+  }
+
+  function openRow(id) {
+    filter = "all"; render();
+    const row = document.querySelector('.row[data-id="' + CSS.escape(id) + '"]');
+    if (row) { row.click(); row.scrollIntoView({ block: "center" }); row.focus(); }
+  }
+
+  function detail(r) {
+    const wrap = el("div", "cols");
+    const why = el("div"); why.append(el("h4", null, "Why it can't start yet"));
+    const ul = el("ul"); let n = 0;
+    Object.entries(r.gates || {}).forEach(([k, g]) => {
+      if (g.state === "green") return;
+      const name = (GATES.find((x) => x[0] === k) || [])[2] || k;
+      g.reasons.forEach((x) => { const li = el("li"); li.append(el("span", "reason-gate", name + ": "), document.createTextNode(x)); ul.append(li); n++; });
+    });
+    (r.issues || []).forEach((x) => { const li = el("li"); li.append(el("span", "reason-gate", "Schedule: "), document.createTextNode(x)); ul.append(li); n++; });
+    why.append(n ? ul : el("p", null, r.in_progress ? "Under way." : "Every gate that applies is green."));
+    const when = el("div"); when.append(el("h4", null, "Dates"));
+    const wl = el("ul");
+    [["Forecast", fmt(r.start) + (r.end && r.end !== r.start ? " to " + fmt(r.end) : "")], ["Booked for", fmt(r.confirmed)], ["Ask the sub by", fmt(r.request_by)],
+     ["Latest order date", fmt(r.latest_order)], ["Client decides by", fmt(r.decision_latest)], ["Ready to call since", fmt(r.ready_since)]]
+      .forEach(([k, v]) => { if (v) { const li = el("li"); li.append(el("span", "reason-gate", k + ": "), el("span", "date", v)); wl.append(li); } });
+    when.append(wl);
+    if ((r.checklist || []).length) { when.append(el("h4", null, "Definition of done")); const dl = el("ul"); r.checklist.forEach((x) => dl.append(el("li", null, x))); when.append(dl); }
+    const act = el("div", "acts"); act.append(el("h4", null, "Update it"));
+    actionsFor(r).forEach((a) => act.append(a));
+    wrap.append(why, when, act);
+    return wrap;
+  }
+
+  // one small form per action
+  function form(label, fields, submit) {
+    const f = el("form", "act");
+    const lab = el("span", "act-label", label); f.append(lab);
+    const inputs = {};
+    fields.forEach(([name, type, value, aria, options]) => {
+      let i;
+      if (type === "select") { i = el("select"); options.forEach(([v, t]) => { const o = el("option", null, t); o.value = v; i.append(o); }); }
+      else { i = el("input"); i.type = type; if (value != null) i.value = value; if (type === "number") { i.min = "0"; i.step = "0.01"; i.inputMode = "decimal"; } }
+      i.setAttribute("aria-label", aria); i.id = "f-" + Math.random().toString(36).slice(2, 9); inputs[name] = i; f.append(i);
+    });
+    const b = el("button", "primary", fields.length ? "Save" : label); b.type = "submit";
+    if (!fields.length) lab.remove();
+    f.append(b);
+    f.addEventListener("submit", (e) => { e.preventDefault(); const v = {}; Object.entries(inputs).forEach(([k, i]) => { v[k] = i.value; }); submit(v); });
+    return f;
+  }
+
+  function subOptions(r) {
+    const subs = RES.snapshot.subs || [];
+    const match = subs.filter((s) => r.trade && (s.trades || []).includes(r.trade));
+    const rest = subs.filter((s) => !match.includes(s));
+    const opts = [["", "Pick a sub"]];
+    match.forEach((s) => opts.push([s.id, s.legal_name]));
+    if (match.length) opts.push(["", "────────"]);
+    rest.forEach((s) => opts.push([s.id, s.legal_name]));
+    return opts;
+  }
+
+  function actionsFor(r) {
+    const id = r.id, out = [], today = todayISO();
+    if (r.in_progress) {
+      out.push(form("Done on", [["date", "date", today, "Date finished"]], (v) => edit({ action: "mark_done", task_id: id, date: v.date })));
+      return out;
+    }
+    if (r.type === "work") {
+      out.push(form("Sub", [["sub_id", "select", null, "Sub", subOptions(r)]], (v) => v.sub_id ? edit({ action: "assign_sub", task_id: id, sub_id: v.sub_id }) : toast("Pick a sub first.", true)));
+      out.push(form("Asked the sub", [], () => edit({ action: "mark_requested", task_id: id, start: r.start, end: r.end })));
+      out.push(form("Booked", [["start", "date", r.confirmed || r.start, "Booked start"], ["end", "date", r.end, "Booked end"]], (v) => edit({ action: "mark_booked", task_id: id, start: v.start, end: v.end })));
+      out.push(form("Price $", [["amount", "number", null, "Accepted price in dollars"], ["terms", "text", null, "Payment terms"]], (v) => edit({ action: "set_price", task_id: id, amount: v.amount, terms: v.terms })));
+      out.push(form("Release the site", [], () => edit({ action: "release_site", task_id: id })));
+      out.push(form("Started on", [["date", "date", today, "Date started"]], (v) => edit({ action: "mark_started", task_id: id, date: v.date })));
+    } else if (r.type === "material_order") {
+      out.push(form("Ordered on", [["date", "date", today, "Order date"]], (v) => edit({ action: "mark_ordered", task_id: id, date: v.date })));
+      out.push(form("Received on", [["date", "date", today, "Date received and checked"]], (v) => edit({ action: "mark_received", task_id: id, date: v.date })));
+    } else if (r.type === "external_gate" || r.type === "external_request") {
+      out.push(form("Called; set for", [["date", "date", null, "Inspection or appointment date, if known"]], (v) => edit({ action: "mark_called", task_id: id, date: v.date })));
+      out.push(form(r.type === "external_gate" ? "Passed on" : "Done on", [["date", "date", today, "Date"]], (v) => edit({ action: "mark_done", task_id: id, date: v.date })));
+    } else {
+      out.push(form(r.type === "decision" ? "Decided on" : "Done on", [["date", "date", today, "Date"]], (v) => edit({ action: "mark_done", task_id: id, date: v.date })));
+    }
+    return out;
+  }
+
+  // to do
+  function renderTodo(main) {
+    lede(main, "To do", "Orders to place, inspections and requests to call in, and client decisions coming due, across every job.");
+    const items = todoItems();
+    if (!items.length) { main.append(el("div", "empty", "Nothing due.")); return; }
+    const g = el("div", "group"); const ul = el("ul");
+    items.forEach((x) => {
+      const li = el("li", "todo" + (x.late ? " late" : ""));
+      const left = el("div");
+      left.append(el("div", "kind", { order: "Order", call: "Call to make", request: "Request", decision: "Client decision" }[x.kind] + " · " + x.job.split(" (")[0]));
+      left.append(el("b", null, x.name));
+      left.append(el("div", "who", x.sub + " " + fmt(x.date) + (x.who ? " · " + x.who : "")));
+      const right = el("div", "acts-inline");
+      const today = todayISO();
+      if (x.kind === "order") right.append(form("Ordered on", [["date", "date", today, "Order date"]], (v) => edit({ action: "mark_ordered", task_id: x.id, date: v.date })));
+      if (x.kind === "call" || x.kind === "request") right.append(form("Called", [], () => edit({ action: "mark_called", task_id: x.id })));
+      if (x.kind === "decision") right.append(form("Decided on", [["date", "date", today, "Date decided"]], (v) => edit({ action: "mark_done", task_id: x.id, date: v.date })));
+      li.append(left, right); ul.append(li);
+    });
+    g.append(ul); main.append(g);
+  }
+
+  // messages
+  function renderMessages(main) {
+    lede(main, "Messages", "Drafts the coordinator wrote. Approve, edit, or skip each one. Approving records your decision; nothing is sent.");
+    const props = RES.snapshot.proposals.filter((p) => p.kind === "message");
+    if (!props.length) { main.append(el("div", "empty", "No messages waiting.")); return; }
+    const cards = el("div", "cards");
+    props.forEach((p) => {
+      const d = RES.decided[p.id];
+      const c = el("article", "card");
+      const head = el("header"); const left = el("div");
+      left.append(el("div", "kind", (KIND[p.message_type] || p.message_type) + " · " + p.job.split(" (")[0]), el("b", null, p.task || ""));
+      head.append(left, el("div", "meta", "To " + [p.sub, p.recipient, p.channel].filter(Boolean).join(" · ")));
+      c.append(head);
+      const ta = el("textarea"); ta.id = "draft-" + p.id; ta.value = d ? (d.final_body || p.draft_body) : p.draft_body; ta.disabled = !!d; ta.setAttribute("aria-label", "Message text");
+      c.append(ta);
+      const act = el("div", "actions");
+      if (d) {
+        act.append(el("span", "decided " + (d.state === "skipped" ? "skipped" : "approved"), d.state === "skipped" ? "Skipped" : d.edited ? "Approved with edits" : "Approved"));
+        const undo = el("button", null, "Undo"); undo.type = "button"; undo.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "undo" }, "Back to waiting"));
+        act.append(undo);
+      } else {
+        const ok = el("button", "primary", "Approve"); ok.type = "button"; ok.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "approved", final_body: ta.value }));
+        const skip = el("button", null, "Skip"); skip.type = "button"; skip.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "skipped" }));
+        act.append(ok, skip);
+      }
+      c.append(act); cards.append(c);
+    });
+    main.append(cards);
+  }
+
+  // board vs notion
+  function renderNotion(main) {
+    lede(main, "Board vs Notion", "Where something you changed on the board and Notion now say different things. The board's version is kept; Notion is never changed.");
+    const ds = disagreements();
+    if (!ds.length) { main.append(el("div", "empty", "No disagreements. Everything changed on the board matches Notion, or nothing has changed in Notion since.")); return; }
+    const box = el("div", "tablebox"); const t = el("table", "narrow");
+    const tr = el("tr"); ["Job", "Task", "What", "Board says", "Notion says"].forEach((x) => tr.append(el("th", null, x)));
+    const th = el("thead"); th.append(tr); t.append(th);
+    const tb = el("tbody");
+    const FIELD = { progress_state: "Status", actual_start: "Started", actual_end: "Finished", confirmed_start: "Booked start", confirmed_end: "Booked end", sub_id: "Sub" };
+    ds.forEach((d) => { const r = el("tr"); [d.job.split(" (")[0], d.task, FIELD[d.field] || d.field, d.board, d.notion].forEach((x) => r.append(el("td", null, x))); tb.append(r); });
+    t.append(tb); box.append(t); main.append(box);
+  }
+
+  function footer() {
+    const f = el("footer");
+    const lib = RES.snapshot.library || {};
+    f.append(el("span", null, "Library " + (lib.id || "") + " · " + (lib.task_count || "") + " tasks"));
+    f.append(el("span", null, "Run of " + fmtY(RES.snapshot.generated)));
+    const out = el("button", "linkish", "Forget passcode on this device"); out.type = "button";
+    out.addEventListener("click", () => { forget(); renderLogin(); });
+    f.append(out);
+    return f;
+  }
+
+  window.addEventListener("hashchange", () => { if (RES) render(); });
+  load();
+})();
+</script>
+
+</body>
+</html>
