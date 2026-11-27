@@ -266,6 +266,26 @@ body.desk.panel-open .d-groups { grid-template-columns: 1fr }
 .panel .act input, .panel .act select { min-height: 38px; font-size: 14px; padding: 6px 10px }
 .panel .gatelist .item { min-height: 0; padding: 8px 12px }
 body.desk .act > button { min-height: 42px }
+
+/* subs */
+.tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px }
+.tck { display: flex; gap: 9px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-height: 44px; font-size: 14px; cursor: pointer }
+.tck input { width: 20px; height: 20px; accent-color: var(--sage); flex: none; margin: 0 }
+.tck:has(input:checked) { border-color: var(--sage); background: var(--sage-wash) }
+.tchips { display: flex; flex-wrap: wrap; gap: 4px }
+.tchip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--sunk); color: var(--ink); white-space: nowrap }
+.tchip.add { background: var(--ok-wash); color: var(--ok); font-weight: 600 }
+.tchip.del { background: var(--bad-wash); color: var(--bad); text-decoration: line-through }
+.tchip.muted { color: var(--muted); background: transparent; border: 1px dashed var(--line) }
+.callout { background: var(--warn-wash); color: var(--ink); border-radius: 10px; padding: 10px 14px; font-size: 14px }
+.callout b { color: var(--warn) }
+.subtools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.subtools input, .subtools select { min-height: 40px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface) }
+.subtools input { flex: 1; min-width: 180px }
+.diffrow { display: grid; grid-template-columns: 64px 1fr; gap: 6px 10px; align-items: center; font-size: 13px; color: var(--muted) }
+.d-table td.tr-cell { min-width: 220px }
+.panel form .btn.primary, body:not(.desk) .sheet form .btn.primary { position: sticky; bottom: calc(var(--safe-b) + 8px); box-shadow: 0 6px 18px rgba(0,0,0,.15) }
+body:not(.desk) .sheet form .btn.primary { bottom: calc(var(--tabh) + var(--safe-b) + 8px) }
 </style>
 </head>
 <body>
@@ -369,15 +389,17 @@ body.desk .act > button { min-height: 42px }
     const h = (location.hash || "#today").slice(1);
     if (h.startsWith("task-")) return { view: "task", id: h.slice(5) };
     if (h.startsWith("job-")) return { view: "job", job: h.slice(4) };
+    if (h.startsWith("sub-")) return { view: "sub", id: h.slice(4) };
+    if (h === "subs") return { view: "subs" };
     return { view: ["today", "board", "messages", "more"].includes(h) ? h : "today" };
   }
   function go(hash) { if (location.hash !== "#" + hash) location.hash = hash; else render(); }
   function openTask(id) {
-    if (desk()) { panelId = id; openAct = null; renderPanel(); return; }
+    if (desk()) { panelId = id; panelSub = null; openAct = null; renderPanel(); return; }
     if (wide() && route().view === "board") { selected = id; render(); return; }
     go("task-" + id);
   }
-  let selected = null, panelId = null;
+  let selected = null, panelId = null, panelSub = null;
 
   // ------------------------------------------------------------- helpers
   const jobs = () => RES.snapshot.jobs;
@@ -389,6 +411,9 @@ body.desk .act > button { min-height: 42px }
   const pendingMessages = () => RES.snapshot.proposals.filter((p) => p.kind === "message" && !RES.decided[p.id]);
   const disagreements = () => jobs().flatMap((j) => (j.disagreements || []).map((d) => Object.assign({ job: j.job }, d)));
   const editedTasks = () => new Set((RES.edits || []).map((e) => e.task_id).filter(Boolean));
+  const liveSubs = () => RES.subs || RES.snapshot.subs || [];
+  const tradeName = (k) => ((RES.trades || []).find((t) => t.key === k) || {}).name || k;
+  const notionWaiting = () => (RES.notion_writes || []).filter((p) => p.state === "pending");
 
   function statusOf(r) {
     const g = r.gates || {}; const red = Object.keys(g).filter((k) => g[k].state === "red");
@@ -433,11 +458,11 @@ body.desk .act > button { min-height: 42px }
 
   function renderTabs(view) {
     const tabs = $("#tabs"); tabs.hidden = false; tabs.replaceChildren();
-    [["today", "Today", todayCount()], ["board", "Board", 0], ["messages", "Messages", pendingMessages().length], ["more", "More", disagreements().length]]
+    [["today", "Today", todayCount()], ["board", "Board", 0], ["messages", "Messages", pendingMessages().length], ["more", "More", disagreements().length + notionWaiting().length]]
       .forEach(([k, label, n]) => {
         const a = el("a"); a.href = "#" + k; a.append(svg(k), el("span", null, label));
         if (n) a.append(el("span", "badge", String(n)));
-        if (view === k || (view === "task" && k === "board")) a.setAttribute("aria-current", "page");
+        if (view === k || (view === "task" && k === "board") || ((view === "subs" || view === "sub") && k === "more")) a.setAttribute("aria-current", "page");
         tabs.append(a);
       });
   }
@@ -455,6 +480,8 @@ body.desk .act > button { min-height: 42px }
     else if (r.view === "board") renderBoard(wrap);
     else if (r.view === "messages") renderMessages(wrap);
     else if (r.view === "more") renderMore(wrap);
+    else if (r.view === "subs") renderSubs(wrap);
+    else if (r.view === "sub") renderSubPage(wrap, r.id);
     else renderToday(wrap);
     window.scrollTo(0, 0);
   }
@@ -640,11 +667,12 @@ body.desk .act > button { min-height: 42px }
   }
 
   function subOptions(r) {
-    const subs = RES.snapshot.subs || [];
+    const subs = liveSubs().filter((s) => s.status !== "do_not_use");
     const match = subs.filter((s) => r.trade && (s.trades || []).includes(r.trade));
     const rest = subs.filter((s) => !match.includes(s));
     const opts = [["", "Pick a sub"]];
-    if (match.length) { opts.push(["", "─ Does " + r.trade + " ─", true]); match.forEach((s) => opts.push([s.id, s.legal_name])); opts.push(["", "─ Everyone else ─", true]); }
+    if (r.trade && !match.length) opts.push(["", "─ Nobody is set up for " + tradeName(r.trade) + " (Subs screen) ─", true]);
+    if (match.length) { opts.push(["", "─ Does " + tradeName(r.trade) + " ─", true]); match.forEach((s) => opts.push([s.id, s.legal_name])); opts.push(["", "─ Everyone else ─", true]); }
     rest.forEach((s) => opts.push([s.id, s.legal_name]));
     return opts;
   }
@@ -709,6 +737,11 @@ body.desk .act > button { min-height: 42px }
   // ----------------------------------------------------------------- more
   function renderMore(wrap) {
     setTop("More", { asof: true });
+    if (!desk()) {
+      const l = el("div", "list"); const a = el("a", "item"); a.href = "#subs";
+      const c = el("div", "main"); c.append(el("div", "t", "Subs and the work they do"), el("div", "m", notionWaiting().length ? notionWaiting().length + " Notion change" + (notionWaiting().length > 1 ? "s" : "") + " waiting for your OK" : "Who to pick for each kind of work"));
+      a.append(c, svg("chev", "chev")); l.append(a); wrap.append(l);
+    }
     const ds = disagreements();
     const sec = el("section", "sec"); const h = el("h2", null, "Board vs Notion"); h.append(el("small", null, String(ds.length))); sec.append(h);
     sec.append(el("p", "note", "Where something you changed here and Notion now say different things. Your version is kept; Notion is never changed."));
@@ -746,10 +779,168 @@ body.desk .act > button { min-height: 42px }
   }
 
 
+
+  // ================================================================== subs
+  // Which subs do which kinds of work. "Pick a sub" on a task lists the subs set
+  // up for its kind of work first. Saving here makes the list the coordinator's;
+  // the matching change to Notion's Trade field waits for Cole's OK.
+  function openSub(id) {
+    if (desk()) { panelSub = id; panelId = null; renderPanel(); return; }
+    go("sub-" + id);
+  }
+
+  function tradeGaps() {
+    const have = new Set(liveSubs().filter((s) => s.status !== "do_not_use").flatMap((s) => s.trades || []));
+    const crew = new Set((RES.trades || []).map((t) => t.key));
+    const need = {};
+    jobs().forEach((j) => (j.board || []).forEach((r) => {
+      if (r.type === "work" && r.trade && crew.has(r.trade) && !have.has(r.trade)) (need[r.trade] = need[r.trade] || []).push(r.name);
+    }));
+    return need;
+  }
+
+  function chips(list, cls) { const c = el("div", "tchips"); list.forEach((x) => c.append(el("span", "tchip" + (cls ? " " + cls : ""), x))); return c; }
+
+  function notionCard(p) {
+    let ch; try { ch = JSON.parse(p.draft_body); } catch (e) { return null; }
+    const c = el("article", "msg");
+    c.append(el("div", "kind", "Notion · Trade field"), el("div", "t", ch.sub));
+    const before = new Set(ch.before), after = new Set(ch.after);
+    const d = el("div", "diffrow");
+    const now = el("div", "tchips"); ch.before.forEach((x) => now.append(el("span", "tchip" + (after.has(x) ? "" : " del"), x)));
+    if (!ch.before.length) now.append(el("span", "tchip muted", "empty"));
+    const nxt = el("div", "tchips"); ch.after.forEach((x) => nxt.append(el("span", "tchip" + (before.has(x) ? "" : " add"), x)));
+    if (!ch.after.length) nxt.append(el("span", "tchip muted", "empty"));
+    d.append(el("span", null, "Now"), now, el("span", null, "After"), nxt); c.append(d);
+    const row = el("div", "row");
+    if (p.state === "pending") {
+      const ok = el("button", "btn primary", "Approve"); ok.type = "button"; ok.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "approved" }));
+      const skip = el("button", "btn", "Skip"); skip.type = "button"; skip.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "skipped" }));
+      row.append(ok, skip);
+    } else if (p.state === "approved") {
+      row.append(el("span", "decided approved", "Approved. Written to Notion at the next run, once the coordinator is allowed to write."));
+      const undo = el("button", "btn", "Undo"); undo.type = "button"; undo.style.flex = "none";
+      undo.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "undo" })); row.append(undo);
+    } else if (p.state === "sent") row.append(el("span", "decided approved", "Written to Notion"));
+    else if (p.state === "failed") row.append(el("span", "decided skipped", "Not written: someone changed it in Notion first. A fresh draft follows."));
+    else return null;
+    c.append(row);
+    return c;
+  }
+
+  function renderSubs(wrap) {
+    setTop("Subs", { back: true, backLabel: "More" });
+    const subs = liveSubs();
+    if (desk()) {
+      const head = el("div", "d-head"); const h = el("div");
+      h.append(el("h2", null, "Subs"), el("p", null, "Tick the kinds of work each sub does. “Pick a sub” on a task then lists the right subs first."));
+      head.append(h, el("span", "d-note", "Notion's Trade field changes only when you approve it below."));
+      wrap.append(head);
+    } else wrap.append(el("p", "note", "Tick the kinds of work each sub does. “Pick a sub” on a task then lists the right subs first. Notion changes only when you approve it."));
+
+    const cards = (RES.notion_writes || []).map(notionCard).filter(Boolean);
+    if (cards.length) {
+      const sec = el("section", "sec"); const h = el("h2", null, "Notion changes"); h.append(el("small", null, notionWaiting().length + " waiting for your OK")); sec.append(h);
+      const grid = el("div", desk() ? "d-msgs" : "stack"); cards.forEach((c) => grid.append(c)); sec.append(grid); wrap.append(sec);
+    }
+
+    const gaps = tradeGaps();
+    if (Object.keys(gaps).length) {
+      const c = el("div", "callout");
+      c.append(el("b", null, "Nobody is set up for: "), document.createTextNode(Object.keys(gaps).map((k) => tradeName(k) + " (" + gaps[k].length + " upcoming)").join(", ") + ". Tick it on the subs who do it."));
+      wrap.append(c);
+    }
+
+    const tools = el("div", "subtools");
+    const q = el("input"); q.type = "search"; q.placeholder = "Find a sub"; q.setAttribute("aria-label", "Find a sub"); q.autocapitalize = "off";
+    const sel = el("select"); sel.setAttribute("aria-label", "Kind of work");
+    [["", "Every kind of work"], ["__none", "Nothing ticked yet"]].concat((RES.trades || []).map((t) => [t.key, t.name])).forEach(([v, t]) => { const o = el("option", null, t); o.value = v; sel.append(o); });
+    const count = el("span", "note");
+    tools.append(q, sel, count); wrap.append(tools);
+
+    const rows = [];
+    let holder;
+    if (desk()) {
+      const box = el("div", "d-table"); const table = el("table"); const tr = el("tr");
+      ["Sub", "Kinds of work", "Notion says", "Contact", "Status"].forEach((x) => tr.append(el("th", null, x)));
+      const thead = el("thead"); thead.append(tr); table.append(thead); holder = el("tbody"); table.append(holder); box.append(table); wrap.append(box);
+      subs.forEach((s) => {
+        const row = el("tr", "d-tr"); row.dataset.id = s.id; row.tabIndex = 0;
+        const tk = (s.trades || []).map(tradeName);
+        const tdN = el("td", "task", s.legal_name); if (s.trades_owner === "board") tdN.append(el("small", null, "Set here"));
+        const tdT = el("td", "tr-cell"); tdT.append(tk.length ? chips(tk) : el("span", "sub none", "Nothing ticked"));
+        const tdNo = el("td"); tdNo.append((s.notion_trades || []).length ? chips(s.notion_trades, "muted") : el("span", "sub", ""));
+        row.append(tdN, tdT, tdNo, el("td", "sub", [s.phone, s.email].filter(Boolean).join(" · ")), el("td", "sub", s.status === "do_not_use" ? "Do not use" : s.status === "inactive" ? "Inactive" : "Active"));
+        row.addEventListener("click", () => openSub(s.id));
+        row.addEventListener("keydown", (e) => { if (e.key === "Enter") openSub(s.id); });
+        holder.append(row); rows.push([row, s]);
+      });
+    } else {
+      holder = el("div", "list"); wrap.append(holder);
+      subs.forEach((s) => {
+        const b = el("button", "item"); b.type = "button";
+        const c = el("div", "main"); c.append(el("div", "t", s.legal_name), el("div", "m", (s.trades || []).map(tradeName).join(", ") || "Nothing ticked"));
+        b.append(c, svg("chev", "chev")); b.addEventListener("click", () => openSub(s.id));
+        holder.append(b); rows.push([b, s]);
+      });
+    }
+    const apply = () => {
+      const text = q.value.trim().toLowerCase(), t = sel.value; let n = 0;
+      rows.forEach(([row, s]) => {
+        const show = (!text || s.legal_name.toLowerCase().includes(text) || (s.trades || []).some((k) => tradeName(k).toLowerCase().includes(text)))
+          && (!t || (t === "__none" ? !(s.trades || []).length : (s.trades || []).includes(t)));
+        row.hidden = !show; if (show) n++;
+      });
+      count.textContent = n + " of " + rows.length;
+    };
+    q.addEventListener("input", apply); sel.addEventListener("change", apply); apply();
+  }
+
+  function renderSubPage(wrap, id) {
+    const s = liveSubs().find((x) => x.id === id);
+    setTop("Sub", { back: true, backLabel: "Subs" });
+    if (!s) { wrap.append(el("div", "empty", "That sub isn't in the list.")); return; }
+    subEditor(wrap, s);
+  }
+
+  function subEditor(into, s) {
+    const box = el("div", "sheet");
+    const head = el("div", "head");
+    head.append(el("div", "kind", "Sub"), el("div", "t", s.legal_name), el("div", "m", [s.phone, s.email].filter(Boolean).join(" · ") || "No contact on file"));
+    box.append(head);
+    if (s.status === "do_not_use") box.append(el("div", "callout", "Marked Do Not Use in Notion. Never offered in “Pick a sub”."));
+    const f = el("form", "sec"); f.append(el("h2", null, "Kinds of work"));
+    const grid = el("div", "tgrid"); const mine = new Set(s.trades || []);
+    (RES.trades || []).forEach((t) => {
+      const lab = el("label", "tck"); const cb = el("input"); cb.type = "checkbox"; cb.value = t.key; cb.checked = mine.has(t.key);
+      lab.append(cb, document.createTextNode(t.name)); grid.append(lab);
+    });
+    f.append(grid);
+    const save = el("button", "btn primary block", "Save"); save.type = "submit"; save.style.marginTop = "12px"; f.append(save);
+    f.addEventListener("submit", (e) => { e.preventDefault(); edit({ action: "set_trades", sub_id: s.id, trades: [...grid.querySelectorAll("input:checked")].map((x) => x.value) }); });
+    box.append(f);
+    const n = el("section", "sec"); n.append(el("h2", null, "Notion says"));
+    n.append((s.notion_trades || []).length ? chips(s.notion_trades, "muted") : el("p", "note", "Nothing in Notion's Trade field."));
+    n.append(el("p", "note", s.trades_owner === "board"
+      ? "This list is set here now. Where it differs from Notion, a change to Notion is drafted at the next run for you to approve."
+      : "Read from Notion's Trade field so far. Saving makes this list the coordinator's, and the matching Notion change comes to you for approval."));
+    box.append(n);
+    const work = [];
+    jobs().forEach((j) => (j.board || []).forEach((r) => { if (r.sub === s.legal_name) work.push([r, j]); }));
+    if (work.length) {
+      const w = el("section", "sec"); w.append(el("h2", null, "On the board"));
+      const l = el("div", "list");
+      work.forEach(([r, j]) => { const b = el("button", "item"); b.type = "button"; const c = el("div", "main"); c.append(el("div", "t", r.name), el("div", "m", short(j.job) + " · " + fmt(r.start))); b.append(c, svg("chev", "chev")); b.addEventListener("click", () => openTask(r.id)); l.append(b); });
+      w.append(l); box.append(w);
+    }
+    into.append(box);
+  }
+
   // ================================================================ desktop
   function renderDesk() {
     const r = route();
-    if (r.view === "task") { panelId = r.id; const [, tj] = findTask(r.id); if (tj) jobKey = slug(tj.job); history.replaceState(null, "", "#job-" + jobKey); return renderDesk(); }
+    if (r.view === "sub") { panelSub = r.id; panelId = null; history.replaceState(null, "", "#subs"); return renderDesk(); }
+    if (r.view === "task") { panelId = r.id; panelSub = null; const [, tj] = findTask(r.id); if (tj) jobKey = slug(tj.job); history.replaceState(null, "", "#job-" + jobKey); return renderDesk(); }
     if (r.view === "job" && jobs().some((j) => slug(j.job) === r.job)) { jobKey = r.job; try { localStorage.setItem("sa-coord-job", jobKey); } catch (e) {} }
     const view = r.view === "board" ? "job" : r.view;
     deskTop(view);
@@ -762,6 +953,7 @@ body.desk .act > button { min-height: 42px }
       if (grid.childNodes.length) wrap.append(grid);
     }
     else if (view === "more") { wrap.classList.add("d-narrow"); renderMore(wrap); deskTop(view); }
+    else if (view === "subs") { renderSubs(wrap); deskTop(view); }
     else deskToday(wrap);
     renderPanel();
   }
@@ -774,6 +966,7 @@ body.desk .act > button { min-height: 42px }
     link("today", "Today", todayCount(), view === "today");
     jobs().forEach((j) => link("job-" + slug(j.job), short(j.job), 0, view === "job" && slug(j.job) === jobKey));
     link("messages", "Messages", pendingMessages().length, view === "messages");
+    link("subs", "Subs", notionWaiting().length, view === "subs");
     link("more", "Board vs Notion", disagreements().length, view === "more");
     top.append(nav);
     const a = el("div", "asof", "Calculated " + new Date(RES.calculated_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
@@ -874,21 +1067,22 @@ body.desk .act > button { min-height: 42px }
 
   function renderPanel() {
     let p = $("#panel");
-    const [t, j] = panelId ? findTask(panelId) : [null, null];
-    if (!desk() || !t) { closePanel(true); return; }
+    const sub = panelSub ? liveSubs().find((x) => x.id === panelSub) : null;
+    const [t, j] = !sub && panelId ? findTask(panelId) : [null, null];
+    if (!desk() || (!t && !sub)) { closePanel(true); return; }
     if (!p) { p = el("aside", "panel"); p.id = "panel"; p.setAttribute("aria-label", "Task"); document.body.append(p); }
     const scroll = p.scrollTop; p.replaceChildren();
     const x = el("button", "close", "×"); x.type = "button"; x.title = "Close (Esc)"; x.setAttribute("aria-label", "Close"); x.addEventListener("click", () => closePanel());
-    p.append(x); taskBody(p, t, j); p.scrollTop = scroll;
+    p.append(x); if (sub) subEditor(p, sub); else taskBody(p, t, j); p.scrollTop = scroll;
     document.body.classList.add("panel-open");
     document.querySelectorAll('[aria-current="true"]').forEach((e) => e.removeAttribute("aria-current"));
-    document.querySelectorAll('[data-id="' + CSS.escape(panelId) + '"]').forEach((e) => e.setAttribute("aria-current", "true"));
+    document.querySelectorAll('[data-id="' + CSS.escape(sub ? sub.id : panelId) + '"]').forEach((e) => e.setAttribute("aria-current", "true"));
   }
 
   function closePanel(quiet) {
     const p = $("#panel"); if (p) p.remove();
     document.body.classList.remove("panel-open");
-    if (!quiet) { panelId = null; document.querySelectorAll('[aria-current="true"]').forEach((e) => e.removeAttribute("aria-current")); }
+    if (!quiet) { panelId = null; panelSub = null; document.querySelectorAll('[aria-current="true"]').forEach((e) => e.removeAttribute("aria-current")); }
   }
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#panel")) closePanel(); });
 

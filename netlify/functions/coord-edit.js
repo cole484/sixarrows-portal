@@ -1,6 +1,7 @@
 // netlify/functions/coord-edit.js
 // POST: one edit from the coordinator board. Writes to the coordinator's
-// tables only: never Notion, never the portal's own tables, and nothing is sent
+// tables only: never Notion (a Notion change is a proposal Cole approves, written
+// later by the coordinator's scheduled run), never the portal's own tables, and nothing is sent
 // to anyone. Every edit is logged in coord.action_log, and fields Notion also
 // tracks are marked as board-owned so the Notion sync reports a disagreement
 // instead of overwriting them.
@@ -116,15 +117,31 @@ const ACTIONS = {
                    values ($1, $2, $3, $4, $5, 'accepted')`, [t.job_id, t.id, t.sub_id, amount.toFixed(2), b.terms || null]);
     return { task: t, summary: `Price $${amount.toLocaleString('en-US')}` };
   },
+  // which kinds of work a sub does. From now on the coordinator owns this sub's
+  // list; the Notion change is drafted at the next run for Cole to approve.
+  async set_trades(c, b) {
+    need(UUID.test(b.sub_id || ''), 'sub_id is missing');
+    need(Array.isArray(b.trades), 'trades is missing');
+    const s = await c.query('select id, legal_name from coord.subcontractors where id = $1', [b.sub_id]);
+    need(s.rows.length, 'No such sub');
+    const known = new Set((await c.query('select key from coord.trades')).rows.map((r) => r.key));
+    const keys = [...new Set(b.trades)];
+    need(keys.every((k) => known.has(k)), 'Unknown kind of work');
+    await c.query('delete from coord.sub_trades where sub_id = $1', [b.sub_id]);
+    for (const k of keys) await c.query('insert into coord.sub_trades (sub_id, trade_key) values ($1, $2)', [b.sub_id, k]);
+    await c.query(`update coord.subcontractors set trades_owner = 'board', updated_at = now() where id = $1`, [b.sub_id]);
+    return { sub: b.sub_id, summary: `Saved ${s.rows[0].legal_name}: ${keys.length} kind${keys.length === 1 ? '' : 's'} of work` };
+  },
   async proposal(c, b) {
     need(UUID.test(b.proposal_id || ''), 'proposal_id is missing');
-    const p = await c.query('select id, job_id, task_id, state, draft_body from coord.proposals where id = $1', [b.proposal_id]);
+    const p = await c.query('select id, job_id, task_id, sub_id, kind, state, draft_body from coord.proposals where id = $1', [b.proposal_id]);
     need(p.rows.length, 'No such draft');
     const cur = p.rows[0];
     if (b.decision === 'undo') {
+      need(['approved', 'skipped'].includes(cur.state), cur.kind === 'notion_write' ? 'Already written to Notion' : 'Nothing to undo');
       await c.query(`update coord.proposals set state = 'pending', final_body = null, edited = null,
                      decided_by = null, decided_at = null where id = $1`, [cur.id]);
-      return { task: { id: cur.task_id, job_id: cur.job_id }, proposal: cur.id, summary: 'Back to waiting' };
+      return { task: { id: cur.task_id, job_id: cur.job_id }, sub: cur.sub_id, proposal: cur.id, summary: 'Back to waiting' };
     }
     need(['approved', 'skipped'].includes(b.decision), 'Approve or skip');
     need(cur.state === 'pending', 'Already decided');
@@ -132,7 +149,7 @@ const ACTIONS = {
     const edited = b.decision === 'approved' && final.trim() !== (cur.draft_body || '').trim();
     await c.query(`update coord.proposals set state = $2, final_body = $3, edited = $4, decided_by = 'cole',
                    decided_at = now() where id = $1`, [cur.id, b.decision, final, edited]);
-    return { task: { id: cur.task_id, job_id: cur.job_id }, proposal: cur.id,
+    return { task: { id: cur.task_id, job_id: cur.job_id }, sub: cur.sub_id, proposal: cur.id,
              summary: b.decision === 'skipped' ? 'Skipped' : edited ? 'Approved with edits' : 'Approved' };
   },
 };
@@ -148,9 +165,9 @@ export const handler = async (event) => {
   try {
     const out = await tx(async (c) => {
       const r = await fn(c, body);
-      await c.query(`insert into coord.action_log (actor, action, job_id, task_id, proposal_id, payload)
-                     values ('cole', $1, $2, $3, $4, $5)`,
-                    [body.action, r.task?.job_id || null, r.task?.id || null, r.proposal || null,
+      await c.query(`insert into coord.action_log (actor, action, job_id, task_id, sub_id, proposal_id, payload)
+                     values ('cole', $1, $2, $3, $4, $5, $6)`,
+                    [body.action, r.task?.job_id || null, r.task?.id || null, r.sub || null, r.proposal || null,
                      JSON.stringify({ source: 'portal board', summary: r.summary, input: body })]);
       return r;
     });

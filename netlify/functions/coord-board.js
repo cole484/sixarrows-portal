@@ -26,7 +26,23 @@ export const handler = async (event) => {
     const decided = ids.length ? await pool.query(
       `select id, state, final_body, edited, decided_at from coord.proposals
         where id = any($1::uuid[]) and state <> 'pending'`, [ids]) : { rows: [] };
+    // subs and their kinds of work are read live, so a save on the Subs screen
+    // shows at once rather than at the next recalculation
+    const subs = await pool.query(
+      `select s.id, s.legal_name, s.status, s.trades_owner, s.notion_trades, s.notes,
+              coalesce(array_agg(t.trade_key order by t.trade_key) filter (where t.trade_key is not null), '{}') as trades,
+              (select c.phone_e164 from coord.sub_contacts c where c.sub_id = s.id and c.is_primary limit 1) as phone,
+              (select c.email from coord.sub_contacts c where c.sub_id = s.id and c.is_primary limit 1) as email
+         from coord.subcontractors s left join coord.sub_trades t on t.sub_id = s.id
+        where s.legal_name <> '(unnamed)'
+        group by s.id order by s.legal_name`);
+    const trades = await pool.query(`select key, name from coord.trades where is_crew order by name`);
+    const notion = await pool.query(
+      `select p.id, p.sub_id, p.state, p.draft_body, p.decided_at, p.updated_at from coord.proposals p
+        where p.kind = 'notion_write' and (p.state in ('pending','approved') or p.updated_at > now() - interval '7 days')
+        order by p.created_at`);
     return json(200, {
+      subs: subs.rows, trades: trades.rows, notion_writes: notion.rows,
       snapshot: s.data,
       calculated_at: s.created_at,
       edits: edits.rows,
