@@ -42,6 +42,7 @@
   --na: #5c5f56; --bar: #0f100e; --bar-ink: #ecebe4; color-scheme: dark }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent }
+[hidden] { display: none !important }
 html, body { margin: 0; height: 100% }
 body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--f-body); -webkit-text-size-adjust: 100% }
 h1, h2, h3 { font-family: var(--f-head); font-weight: 600; letter-spacing: .01em; margin: 0; text-wrap: balance }
@@ -187,6 +188,84 @@ details.dod ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px }
 }
 @media (min-width: 760px) and (max-width: 979px) { .split { grid-template-columns: minmax(260px, 340px) minmax(0, 1fr) } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+
+/* ---------------------------------------------------------------- desktop
+   A computer with a mouse and a wide window gets its own layout: navigation
+   across the top, dense tables, and the task in a panel on the right so the
+   list stays in view. Phones and iPads never see it. */
+body.desk { font-size: 14px }
+body.desk .tabs { display: none }
+body.desk .top, body.desk main { margin-left: 0 }
+body.desk .top { padding: 0 24px; min-height: 54px; gap: 22px }
+body.desk .top .brand { font-family: var(--f-head); font-size: 20px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap }
+body.desk .top .brand small { font-weight: 500; opacity: .6; margin-left: 6px; font-size: 14px; letter-spacing: .1em }
+body.desk .nav { display: flex; gap: 2px; flex: 1; min-width: 0 }
+body.desk .nav a { color: var(--bar-ink); opacity: .78; text-decoration: none; padding: 7px 12px; border-radius: 6px; font-weight: 500; font-size: 14.5px; display: flex; gap: 7px; align-items: center; white-space: nowrap }
+body.desk .nav a:hover { opacity: 1; background: rgba(255,255,255,.08) }
+body.desk .nav a[aria-current="page"] { opacity: 1; background: var(--sage); color: #fff }
+body.desk .nav .n { background: var(--bad); color: #fff; font-size: 11px; font-weight: 600; border-radius: 9px; padding: 0 6px; line-height: 17px }
+body.desk .top .asof { font-family: var(--f-mono); font-size: 11.5px }
+body.desk main { padding: 20px 24px 48px; max-width: 1500px; transition: margin-right .15s }
+body.desk.panel-open main { margin-right: 460px }
+body.desk .msg textarea { min-height: 170px }
+body.desk .toast { left: 24px; right: auto; bottom: 20px; margin: 0; max-width: 480px }
+
+.d-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap }
+.d-head h2 { font-size: 30px; line-height: 1.1 }
+.d-head p { margin: 2px 0 0; color: var(--muted) }
+.d-note { font-size: 12.5px; color: var(--sage-ink); background: var(--sage-wash); padding: 5px 10px; border-radius: 6px }
+.d-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: 8px }
+.d-stats .stat { border: 0; border-radius: 0; padding: 10px 16px }
+.d-stats .stat + .stat { border-left: 1px solid var(--line) }
+.d-jobs { display: grid; gap: 10px }
+.d-job { display: grid; grid-template-columns: 170px 1fr; align-items: stretch; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
+.d-job > a { display: flex; flex-direction: column; justify-content: center; padding: 10px 16px; color: inherit; text-decoration: none; border-right: 1px solid var(--line); background: var(--sunk) }
+.d-job > a b { font-family: var(--f-head); font-size: 22px; font-weight: 600 }
+.d-job > a span { font-size: 12px; color: var(--sage-ink); font-weight: 600 }
+.d-job .d-stats { border: 0; border-radius: 0 }
+.d-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 14px; align-items: start }
+body.desk.panel-open .d-groups { grid-template-columns: 1fr }
+.d-group { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
+.d-group h3 { font-size: 15px; text-transform: uppercase; letter-spacing: .07em; color: var(--sage-ink); padding: 9px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between }
+.d-group h3 small { color: var(--muted); font: 500 12px var(--f-body); letter-spacing: 0; text-transform: none }
+.d-row { display: grid; grid-template-columns: 1fr auto; gap: 1px 14px; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 7px 14px; color: inherit }
+.d-row:first-of-type { border-top: 0 }
+.d-row:hover { background: var(--sunk) }
+.d-row[aria-current="true"], tr.d-tr[aria-current="true"] td { background: var(--sage-wash) }
+.d-row .t { font-weight: 500 }
+.d-row .m { grid-column: 1; font-size: 12.5px; color: var(--muted) }
+.d-row .date { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 13px }
+.d-row.late .date { color: var(--bad); font-weight: 600 }
+.d-filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
+.d-filters .chip { min-height: 30px; padding: 4px 12px; font-size: 13px }
+.d-filters .count { margin-left: auto; color: var(--muted); font-size: 12.5px }
+.d-table { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: auto }
+.d-table table { border-collapse: collapse; width: 100% }
+.d-table th { position: sticky; top: 0; background: var(--sunk); font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap }
+.d-table th.gc, .d-table td.gc { text-align: center; width: 54px; padding-left: 4px; padding-right: 4px }
+.d-table td.date { white-space: nowrap }
+.d-table td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: middle }
+.d-table tr.d-tr { cursor: pointer }
+.d-table tr.d-tr:hover td { background: var(--sunk) }
+.d-table .task { font-weight: 500 }
+.d-table .task small { display: block; font-weight: 400; color: var(--muted); font-size: 12px }
+.d-table .sub { color: var(--muted); font-size: 13px }
+.d-table .sub.none { color: var(--bad) }
+.d-table .edited { margin: 3px 0 0 }
+.d-key { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted) }
+.d-key span { display: inline-flex; gap: 6px; align-items: center }
+.d-msgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; align-items: start }
+.d-narrow { max-width: 860px }
+
+.panel { position: fixed; top: 54px; right: 0; bottom: 0; width: 460px; background: var(--bg); border-left: 1px solid var(--line); box-shadow: -10px 0 30px rgba(0,0,0,.08);
+         overflow-y: auto; padding: 16px 20px 40px; z-index: 15 }
+.panel .close { position: sticky; top: 0; float: right; margin: -6px -8px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 34px; font-size: 20px; line-height: 1; color: var(--muted) }
+.panel .close:hover { color: var(--ink) }
+.panel .sheet .head .t { font-size: 24px; padding-right: 36px }
+.panel .act > button, .panel .btn { min-height: 40px }
+.panel .act input, .panel .act select { min-height: 38px; font-size: 14px; padding: 6px 10px }
+.panel .gatelist .item { min-height: 0; padding: 8px 12px }
+body.desk .act > button { min-height: 42px }
 </style>
 </head>
 <body>
@@ -209,6 +288,8 @@ details.dod ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px }
   const slug = (name) => name.split(/[\s(]/)[0].toLowerCase().replace(/[^a-z0-9-]/g, "");
   const short = (name) => name.split(" (")[0];
   const wide = () => window.matchMedia("(min-width: 760px)").matches;
+  // a computer: wide window and a mouse. iPads report a coarse pointer and keep the tablet layout.
+  const desk = () => window.matchMedia("(min-width: 1100px) and (hover: hover) and (pointer: fine)").matches;
 
   const ICON = {
     today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3M8 14l2.5 2.5L16 12"/></svg>',
@@ -287,14 +368,16 @@ details.dod ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px }
   function route() {
     const h = (location.hash || "#today").slice(1);
     if (h.startsWith("task-")) return { view: "task", id: h.slice(5) };
+    if (h.startsWith("job-")) return { view: "job", job: h.slice(4) };
     return { view: ["today", "board", "messages", "more"].includes(h) ? h : "today" };
   }
   function go(hash) { if (location.hash !== "#" + hash) location.hash = hash; else render(); }
   function openTask(id) {
+    if (desk()) { panelId = id; openAct = null; renderPanel(); return; }
     if (wide() && route().view === "board") { selected = id; render(); return; }
     go("task-" + id);
   }
-  let selected = null;
+  let selected = null, panelId = null;
 
   // ------------------------------------------------------------- helpers
   const jobs = () => RES.snapshot.jobs;
@@ -361,6 +444,9 @@ details.dod ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px }
 
   function render() {
     if (!RES) return;
+    document.body.classList.toggle("desk", desk());
+    if (desk()) return renderDesk();
+    closePanel(true);
     const r = route();
     renderTabs(r.view);
     const m = $("#main"); m.replaceChildren();
@@ -420,7 +506,7 @@ details.dod ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px }
         const mainCol = el("div", "main"); mainCol.append(el("div", "t", x.name), el("div", "m", short(x.job) + (x.sub ? " · " + x.sub : "")));
         const right = el("div", "r"); right.append(el("div", "date", fmt(x.date)), el("div", "m", x.pre));
         b.append(mainCol, right, svg("chev", "chev"));
-        b.addEventListener("click", () => go("task-" + x.id));
+        b.addEventListener("click", () => openTask(x.id));
         list.append(b);
       });
       sec.append(list); wrap.append(sec);
@@ -659,9 +745,156 @@ details.dod ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px }
     out.addEventListener("click", () => { forget(); RES = null; renderLogin(); }); wrap.append(out);
   }
 
-  window.addEventListener("hashchange", () => { openAct = null; render(); });
-  let lastWide = wide();
-  window.addEventListener("resize", () => { if (wide() !== lastWide) { lastWide = wide(); render(); } });
+
+  // ================================================================ desktop
+  function renderDesk() {
+    const r = route();
+    if (r.view === "task") { panelId = r.id; const [, tj] = findTask(r.id); if (tj) jobKey = slug(tj.job); history.replaceState(null, "", "#job-" + jobKey); return renderDesk(); }
+    if (r.view === "job" && jobs().some((j) => slug(j.job) === r.job)) { jobKey = r.job; try { localStorage.setItem("sa-coord-job", jobKey); } catch (e) {} }
+    const view = r.view === "board" ? "job" : r.view;
+    deskTop(view);
+    const m = $("#main"); m.replaceChildren();
+    const wrap = el("div", "stack"); m.append(wrap);
+    if (view === "job") deskJob(wrap, curJob());
+    else if (view === "messages") {
+      renderMessages(wrap); deskTop(view);
+      const grid = el("div", "d-msgs"); wrap.querySelectorAll(".msg").forEach((x) => grid.append(x));
+      if (grid.childNodes.length) wrap.append(grid);
+    }
+    else if (view === "more") { wrap.classList.add("d-narrow"); renderMore(wrap); deskTop(view); }
+    else deskToday(wrap);
+    renderPanel();
+  }
+
+  function deskTop(view) {
+    const top = $("#top"); top.replaceChildren();
+    const brand = el("div", "brand", "Six Arrows"); brand.append(el("small", null, "Coordinator")); top.append(brand);
+    const nav = el("nav", "nav"); nav.setAttribute("aria-label", "Sections");
+    const link = (hash, label, n, on) => { const a = el("a", null, label); a.href = "#" + hash; if (n) a.append(el("span", "n", String(n))); if (on) a.setAttribute("aria-current", "page"); nav.append(a); };
+    link("today", "Today", todayCount(), view === "today");
+    jobs().forEach((j) => link("job-" + slug(j.job), short(j.job), 0, view === "job" && slug(j.job) === jobKey));
+    link("messages", "Messages", pendingMessages().length, view === "messages");
+    link("more", "Board vs Notion", disagreements().length, view === "more");
+    top.append(nav);
+    const a = el("div", "asof", "Calculated " + new Date(RES.calculated_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
+    top.append(a);
+  }
+
+  function jobStats(j) {
+    const t = j.today || {};
+    const todo = ["calls", "requests", "orders", "decisions", "bookings"].reduce((s, k) => s + (t[k] || []).length, 0);
+    const blocked = (j.board || []).filter((r) => statusOf(r).cls === "s-bad").length;
+    const st = el("div", "d-stats");
+    const stat = (label, value, sub, tone) => { const x = el("div", "stat" + (tone ? " " + tone : "")); x.append(el("label", null, label), el("b", null, value), el("span", null, sub)); st.append(x); };
+    stat("Booked out", j.weeks_booked_out >= 99 ? "All" : j.weeks_booked_out + " wks", "Target 2, then 4, 6, 8", j.weeks_booked_out >= 2 ? "ok" : "bad");
+    stat("Forecast finish", fmt(j.finish), j.finish ? j.finish.slice(0, 4) : "");
+    stat("Needs action today", String(todo), "Book, order, call, decide", todo ? "bad" : "ok");
+    stat("Blocked, next 8 weeks", String(blocked), "A gate not yet green", blocked ? "bad" : "ok");
+    return st;
+  }
+
+  function deskToday(wrap) {
+    const head = el("div", "d-head"); const h = el("div"); h.append(el("h2", null, "Today"), el("p", null, "Everything due across both jobs. Select a task to see why and update it."));
+    head.append(h, el("span", "d-note", "Side by side with Notion. Edits are saved to the coordinator only. Nothing is sent."));
+    wrap.append(head);
+    const js = el("div", "d-jobs");
+    jobs().forEach((j) => { const row = el("div", "d-job"); const a = el("a"); a.href = "#job-" + slug(j.job); a.append(el("b", null, short(j.job)), el("span", null, "Open the board →")); row.append(a, jobStats(j)); js.append(row); });
+    wrap.append(js);
+    const g = todayGroups();
+    const groups = el("div", "d-groups");
+    [["Book a sub", g.bookings, "Assign, ask, then mark booked"], ["Orders to place", g.orders, "By the latest order date"], ["Calls to make", g.calls, "Inspections ready to call"],
+     ["Client decisions", g.decisions, "Due before the order they feed"], ["Requests", g.requests, "Utilities and 811"]].forEach(([title, items, sub]) => {
+      if (!items.length) return;
+      const box = el("section", "d-group"); const h3 = el("h3", null, title + " · " + items.length); h3.append(el("small", null, sub)); box.append(h3);
+      items.forEach((x) => box.append(deskRow(x)));
+      groups.append(box);
+    });
+    if (!groups.childNodes.length) wrap.append(el("div", "empty", "Nothing due today on either job."));
+    else wrap.append(groups);
+  }
+
+  function deskRow(x) {
+    const b = el("button", "d-row" + (x.late ? " late" : "")); b.type = "button"; b.dataset.id = x.id;
+    if (panelId === x.id) b.setAttribute("aria-current", "true");
+    b.append(el("span", "t", x.name), el("span", "date", (x.pre ? x.pre + " " : "") + fmt(x.date)), el("span", "m", short(x.job) + (x.sub ? " · " + x.sub : "")));
+    b.addEventListener("click", () => openTask(x.id));
+    return b;
+  }
+
+  function deskJob(wrap, j) {
+    const head = el("div", "d-head"); const h = el("div");
+    h.append(el("h2", null, j.job), el("p", null, "Lookahead " + fmt(j.run_date) + " to " + fmt(j.window_end) + ". Forecast finish " + fmtY(j.finish) + "."));
+    head.append(h, el("span", "d-note", "Edits are saved to the coordinator only. Notion is not changed."));
+    wrap.append(head, jobStats(j));
+    const fl = el("div", "d-filters");
+    const rows = (j.board || []).filter((r) => filter === "work" ? r.type === "work" : filter === "blocked" ? statusOf(r).cls === "s-bad"
+      : filter === "orders" ? (r.type === "material_order" || r.type === "decision") : filter === "calls" ? r.type.startsWith("external") : true);
+    [["all", "Next 8 weeks"], ["blocked", "Blocked"], ["work", "Crew on site"], ["orders", "Orders & selections"], ["calls", "Inspections & requests"]].forEach(([k, label]) => {
+      const b = el("button", "chip", label); b.type = "button"; b.setAttribute("aria-pressed", String(filter === k));
+      b.addEventListener("click", () => { filter = k; render(); }); fl.append(b);
+    });
+    fl.append(el("span", "count", rows.length + " tasks"));
+    wrap.append(fl);
+    const box = el("div", "d-table"); const table = el("table"); const tr = el("tr");
+    ["Task", "Start", "Finish", "Sub"].forEach((x) => tr.append(el("th", null, x)));
+    GATES.forEach(([k, label, name, def]) => { const th = el("th", "gc", label); th.title = name + ": " + def; tr.append(th); });
+    tr.append(el("th", null, "Status"));
+    const thead = el("thead"); thead.append(tr); table.append(thead);
+    const tb = el("tbody"); const edited = editedTasks();
+    rows.forEach((r) => {
+      const row = el("tr", "d-tr"); row.tabIndex = 0; row.dataset.id = r.id;
+      if (panelId === r.id) row.setAttribute("aria-current", "true");
+      const tdT = el("td", "task", r.name); tdT.append(el("small", null, [TYPES[r.type] ? TYPES[r.type][0] : r.type, r.trade].filter(Boolean).join(" · ")));
+      if (edited.has(r.id)) tdT.append(el("span", "edited", "Edited · updating"));
+      const subTd = el("td", "sub" + (!r.sub && r.type === "work" ? " none" : ""), r.sub || (r.type === "work" ? "None yet" : ""));
+      row.append(tdT, el("td", "date", fmt(r.start)), el("td", "date", r.end && r.end !== r.start ? fmt(r.end) : ""), subTd);
+      GATES.forEach(([k, label, name]) => {
+        const td = el("td", "gc"); const g = (r.gates || {})[k];
+        const d = el("span", "dot " + (g ? g.state : "not_applicable"));
+        d.title = name + ": " + (g ? (g.state === "green" ? "green" : (g.reasons.join("; ") || g.state)) : "does not apply");
+        d.setAttribute("aria-label", d.title); td.append(d); row.append(td);
+      });
+      const st = statusOf(r); const tdS = el("td"); tdS.append(el("span", "pill " + st.cls, st.text)); row.append(tdS);
+      row.addEventListener("click", () => openTask(r.id));
+      row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTask(r.id); } });
+      tb.append(row);
+    });
+    if (!rows.length) { const er = el("tr"); const td = el("td", null, "Nothing matches this filter."); td.colSpan = 11; er.append(td); tb.append(er); }
+    table.append(tb); box.append(table); wrap.append(box);
+    const key = el("div", "d-key");
+    [["green", "Done or in place"], ["red", "Not yet: select the task for why"], ["unknown", "Information missing"], ["not_applicable", "Does not apply"]]
+      .forEach(([c, t]) => { const s = el("span"); s.append(el("span", "dot " + c), document.createTextNode(t)); key.append(s); });
+    wrap.append(key);
+    if ((j.problems || []).length) {
+      const box2 = el("section", "d-group"); box2.append(el("h3", null, "Schedule problems · " + j.problems.length));
+      j.problems.forEach((p) => box2.append(deskRow({ id: p.id, name: p.task, job: j.job, sub: p.issues.join("; ") })));
+      wrap.append(box2);
+    }
+  }
+
+  function renderPanel() {
+    let p = $("#panel");
+    const [t, j] = panelId ? findTask(panelId) : [null, null];
+    if (!desk() || !t) { closePanel(true); return; }
+    if (!p) { p = el("aside", "panel"); p.id = "panel"; p.setAttribute("aria-label", "Task"); document.body.append(p); }
+    const scroll = p.scrollTop; p.replaceChildren();
+    const x = el("button", "close", "×"); x.type = "button"; x.title = "Close (Esc)"; x.setAttribute("aria-label", "Close"); x.addEventListener("click", () => closePanel());
+    p.append(x); taskBody(p, t, j); p.scrollTop = scroll;
+    document.body.classList.add("panel-open");
+    document.querySelectorAll('[aria-current="true"]').forEach((e) => e.removeAttribute("aria-current"));
+    document.querySelectorAll('[data-id="' + CSS.escape(panelId) + '"]').forEach((e) => e.setAttribute("aria-current", "true"));
+  }
+
+  function closePanel(quiet) {
+    const p = $("#panel"); if (p) p.remove();
+    document.body.classList.remove("panel-open");
+    if (!quiet) { panelId = null; document.querySelectorAll('[aria-current="true"]').forEach((e) => e.removeAttribute("aria-current")); }
+  }
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#panel")) closePanel(); });
+
+  window.addEventListener("hashchange", () => { openAct = null; render(); if (desk()) window.scrollTo(0, 0); });
+  let lastWide = wide() + "" + desk();
+  window.addEventListener("resize", () => { const k = wide() + "" + desk(); if (k !== lastWide) { lastWide = k; render(); } });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && RES) load(); });
   load();
 })();
