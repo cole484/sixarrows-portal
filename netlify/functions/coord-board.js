@@ -37,12 +37,8 @@ export const handler = async (event) => {
         where s.legal_name <> '(unnamed)'
         group by s.id order by s.legal_name`);
     const trades = await pool.query(`select key, name from coord.trades where is_crew order by name`);
-    const notion = await pool.query(
-      `select p.id, p.sub_id, p.state, p.draft_body, p.decided_at, p.updated_at from coord.proposals p
-        where p.kind = 'notion_write' and (p.state in ('pending','approved') or p.updated_at > now() - interval '7 days')
-        order by p.created_at`);
     return json(200, {
-      subs: subs.rows, trades: trades.rows, notion_writes: notion.rows,
+      subs: subs.rows, trades: trades.rows,
       snapshot: s.data,
       calculated_at: s.created_at,
       edits: edits.rows,

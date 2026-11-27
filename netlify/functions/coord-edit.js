@@ -1,7 +1,6 @@
 // netlify/functions/coord-edit.js
 // POST: one edit from the coordinator board. Writes to the coordinator's
-// tables only: never Notion (a Notion change is a proposal Cole approves, written
-// later by the coordinator's scheduled run), never the portal's own tables, and nothing is sent
+// tables only: never Notion, never the portal's own tables, and nothing is sent
 // to anyone. Every edit is logged in coord.action_log, and fields Notion also
 // tracks are marked as board-owned so the Notion sync reports a disagreement
 // instead of overwriting them.
@@ -118,7 +117,7 @@ const ACTIONS = {
     return { task: t, summary: `Price $${amount.toLocaleString('en-US')}` };
   },
   // which kinds of work a sub does. From now on the coordinator owns this sub's
-  // list; the Notion change is drafted at the next run for Cole to approve.
+  // list. Notion is not changed.
   async set_trades(c, b) {
     need(UUID.test(b.sub_id || ''), 'sub_id is missing');
     need(Array.isArray(b.trades), 'trades is missing');
@@ -138,7 +137,7 @@ const ACTIONS = {
     need(p.rows.length, 'No such draft');
     const cur = p.rows[0];
     if (b.decision === 'undo') {
-      need(['approved', 'skipped'].includes(cur.state), cur.kind === 'notion_write' ? 'Already written to Notion' : 'Nothing to undo');
+      need(['approved', 'skipped'].includes(cur.state), 'Nothing to undo');
       await c.query(`update coord.proposals set state = 'pending', final_body = null, edited = null,
                      decided_by = null, decided_at = null where id = $1`, [cur.id]);
       return { task: { id: cur.task_id, job_id: cur.job_id }, sub: cur.sub_id, proposal: cur.id, summary: 'Back to waiting' };

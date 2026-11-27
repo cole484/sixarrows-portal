@@ -413,7 +413,6 @@ body:not(.desk) .sheet form .btn.primary { bottom: calc(var(--tabh) + var(--safe
   const editedTasks = () => new Set((RES.edits || []).map((e) => e.task_id).filter(Boolean));
   const liveSubs = () => RES.subs || RES.snapshot.subs || [];
   const tradeName = (k) => ((RES.trades || []).find((t) => t.key === k) || {}).name || k;
-  const notionWaiting = () => (RES.notion_writes || []).filter((p) => p.state === "pending");
 
   function statusOf(r) {
     const g = r.gates || {}; const red = Object.keys(g).filter((k) => g[k].state === "red");
@@ -458,7 +457,7 @@ body:not(.desk) .sheet form .btn.primary { bottom: calc(var(--tabh) + var(--safe
 
   function renderTabs(view) {
     const tabs = $("#tabs"); tabs.hidden = false; tabs.replaceChildren();
-    [["today", "Today", todayCount()], ["board", "Board", 0], ["messages", "Messages", pendingMessages().length], ["more", "More", disagreements().length + notionWaiting().length]]
+    [["today", "Today", todayCount()], ["board", "Board", 0], ["messages", "Messages", pendingMessages().length], ["more", "More", disagreements().length]]
       .forEach(([k, label, n]) => {
         const a = el("a"); a.href = "#" + k; a.append(svg(k), el("span", null, label));
         if (n) a.append(el("span", "badge", String(n)));
@@ -739,7 +738,7 @@ body:not(.desk) .sheet form .btn.primary { bottom: calc(var(--tabh) + var(--safe
     setTop("More", { asof: true });
     if (!desk()) {
       const l = el("div", "list"); const a = el("a", "item"); a.href = "#subs";
-      const c = el("div", "main"); c.append(el("div", "t", "Subs and the work they do"), el("div", "m", notionWaiting().length ? notionWaiting().length + " Notion change" + (notionWaiting().length > 1 ? "s" : "") + " waiting for your OK" : "Who to pick for each kind of work"));
+      const c = el("div", "main"); c.append(el("div", "t", "Subs and the work they do"), el("div", "m", "Who to pick for each kind of work"));
       a.append(c, svg("chev", "chev")); l.append(a); wrap.append(l);
     }
     const ds = disagreements();
@@ -782,8 +781,8 @@ body:not(.desk) .sheet form .btn.primary { bottom: calc(var(--tabh) + var(--safe
 
   // ================================================================== subs
   // Which subs do which kinds of work. "Pick a sub" on a task lists the subs set
-  // up for its kind of work first. Saving here makes the list the coordinator's;
-  // the matching change to Notion's Trade field waits for Cole's OK.
+  // up for its kind of work first. Saving here makes the list the coordinator's.
+  // Notion is only read: its Trade field is shown alongside for comparison.
   function openSub(id) {
     if (desk()) { panelSub = id; panelId = null; renderPanel(); return; }
     go("sub-" + id);
@@ -801,48 +800,15 @@ body:not(.desk) .sheet form .btn.primary { bottom: calc(var(--tabh) + var(--safe
 
   function chips(list, cls) { const c = el("div", "tchips"); list.forEach((x) => c.append(el("span", "tchip" + (cls ? " " + cls : ""), x))); return c; }
 
-  function notionCard(p) {
-    let ch; try { ch = JSON.parse(p.draft_body); } catch (e) { return null; }
-    const c = el("article", "msg");
-    c.append(el("div", "kind", "Notion · Trade field"), el("div", "t", ch.sub));
-    const before = new Set(ch.before), after = new Set(ch.after);
-    const d = el("div", "diffrow");
-    const now = el("div", "tchips"); ch.before.forEach((x) => now.append(el("span", "tchip" + (after.has(x) ? "" : " del"), x)));
-    if (!ch.before.length) now.append(el("span", "tchip muted", "empty"));
-    const nxt = el("div", "tchips"); ch.after.forEach((x) => nxt.append(el("span", "tchip" + (before.has(x) ? "" : " add"), x)));
-    if (!ch.after.length) nxt.append(el("span", "tchip muted", "empty"));
-    d.append(el("span", null, "Now"), now, el("span", null, "After"), nxt); c.append(d);
-    const row = el("div", "row");
-    if (p.state === "pending") {
-      const ok = el("button", "btn primary", "Approve"); ok.type = "button"; ok.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "approved" }));
-      const skip = el("button", "btn", "Skip"); skip.type = "button"; skip.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "skipped" }));
-      row.append(ok, skip);
-    } else if (p.state === "approved") {
-      row.append(el("span", "decided approved", "Approved. Written to Notion at the next run, once the coordinator is allowed to write."));
-      const undo = el("button", "btn", "Undo"); undo.type = "button"; undo.style.flex = "none";
-      undo.addEventListener("click", () => edit({ action: "proposal", proposal_id: p.id, decision: "undo" })); row.append(undo);
-    } else if (p.state === "sent") row.append(el("span", "decided approved", "Written to Notion"));
-    else if (p.state === "failed") row.append(el("span", "decided skipped", "Not written: someone changed it in Notion first. A fresh draft follows."));
-    else return null;
-    c.append(row);
-    return c;
-  }
-
   function renderSubs(wrap) {
     setTop("Subs", { back: true, backLabel: "More" });
     const subs = liveSubs();
     if (desk()) {
       const head = el("div", "d-head"); const h = el("div");
       h.append(el("h2", null, "Subs"), el("p", null, "Tick the kinds of work each sub does. “Pick a sub” on a task then lists the right subs first."));
-      head.append(h, el("span", "d-note", "Notion's Trade field changes only when you approve it below."));
+      head.append(h, el("span", "d-note", "Saved in the coordinator only. Notion is not changed."));
       wrap.append(head);
-    } else wrap.append(el("p", "note", "Tick the kinds of work each sub does. “Pick a sub” on a task then lists the right subs first. Notion changes only when you approve it."));
-
-    const cards = (RES.notion_writes || []).map(notionCard).filter(Boolean);
-    if (cards.length) {
-      const sec = el("section", "sec"); const h = el("h2", null, "Notion changes"); h.append(el("small", null, notionWaiting().length + " waiting for your OK")); sec.append(h);
-      const grid = el("div", desk() ? "d-msgs" : "stack"); cards.forEach((c) => grid.append(c)); sec.append(grid); wrap.append(sec);
-    }
+    } else wrap.append(el("p", "note", "Tick the kinds of work each sub does. “Pick a sub” on a task then lists the right subs first. Saved in the coordinator only; Notion is not changed."));
 
     const gaps = tradeGaps();
     if (Object.keys(gaps).length) {
@@ -922,8 +888,8 @@ body:not(.desk) .sheet form .btn.primary { bottom: calc(var(--tabh) + var(--safe
     const n = el("section", "sec"); n.append(el("h2", null, "Notion says"));
     n.append((s.notion_trades || []).length ? chips(s.notion_trades, "muted") : el("p", "note", "Nothing in Notion's Trade field."));
     n.append(el("p", "note", s.trades_owner === "board"
-      ? "This list is set here now. Where it differs from Notion, a change to Notion is drafted at the next run for you to approve."
-      : "Read from Notion's Trade field so far. Saving makes this list the coordinator's, and the matching Notion change comes to you for approval."));
+      ? "This list is set here now. The Notion sync no longer changes it, and Notion is not changed either."
+      : "Read from Notion's Trade field so far. Saving makes this list the coordinator's. Notion is not changed."));
     box.append(n);
     const work = [];
     jobs().forEach((j) => (j.board || []).forEach((r) => { if (r.sub === s.legal_name) work.push([r, j]); }));
@@ -966,7 +932,7 @@ body:not(.desk) .sheet form .btn.primary { bottom: calc(var(--tabh) + var(--safe
     link("today", "Today", todayCount(), view === "today");
     jobs().forEach((j) => link("job-" + slug(j.job), short(j.job), 0, view === "job" && slug(j.job) === jobKey));
     link("messages", "Messages", pendingMessages().length, view === "messages");
-    link("subs", "Subs", notionWaiting().length, view === "subs");
+    link("subs", "Subs", 0, view === "subs");
     link("more", "Board vs Notion", disagreements().length, view === "more");
     top.append(nav);
     const a = el("div", "asof", "Calculated " + new Date(RES.calculated_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
