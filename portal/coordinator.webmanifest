@@ -1,0 +1,16 @@
+{
+ "name": "Six Arrows Coordinator",
+ "short_name": "Coordinator",
+ "start_url": "/coordinator.html#today",
+ "scope": "/",
+ "display": "standalone",
+ "background_color": "#2e2e2e",
+ "theme_color": "#2e2e2e",
+ "icons": [
+  {
+   "src": "/coordinator-icon.png",
+   "sizes": "180x180",
+   "type": "image/png"
+  }
+ ]
+}
