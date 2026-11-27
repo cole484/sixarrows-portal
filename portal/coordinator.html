@@ -93,6 +93,7 @@ main { padding: 14px var(--gut-r) calc(var(--tabh) + var(--safe-b) + 24px) var(-
 .item .m { font-size: 13px; color: var(--muted); margin-top: 2px }
 .item .r { text-align: right; flex: none; font-size: 13px }
 .item .chev { color: var(--na); flex: none; width: 16px; height: 16px }
+svg { max-width: 24px; max-height: 24px }
 .late .r .date { color: var(--bad); font-weight: 600 }
 .kind { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: .07em; color: var(--sage-ink) }
 .empty { color: var(--muted); padding: 18px 14px; background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; text-align: center }
@@ -217,7 +218,7 @@ details.dod ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px }
     chev: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>',
     back: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>',
   };
-  const svg = (name, cls) => { const s = el("span", cls); s.innerHTML = ICON[name]; return s.firstChild; };
+  const svg = (name, cls) => { const s = el("span"); s.innerHTML = ICON[name]; const g = s.firstChild; g.setAttribute("aria-hidden", "true"); if (cls) g.setAttribute("class", cls); return g; };
 
   const GATES = [
     ["sequence", "Seq", "Sequence", "Everything that has to happen first is done: earlier work, inspections, permits, materials on site."],
